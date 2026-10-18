@@ -1,0 +1,76 @@
+name: Build and Publish WASM
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish_npm:
+        description: 'Publish WASM package to npm'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  wasm-build-test-publish:
+    name: Build, Test, and Publish WASM Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "wasm-cache"
+
+      - name: Install wasm-pack
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Run WASM tests
+        run: |
+          wasm-pack test --node crates/wasm || cargo test -p grat-wasm
+
+      - name: Build WASM package for web target
+        run: |
+          wasm-pack build crates/wasm --target web --out-dir pkg
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Upload WASM package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grat-wasm-pkg
+          path: crates/wasm/pkg
+
+      - name: Create WASM tarball
+        run: |
+          tar -czf grat-wasm.tar.gz -C crates/wasm pkg
+
+      - name: Attach WASM tarball to GitHub Release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" grat-wasm.tar.gz --clobber || echo "No release tag found or release upload skipped"
+
+      - name: Publish WASM package to npm
+        if: (github.event_name == 'release' || startsWith(github.ref, 'refs/tags/v') || inputs.publish_npm == true) && env.NODE_AUTH_TOKEN != ''
+        working-directory: crates/wasm/pkg
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm publish --access public
