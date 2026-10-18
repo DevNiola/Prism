@@ -1,0 +1,65 @@
+name: Performance Benchmarks
+
+'on':
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'crates/core/**'
+      - 'crates/types/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - '.github/workflows/benchmark.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'crates/core/**'
+      - 'crates/types/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - '.github/workflows/benchmark.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: benchmark-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  benchmark:
+    name: Core Decode Pipeline Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate Cargo.lock
+        run: cargo generate-lockfile
+
+      - name: Run Criterion Benchmarks
+        run: |
+          cargo bench --bench decode_benchmarks -- --output-format bencher | tee output.txt
+
+      - name: Store & Compare Benchmark Results
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Grat Core Decode Benchmarks
+          tool: 'cargo'
+          output-file-path: output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          comment-on-alert: true
+          comment-always: true
+          alert-threshold: '110%'
+          fail-on-alert: true
+          summary-always: true
