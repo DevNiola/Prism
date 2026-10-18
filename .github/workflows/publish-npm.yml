@@ -1,0 +1,117 @@
+name: Publish NPM Packages
+
+'on':
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/server/**'
+      - 'apps/web/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/publish-npm.yml'
+  release:
+    types:
+      - published
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run only (do not publish to npm registry)'
+        type: boolean
+        default: false
+        required: false
+
+concurrency:
+  group: publish-npm-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  dry-run-check:
+    name: Dry-Run NPM Packaging & Build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true)
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build taxonomy and server
+        run: |
+          pnpm run build:taxonomy
+          pnpm --filter grat-server build
+
+      - name: Dry-run publish grat-server
+        run: |
+          cd apps/server
+          pnpm publish --dry-run --no-git-checks
+
+  publish-npm:
+    name: Publish Packages to npm
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'release' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)) && github.repository == 'DevNiola/Prism'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Verify NPM_TOKEN secret
+        run: |
+          if [ -z "${{ secrets.NPM_TOKEN }}" ]; then
+            echo "::error::NPM_TOKEN secret is missing or empty. Please configure it in repository secrets."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build taxonomy and server package
+        run: |
+          pnpm run build:taxonomy
+          pnpm --filter grat-server build
+
+      - name: Publish grat-server to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "[+] Publishing grat-server to npm registry..."
+          cd apps/server
+          npm publish --access public --provenance
+
+      - name: Verify npm publication status
+        run: |
+          echo "[+] Verifying grat-server publication status..."
+          sleep 10
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/grat-server" || true)
+          echo "npm registry HTTP status for grat-server: $HTTP_STATUS"
+          echo "[✓] grat-server published and verified on npm successfully!"

@@ -1,7 +1,14 @@
 {
   "name": "grat-server",
   "version": "0.1.0",
-  "private": true,
+  "description": "Grat backend server and RPC listener for Soroban transaction diagnostics",
+  "main": "dist/index.js",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
