@@ -1,0 +1,46 @@
+# Configuration for Stale Bot (.github/stale.yml)
+# Manages inactive issues and pull requests to keep the repository backlog clean.
+
+# Number of days of inactivity before an issue becomes stale
+daysUntilIssueStale: 30
+
+# Number of days of inactivity before a stale issue is closed
+daysUntilIssueClose: 7
+
+# Number of days of inactivity before a pull request becomes stale
+daysUntilPRStale: 30
+
+# Number of days of inactivity before a stale pull request is closed
+daysUntilPRClose: 7
+
+# Issues or PRs with these labels will never be marked as stale
+exemptLabels:
+  - pinned
+  - security
+
+# Label to apply when an issue or PR is marked stale
+staleLabel: stale
+
+# Friendly comment posted when marking an issue as stale
+markIssueComment: >
+  This issue has been automatically marked as stale because it has not had
+  recent activity for 30 days. It will be closed in 7 days if no further
+  activity occurs. Thank you for your contributions to Prism! If this issue
+  is still relevant, please leave a comment to keep it open.
+
+# Friendly comment posted when marking a PR as stale
+markPRComment: >
+  This pull request has been automatically marked as stale because it has not had
+  recent activity for 30 days. It will be closed in 7 days if no further
+  activity occurs. Thank you for your contributions to Prism!
+
+# Comment posted when closing a stale issue
+closeIssueComment: >
+  This issue has been automatically closed due to inactivity after being marked
+  stale. If you still believe this issue is relevant or have further details,
+  feel free to reopen it or file a new issue following our templates.
+
+# Comment posted when closing a stale PR
+closePRComment: >
+  This pull request has been automatically closed due to inactivity. If you wish
+  to continue work on this solution, please feel free to reopen it.
