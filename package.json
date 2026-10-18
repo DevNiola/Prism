@@ -13,6 +13,7 @@
     "build:wasm": "powershell -File scripts/build-wasm.ps1",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
+    "config:validate": "pnpm --filter grat-server config:validate",
     "clean": "pnpm -r clean"
   },
   "engines": {
