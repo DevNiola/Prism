@@ -1,14 +1,24 @@
 //! Type-aware recursive decoding of Soroban values.
+//!
+//! This module bridges raw [`ScVal`] XDR values and structured JSON by walking
+//! the contract's ABI spec (`ScSpecTypeDef`) in lock-step with the value tree.
+//! Without the spec every value degrades to its generic JSON representation
+//! (e.g., `{"u32": 42}`); with it, primitive numeric types become plain JSON
+//! numbers and user-defined types (structs, enums, unions) become named objects.
 
 use crate::decode::scval_to_json;
 use crate::spec::decoder::{ContractSpec, ContractStructDef};
 use serde_json::{json, Map, Value};
 use stellar_xdr::curr::{ScSpecTypeDef, ScVal};
 
-/// The type information available while decoding one value.
+/// Carries the type specification for one value being decoded, together with
+/// the full contract spec needed to resolve any user-defined types (`Udt`)
+/// that appear in nested fields.
 #[derive(Clone, Copy)]
 pub struct TypeRef<'a> {
     pub type_def: &'a ScSpecTypeDef,
+    /// The full contract ABI spec, required to look up struct/enum/union defs.
+    /// `None` when decoding without a spec (falls back to generic JSON).
     pub contract_spec: Option<&'a ContractSpec>,
 }
 
@@ -23,6 +33,9 @@ impl<'a> TypeRef<'a> {
 
 /// Dispatches a value to the decoder for its current type and carries the
 /// contract specification into every nested value.
+///
+/// The decoder is stateless — it holds no per-call data and is cheap to copy,
+/// so it can be threaded through recursive calls without heap allocation.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RecursiveTypeDecoder;
 
@@ -31,13 +44,24 @@ impl RecursiveTypeDecoder {
         Self
     }
 
+    /// Entry point: decode `val` using the type information in `type_ref`.
+    ///
+    /// When `type_ref` is `None` (no ABI available), falls back to the
+    /// generic `scval_to_json` converter which produces verbose but correct output.
     pub fn decode<'a>(&self, val: &ScVal, type_ref: Option<TypeRef<'a>>) -> Value {
         let Some(type_ref) = type_ref else {
+            // No type information — use the generic fallback path.
             return scval_to_json(val, None);
         };
         self.decode_type(val, type_ref.type_def, type_ref.contract_spec, 0)
     }
 
+    /// Core recursive dispatch — matches the ABI `type_def` to pick the right
+    /// decoding strategy for `val`.
+    ///
+    /// `depth` guards against pathological specs that could cause unbounded
+    /// recursion (e.g., self-referential custom types).  At depth > 100 we
+    /// give up and fall back to the generic converter rather than stack-overflow.
     fn decode_type(
         &self,
         val: &ScVal,
@@ -45,16 +69,26 @@ impl RecursiveTypeDecoder {
         contract_spec: Option<&ContractSpec>,
         depth: usize,
     ) -> Value {
+        // Safety guard: bail out to generic JSON if nesting is unexpectedly deep.
         if depth > 100 {
             return scval_to_json(val, None);
         }
+
+        // Convenience closure that recurses with depth + 1 and threads the
+        // current contract_spec into every child call automatically.
         let child = |value: &ScVal, td: &ScSpecTypeDef| {
             self.decode_type(value, td, contract_spec, depth + 1)
         };
 
         match type_def {
+            // Void is always JSON null regardless of the underlying ScVal.
             ScSpecTypeDef::Void => Value::Null,
+
+            // Val means "any Soroban value" — no richer type info, use generic.
             ScSpecTypeDef::Val => scval_to_json(val, None),
+
+            // Primitive scalar types: extract the inner Rust value directly
+            // so the JSON output is a plain number/bool rather than a tagged object.
             ScSpecTypeDef::Bool => match val {
                 ScVal::Bool(v) => json!(v),
                 _ => scval_to_json(val, None),
@@ -75,9 +109,12 @@ impl RecursiveTypeDecoder {
                 ScVal::I64(v) => json!(v),
                 _ => scval_to_json(val, None),
             },
+
+            // Timepoint and Duration are stored as u64 internally; unwrap the
+            // newtype wrapper so the output is a plain numeric timestamp.
             ScSpecTypeDef::Timepoint => match val {
                 ScVal::Timepoint(v) => json!(v.0),
-                ScVal::U64(v) => json!(v),
+                ScVal::U64(v) => json!(v), // Accept raw u64 as a fallback.
                 _ => scval_to_json(val, None),
             },
             ScSpecTypeDef::Duration => match val {
@@ -85,6 +122,9 @@ impl RecursiveTypeDecoder {
                 ScVal::U64(v) => json!(v),
                 _ => scval_to_json(val, None),
             },
+
+            // 128/256-bit integers and raw byte/string/address types: the
+            // generic converter already handles these well enough.
             ScSpecTypeDef::U128
             | ScSpecTypeDef::I128
             | ScSpecTypeDef::U256
@@ -95,14 +135,23 @@ impl RecursiveTypeDecoder {
             | ScSpecTypeDef::Symbol
             | ScSpecTypeDef::Address
             | ScSpecTypeDef::Error => scval_to_json(val, None),
+
+            // Option<T> — Soroban encodes None as Void or an empty Vec,
+            // and Some(v) as a single-element Vec [v] or the value directly.
             ScSpecTypeDef::Option(spec) => match val {
                 ScVal::Void => Value::Null,
                 ScVal::Vec(Some(values)) if values.is_empty() => Value::Null,
+                // Single-element vec wraps the inner Some(v) payload.
                 ScVal::Vec(Some(values)) if values.len() == 1 => {
                     child(&values[0], &spec.value_type)
                 }
+                // Bare value (not wrapped in a vec) — treat as Some(val).
                 _ => child(val, &spec.value_type),
             },
+
+            // Result<Ok, Err> — encoded as a 2-element Vec [variant_name, payload].
+            // The first element is a Symbol/String "Ok" or "Err" discriminator;
+            // the second element is the actual payload decoded with the matching type.
             ScSpecTypeDef::Result(spec) => match val {
                 ScVal::Vec(Some(values)) if values.len() == 2 => {
                     let name = match &values[0] {
@@ -115,12 +164,15 @@ impl RecursiveTypeDecoder {
                     } else if name == "Err" {
                         child(&values[1], &spec.error_type)
                     } else {
+                        // Unknown discriminator — fall back to generic.
                         return scval_to_json(val, None);
                     };
                     json!({ (name): payload })
                 }
                 _ => scval_to_json(val, None),
             },
+
+            // Vec<T> — decode each element with the homogeneous element type.
             ScSpecTypeDef::Vec(spec) => match val {
                 ScVal::Vec(Some(values)) => Value::Array(
                     values
@@ -130,6 +182,12 @@ impl RecursiveTypeDecoder {
                 ),
                 _ => scval_to_json(val, None),
             },
+
+            // Map<K, V> — iterate entries and decode each key and value pair.
+            //
+            // When all keys decode to JSON strings we emit a JSON object for
+            // easy readability; otherwise we fall back to an array of [key, value]
+            // pairs to avoid losing non-string keys.
             ScSpecTypeDef::Map(spec) => match val {
                 ScVal::Map(Some(entries)) => {
                     let mut object = Map::new();
@@ -138,25 +196,34 @@ impl RecursiveTypeDecoder {
                         let key = child(&entry.key, &spec.key_type);
                         let value = child(&entry.val, &spec.value_type);
                         if let Value::String(key) = key {
+                            // String key → add directly to the JSON object.
                             object.insert(key, value);
                         } else {
+                            // Non-string key → store as a [key, value] pair.
                             pairs.push(json!([key, value]));
                         }
                     }
                     if pairs.is_empty() {
+                        // All keys were strings — return a clean JSON object.
                         Value::Object(object)
                     } else {
+                        // Mixed or non-string keys — return array of pairs.
                         Value::Array(pairs)
                     }
                 }
                 _ => scval_to_json(val, None),
             },
+
+            // Tuple — positionally typed; each element is decoded with its
+            // corresponding type from the spec's value_types list.
             ScSpecTypeDef::Tuple(spec) => match val {
                 ScVal::Vec(Some(values)) => Value::Array(
                     values
                         .iter()
                         .enumerate()
                         .map(|(i, value)| {
+                            // Use the spec type for this position if available,
+                            // otherwise fall back to generic for extra elements.
                             spec.value_types
                                 .get(i)
                                 .map_or_else(|| scval_to_json(value, None), |td| child(value, td))
@@ -165,11 +232,16 @@ impl RecursiveTypeDecoder {
                 ),
                 _ => scval_to_json(val, None),
             },
+
+            // Udt (User-Defined Type) — look up the type name in the contract spec
+            // and dispatch to the appropriate struct/enum/union decoder.
             ScSpecTypeDef::Udt(spec) => {
                 let Some(contract_spec) = contract_spec else {
+                    // No spec available — cannot resolve the UDT; use generic.
                     return scval_to_json(val, None);
                 };
                 let name = spec.name.to_string();
+                // Search structs first, then enums, then unions.
                 if let Some(def) = contract_spec.structs.iter().find(|def| def.name == name) {
                     self.decode_struct(val, def, contract_spec, depth)
                 } else if let Some(def) = contract_spec.enums.iter().find(|def| def.name == name) {
@@ -177,12 +249,21 @@ impl RecursiveTypeDecoder {
                 } else if let Some(def) = contract_spec.unions.iter().find(|def| def.name == name) {
                     self.decode_union(val, def, contract_spec, depth)
                 } else {
+                    // Type name not found in any category — fall back to generic.
                     scval_to_json(val, None)
                 }
             }
         }
     }
 
+    /// Decode a struct value.
+    ///
+    /// Soroban serialises structs in two ways depending on the SDK version:
+    /// - **Map**: fields are `{Symbol → value}` entries (named layout).
+    /// - **Vec**: fields are positional, matched by index to the spec's field list.
+    ///
+    /// Both forms are supported; missing fields are emitted as `null` so the
+    /// output always contains every field declared in the spec.
     fn decode_struct(
         &self,
         val: &ScVal,
@@ -193,6 +274,7 @@ impl RecursiveTypeDecoder {
         let mut object = Map::new();
         match val {
             ScVal::Map(Some(entries)) => {
+                // Named layout: look up each spec field by its symbol/string key.
                 for field in &def.fields {
                     let entry = entries.iter().find(|entry| match &entry.key {
                         ScVal::Symbol(k) => k.to_string() == field.name,
@@ -212,6 +294,8 @@ impl RecursiveTypeDecoder {
                 }
             }
             ScVal::Vec(Some(values)) => {
+                // Positional layout: match each spec field to the value at the
+                // same index in the vec.
                 for (i, field) in def.fields.iter().enumerate() {
                     object.insert(
                         field.name.clone(),
@@ -232,10 +316,18 @@ impl RecursiveTypeDecoder {
         Value::Object(object)
     }
 
+    /// Decode an enum value.
+    ///
+    /// Soroban enums are integer-tagged at the wire level (a `u32` discriminant)
+    /// but the spec maps each discriminant to a human-readable case name.
+    /// Symbols/strings from newer SDK versions are also accepted directly.
     fn decode_enum(&self, val: &ScVal, def: &crate::spec::decoder::ContractEnumDef) -> Value {
         match val {
+            // SDK >= some version serialises enum cases as their symbol name.
             ScVal::Symbol(v) => json!(v.to_string()),
             ScVal::String(v) => json!(v.to_string()),
+            // Numeric discriminant — look up the case name in the spec.
+            // If the discriminant is out of range, fall back to the raw number.
             ScVal::U32(v) => def
                 .cases
                 .iter()
@@ -245,6 +337,15 @@ impl RecursiveTypeDecoder {
         }
     }
 
+    /// Decode a union (tagged-enum) value.
+    ///
+    /// Unions are encoded as a Vec whose first element is the variant name
+    /// (a Symbol or String) and whose remaining elements are the payload values.
+    ///
+    /// The variant name is used to look up the case definition in the spec,
+    /// which carries the types of the payload elements.  A single-element
+    /// payload is unwrapped to a plain `{name: value}` object; multi-element
+    /// payloads use `{name: [v1, v2, …]}`.
     fn decode_union(
         &self,
         val: &ScVal,
@@ -252,9 +353,11 @@ impl RecursiveTypeDecoder {
         spec: &ContractSpec,
         depth: usize,
     ) -> Value {
+        // Unions must be encoded as a Vec.
         let ScVal::Vec(Some(values)) = val else {
             return scval_to_json(val, None);
         };
+        // The first element is always the variant name discriminator.
         let Some(first) = values.first() else {
             return scval_to_json(val, None);
         };
@@ -263,10 +366,12 @@ impl RecursiveTypeDecoder {
             ScVal::String(v) => v.to_string(),
             _ => return scval_to_json(val, None),
         };
+        // Look up the case definition so we know the payload types.
         let Some(case) = def.cases.iter().find(|case| case.name == name) else {
             return scval_to_json(val, None);
         };
         if let Some(types) = &case.value_types {
+            // Decode each payload element with its corresponding type from the spec.
             let payload: Vec<Value> = values[1..]
                 .iter()
                 .enumerate()
@@ -277,12 +382,14 @@ impl RecursiveTypeDecoder {
                     )
                 })
                 .collect();
+            // Unwrap single-element payloads for a cleaner JSON representation.
             if payload.len() == 1 {
                 json!({ (name): payload[0] })
             } else {
                 json!({ (name): payload })
             }
         } else {
+            // Unit variant — no payload, just emit the name as a string.
             json!(name)
         }
     }
