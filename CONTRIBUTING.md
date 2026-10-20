@@ -16,7 +16,12 @@ By participating, you agree to follow our [Code of Conduct](./CODE_OF_CONDUCT.md
 
 ## Development Setup
 
-Refer to the [Requirements section in the README](../README.md#requirements) for environment setup.
+Please refer to the comprehensive [Getting Started Guide](./docs/getting-started.md) for full instructions on setting up:
+- The Rust toolchain (stable, wasm32-unknown-unknown, rustfmt, clippy)
+- Node.js and pnpm monorepo dependencies
+- Environment variables for `apps/server` and `apps/web`
+- Running all crates, API server, and web frontend locally
+- Troubleshooting common setup hurdles
 
 ## License
 
