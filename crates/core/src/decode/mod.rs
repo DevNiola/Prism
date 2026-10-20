@@ -48,3 +48,22 @@ pub use struct_decoder::{StructDecodeReport, StructDecoder};
 pub use walker::{
     walk_diagnostic_events, DiagnosticEventKind, DiagnosticEventWalker, StructuredDiagnosticEvent,
 };
+
+/// Decodes a transaction using the async cache with a cache-aside pattern, preventing blocking on cache I/O.
+pub async fn decode_with_cache(
+    cache: &crate::cache::async_cache::AsyncCache,
+    tx_data: &serde_json::Value,
+) -> crate::error::GratResult<Vec<crate::types::report::DiagnosticReport>> {
+    let hash = tx_data
+        .get("hash")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    let cache_key = format!("decode_tx:{hash}");
+
+    cache
+        .get_or_compute(&cache_key, || async {
+            let decoder = MultiOpDecoder::new();
+            decoder.decode_transaction(tx_data)
+        })
+        .await
+}

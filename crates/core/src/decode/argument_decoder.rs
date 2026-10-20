@@ -86,6 +86,66 @@ impl ArgumentDecoder {
         type_def: Option<&ScSpecTypeDef>,
         contract_spec: Option<&ContractSpec>,
     ) -> DecodedArgument {
+        if let Some(ScSpecTypeDef::Option(opt_spec)) = type_def {
+            let (value, formatted) = match val {
+                ScVal::Void => (serde_json::json!({ "None": null }), "None".to_string()),
+                _ => {
+                    let inner = self.return_decoder.decode(val, Some(&opt_spec.value_type), contract_spec);
+                    let formatted_inner = Self::format_value(&inner);
+                    (serde_json::json!({ "Some": inner }), format!("Some({formatted_inner})"))
+                }
+            };
+            return DecodedArgument {
+                name: name.to_string(),
+                value,
+                formatted,
+            };
+        }
+
+        if let Some(ScSpecTypeDef::Result(res_spec)) = type_def {
+            let (value, formatted) = match val {
+                ScVal::Error(err) => {
+                    let err_str = format!("{err:?}");
+                    (serde_json::json!({ "Err": err_str }), format!("Err({err_str})"))
+                }
+                _ => {
+                    let inner = self.return_decoder.decode(val, Some(&res_spec.ok_type), contract_spec);
+                    let formatted_inner = Self::format_value(&inner);
+                    (serde_json::json!({ "Ok": inner }), format!("Ok({formatted_inner})"))
+                }
+            };
+            return DecodedArgument {
+                name: name.to_string(),
+                value,
+                formatted,
+            };
+        }
+
+        if let Some(ScSpecTypeDef::Udt(udt)) = type_def {
+            if let Some(spec) = contract_spec {
+                if let Some(enum_def) = spec.find_enum(&udt.name) {
+                    if crate::decode::enum_decoder::EnumDecoder::is_option_enum(enum_def) {
+                        let value = crate::decode::enum_decoder::EnumDecoder::new().decode_option(val, enum_def);
+                        let formatted = Self::format_value(&value);
+                        return DecodedArgument {
+                            name: name.to_string(),
+                            value,
+                            formatted,
+                        };
+                    }
+                    if crate::decode::enum_decoder::EnumDecoder::is_result_enum(enum_def) {
+                        let value = crate::decode::enum_decoder::EnumDecoder::new().decode_result(val, enum_def);
+                        let formatted = Self::format_value(&value);
+                        return DecodedArgument {
+                            name: name.to_string(),
+                            value,
+                            formatted,
+                        };
+                    }
+                }
+            }
+        }
+
         let value = self.return_decoder.decode(val, type_def, contract_spec);
         let formatted = Self::format_value(&value);
         DecodedArgument {
@@ -102,6 +162,23 @@ impl ArgumentDecoder {
             Value::Null => "null".to_string(),
             Value::Bool(b) => b.to_string(),
             Value::Number(n) => n.to_string(),
+            Value::Object(map) if map.len() == 1 => {
+                if let Some((k, v)) = map.iter().next() {
+                    if k == "Some" {
+                        return format!("Some({})", Self::format_value(v));
+                    }
+                    if k == "None" {
+                        return "None".to_string();
+                    }
+                    if k == "Ok" {
+                        return format!("Ok({})", Self::format_value(v));
+                    }
+                    if k == "Err" {
+                        return format!("Err({})", Self::format_value(v));
+                    }
+                }
+                serde_json::to_string(value).unwrap_or_else(|_| value.to_string())
+            }
             other => serde_json::to_string(other).unwrap_or_else(|_| other.to_string()),
         }
     }
@@ -304,5 +381,57 @@ mod tests {
         assert_eq!(decoded[0].value, json!(1));
         assert_eq!(decoded[1].name, "arg1");
         assert_eq!(decoded[1].value, json!("test"));
+    }
+
+    #[test]
+    fn test_option_argument_decoding() {
+        use stellar_xdr::curr::ScSpecTypeOption;
+
+        let decoder = ArgumentDecoder::new();
+        let param_defs = vec![
+            (
+                "maybe_amount".to_string(),
+                ScSpecTypeDef::Option(Box::new(ScSpecTypeOption {
+                    value_type: Box::new(ScSpecTypeDef::U32),
+                })),
+            ),
+        ];
+
+        // None case (Void)
+        let decoded_none = decoder.decode(&[ScVal::Void], &param_defs, None);
+        assert_eq!(decoded_none.len(), 1);
+        assert_eq!(decoded_none[0].name, "maybe_amount");
+        assert_eq!(decoded_none[0].value, json!({ "None": null }));
+        assert_eq!(decoded_none[0].formatted, "None");
+
+        // Some case (U32)
+        let decoded_some = decoder.decode(&[ScVal::U32(500)], &param_defs, None);
+        assert_eq!(decoded_some.len(), 1);
+        assert_eq!(decoded_some[0].name, "maybe_amount");
+        assert_eq!(decoded_some[0].value, json!({ "Some": 500 }));
+        assert_eq!(decoded_some[0].formatted, "Some(500)");
+    }
+
+    #[test]
+    fn test_result_argument_decoding() {
+        use stellar_xdr::curr::ScSpecTypeResult;
+
+        let decoder = ArgumentDecoder::new();
+        let param_defs = vec![
+            (
+                "outcome".to_string(),
+                ScSpecTypeDef::Result(Box::new(ScSpecTypeResult {
+                    ok_type: Box::new(ScSpecTypeDef::String),
+                    error_type: Box::new(ScSpecTypeDef::U32),
+                })),
+            ),
+        ];
+
+        // Ok case
+        let decoded_ok = decoder.decode(&[str_val("success_token")], &param_defs, None);
+        assert_eq!(decoded_ok.len(), 1);
+        assert_eq!(decoded_ok[0].name, "outcome");
+        assert_eq!(decoded_ok[0].value, json!({ "Ok": "success_token" }));
+        assert_eq!(decoded_ok[0].formatted, "Ok(success_token)");
     }
 }

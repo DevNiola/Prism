@@ -52,6 +52,35 @@ impl DiskCache {
         Self::new(project_dirs.cache_dir().join("disk_cache"))
     }
 
+    pub fn put_sync<V>(&self, key: &str, value: &V) -> GratResult<()>
+    where
+        V: Serialize,
+    {
+        let encoded = bincode::serialize(value).map_err(|e| GratError::CacheSerializationError {
+            key: key.to_string(),
+            reason: e.to_string(),
+        })?;
+        self.db.insert(key.as_bytes(), encoded)
+            .map_err(|e| GratError::CacheError(format!("Sled insert failed: {e}")))?;
+        Ok(())
+    }
+
+    pub fn get_sync<V>(&self, key: &str) -> GratResult<Option<V>>
+    where
+        V: DeserializeOwned,
+    {
+        let raw = self.db.get(key.as_bytes())
+            .map_err(|e| GratError::CacheError(format!("Sled get failed: {e}")))?;
+        let Some(bytes) = raw else {
+            return Ok(None);
+        };
+        let value = bincode::deserialize(&bytes).map_err(|e| GratError::CacheDeserializationError {
+            key: key.to_string(),
+            reason: e.to_string(),
+        })?;
+        Ok(Some(value))
+    }
+
     pub async fn put<V>(&self, key: &str, value: &V, ledger_sequence: Option<u32>) -> GratResult<()>
     where
         V: Serialize + Sync,
@@ -60,37 +89,33 @@ impl DiskCache {
         let encoded = bincode::serialize(value).map_err(|e| GratError::CacheSerializationError {
             key: key.clone(),
             reason: e.to_string(),
-        });
+        })?;
 
         let db = Arc::clone(&self.db);
+        let cache_key = match ledger_sequence {
+            Some(sequence) => Self::ledger_key(&key, sequence),
+            None => key.as_bytes().to_vec(),
+        };
 
-        async move {
-            let encoded = encoded?;
-            let cache_key = match ledger_sequence {
-                Some(sequence) => Self::ledger_key(&key, sequence),
-                None => key.as_bytes().to_vec(),
-            };
+        tokio::task::spawn_blocking(move || {
+            db.insert(cache_key.clone(), encoded.clone())
+                .map_err(|e| GratError::CacheError(format!("Sled insert failed: {e}")))?;
 
-            tokio::task::spawn_blocking(move || {
-                db.insert(cache_key.clone(), encoded.clone())
-                    .map_err(|e| GratError::CacheError(format!("Sled insert failed: {e}")))?;
+            if let Some(sequence) = ledger_sequence {
+                let ledger_index = db.open_tree(b"ledger_index")
+                    .map_err(|e| GratError::CacheError(format!("Failed to open ledger index: {e}")))?;
+                let entry_key = Self::ledger_key(&key, sequence);
+                ledger_index
+                    .insert(entry_key.clone(), key.as_bytes())
+                    .map_err(|e| GratError::CacheError(format!("Failed to index ledger entry: {e}")))?;
+                let _ = entry_key;
+            }
+            Ok::<(), GratError>(())
+        })
+        .await
+        .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))??;
 
-                if let Some(sequence) = ledger_sequence {
-                    let ledger_index = db.open_tree(b"ledger_index")
-                        .map_err(|e| GratError::CacheError(format!("Failed to open ledger index: {e}")))?;
-                    let entry_key = Self::ledger_key(&key, sequence);
-                    ledger_index
-                        .insert(entry_key.clone(), key.as_bytes())
-                        .map_err(|e| GratError::CacheError(format!("Failed to index ledger entry: {e}")))?;
-                    let _ = entry_key;
-                }
-                Ok::<(), GratError>(())
-            })
-            .await
-            .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))??;
-
-            Ok(())
-        }
+        Ok(())
     }
 
     pub async fn get<V>(&self, key: &str, ledger_sequence: Option<u32>) -> GratResult<Option<V>>
@@ -100,93 +125,87 @@ impl DiskCache {
         let db = Arc::clone(&self.db);
         let key = key.to_owned();
 
-        async move {
-            let lookup_key = match ledger_sequence {
-                Some(sequence) => Self::ledger_key(&key, sequence),
-                None => key.as_bytes().to_vec(),
-            };
+        let lookup_key = match ledger_sequence {
+            Some(sequence) => Self::ledger_key(&key, sequence),
+            None => key.as_bytes().to_vec(),
+        };
 
-            let raw = tokio::task::spawn_blocking(move || db.get(lookup_key))
-                .await
-                .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))?
-                .map_err(|e| GratError::CacheError(format!("Sled get failed: {e}")))?;
+        let raw = tokio::task::spawn_blocking(move || db.get(lookup_key))
+            .await
+            .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))?
+            .map_err(|e| GratError::CacheError(format!("Sled get failed: {e}")))?;
 
-            let Some(bytes) = raw else {
-                return Ok(None);
-            };
+        let Some(bytes) = raw else {
+            return Ok(None);
+        };
 
-            let value = bincode::deserialize(&bytes).map_err(|e| GratError::CacheDeserializationError {
-                key,
-                reason: e.to_string(),
-            })?;
+        let value = bincode::deserialize(&bytes).map_err(|e| GratError::CacheDeserializationError {
+            key,
+            reason: e.to_string(),
+        })?;
 
-            Ok(Some(value))
-        }
+        Ok(Some(value))
     }
 
     pub async fn remove(&self, key: &str, ledger_sequence: Option<u32>) -> GratResult<()> {
         let db = Arc::clone(&self.db);
         let key = key.to_owned();
 
-        async move {
-            let lookup_key = match ledger_sequence {
-                Some(sequence) => Self::ledger_key(&key, sequence),
-                None => key.as_bytes().to_vec(),
-            };
+        let lookup_key = match ledger_sequence {
+            Some(sequence) => Self::ledger_key(&key, sequence),
+            None => key.as_bytes().to_vec(),
+        };
 
-            tokio::task::spawn_blocking(move || {
-                db.remove(lookup_key)
-                    .map_err(|e| GratError::CacheError(format!("Sled remove failed: {e}")))?;
-                if let Some(sequence) = ledger_sequence {
-                    let index = db.open_tree(b"ledger_index")
-                        .map_err(|e| GratError::CacheError(format!("Failed to open ledger index: {e}")))?;
-                    index
-                        .remove(Self::ledger_key(&key, sequence))
-                        .map_err(|e| GratError::CacheError(format!("Failed to remove ledger index entry: {e}")))?;
-                }
-                Ok::<(), GratError>(())
-            })
-            .await
-            .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))??;
+        tokio::task::spawn_blocking(move || {
+            db.remove(lookup_key)
+                .map_err(|e| GratError::CacheError(format!("Sled remove failed: {e}")))?;
+            if let Some(sequence) = ledger_sequence {
+                let index = db.open_tree(b"ledger_index")
+                    .map_err(|e| GratError::CacheError(format!("Failed to open ledger index: {e}")))?;
+                index
+                    .remove(Self::ledger_key(&key, sequence))
+                    .map_err(|e| GratError::CacheError(format!("Failed to remove ledger index entry: {e}")))?;
+            }
+            Ok::<(), GratError>(())
+        })
+        .await
+        .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))??;
 
-            Ok(())
-        }
+        Ok(())
     }
 
     pub async fn prune_older_than(&self, ledger_sequence: u32) -> GratResult<()> {
         let db = Arc::clone(&self.db);
 
-        async move {
-            tokio::task::spawn_blocking(move || {
-                let ledger_index = db.open_tree(b"ledger_index")
-                    .map_err(|e| GratError::CacheError(format!("Failed to open ledger index: {e}")))?;
+        tokio::task::spawn_blocking(move || {
+            let ledger_index = db.open_tree(b"ledger_index")
+                .map_err(|e| GratError::CacheError(format!("Failed to open ledger index: {e}")))?;
 
-                let mut keys_to_remove = Vec::new();
-                for seq in 0..ledger_sequence {
-                    let prefix = seq.to_be_bytes();
-                    for entry in ledger_index.scan_prefix(prefix) {
-                        let (index_key, _) = entry.map_err(|e| {
-                            GratError::CacheError(format!("Sled prefix scan failed: {e}"))
-                        })?;
-                        keys_to_remove.push(index_key.to_vec());
-                    }
+            let mut keys_to_remove = Vec::new();
+            for seq in 0..ledger_sequence {
+                let prefix = seq.to_be_bytes();
+                for entry in ledger_index.scan_prefix(prefix) {
+                    let (index_key, _) = entry.map_err(|e| {
+                        GratError::CacheError(format!("Sled prefix scan failed: {e}"))
+                    })?;
+                    keys_to_remove.push(index_key.to_vec());
                 }
+            }
 
-                for index_key in keys_to_remove {
-                    db.remove(index_key.clone())
-                        .map_err(|e| GratError::CacheError(format!("Sled remove failed: {e}")))?;
-                    ledger_index
-                        .remove(index_key)
-                        .map_err(|e| GratError::CacheError(format!("Failed to remove ledger index entry: {e}")))?;
-                }
+            for index_key in keys_to_remove {
+                db.remove(index_key.clone())
+                    .map_err(|e| GratError::CacheError(format!("Sled remove failed: {e}")))?;
+                ledger_index
+                    .remove(index_key)
+                    .map_err(|e| GratError::CacheError(format!("Failed to remove ledger index entry: {e}")))?;
+            }
 
-                Ok::<(), GratError>(())
-            })
-            .await
-            .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))??;
+            Ok::<(), GratError>(())
+        })
+        .await
+        .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))??;
 
-            Ok(())
-        }
+        Ok(())
     }
 
     /// Flushes any buffered writes to disk. Sled batches and lazily flushes
