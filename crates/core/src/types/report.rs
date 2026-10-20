@@ -153,6 +153,9 @@ pub struct DiagnosticReport {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub operation_count: Option<usize>,
 
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub is_first_failure: Option<bool>,
+
     pub learn_more: String,
 }
 
@@ -178,6 +181,7 @@ impl DiagnosticReport {
             resource_diagnostics: None,
             operation_index: None,
             operation_count: None,
+            is_first_failure: None,
             learn_more: "https://developers.stellar.org/docs/learn/smart-contracts/errors"
                 .to_string(),
         }
