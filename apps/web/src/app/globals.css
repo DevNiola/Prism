@@ -1,1 +1,50 @@
 @import "tailwindcss";
+
+/*
+ * =============================================================================
+ * Spacing System — 4px Grid
+ * =============================================================================
+ *
+ * All spacing in this application follows a strict 4px base grid. Spacing
+ * tokens are defined as CSS custom properties and registered with Tailwind v4
+ * via @theme so they are available as utility classes (e.g. p-space-4,
+ * gap-space-8, m-space-16, etc.).
+ *
+ * Token reference:
+ *   --spacing-1   →  4px   (extra-tight, icon gaps, micro-padding)
+ *   --spacing-2   →  8px   (tight, inline element gaps)
+ *   --spacing-3   →  12px  (compact, small component padding)
+ *   --spacing-4   →  16px  (base unit, standard padding / margins)
+ *   --spacing-6   →  24px  (medium, card padding, section gaps)
+ *   --spacing-8   →  32px  (large, section separation)
+ *   --spacing-12  →  48px  (x-large, page-level vertical rhythm)
+ *   --spacing-16  →  64px  (xx-large, hero sections, major dividers)
+ *
+ * Usage rules:
+ *   1. Always prefer a spacing token over an arbitrary value.
+ *   2. Use --spacing-4 (16px) as the default padding for interactive elements.
+ *   3. Use --spacing-6 (24px) for card / panel padding.
+ *   4. Use --spacing-8 (32px) or larger only for section-level separation.
+ *   5. Half-pixel or non-grid values (e.g. p-2.5, py-0.5) are permitted only
+ *      for fine-tuned border / badge elements where the token grid is too
+ *      coarse — document the exception inline.
+ *
+ * =============================================================================
+ */
+
+@theme {
+  /* 4px base grid spacing tokens */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-12: 48px;
+  --spacing-16: 64px;
+
+  /* Layout tokens */
+  --max-width-content: 48rem;   /* 768px — max width for content containers */
+  --max-width-wide: 64rem;      /* 1024px — max width for wide layouts       */
+  --max-width-full: 80rem;      /* 1280px — full-bleed page max-width         */
+}
