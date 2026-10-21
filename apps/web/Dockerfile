@@ -1,24 +1,25 @@
-FROM node:20-alpine AS dependencies
+FROM node:20-alpine AS build
 
 WORKDIR /app
-COPY package.json ./
-RUN npm install
-
-FROM dependencies AS build
-
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/package.json
+RUN pnpm install --filter grat-web --frozen-lockfile
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-COPY . .
-RUN npm run build
+COPY apps/web/ apps/web/
+RUN pnpm --filter grat-web build
 
 FROM node:20-alpine AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
-COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/.next ./.next
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/package.json
+RUN pnpm install --filter grat-web --prod --frozen-lockfile
+COPY --from=build /app/apps/web/.next apps/web/.next
 
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["pnpm", "--filter", "grat-web", "start"]

@@ -42,11 +42,11 @@ Build and push images from the repository root. The web API URL is compiled into
 the Next.js client bundle, so set it to the public application hostname:
 
 ```sh
-docker build -t "$ECR_REGISTRY/prism-server:latest" -f apps/server/Dockerfile apps/server
+docker build -t "$ECR_REGISTRY/prism-server:latest" -f apps/server/Dockerfile .
 docker build \
   --build-arg NEXT_PUBLIC_API_URL="https://${DOMAIN_NAME}" \
   -t "$ECR_REGISTRY/prism-web:latest" \
-  -f apps/web/Dockerfile apps/web
+  -f apps/web/Dockerfile .
 docker push "$ECR_REGISTRY/prism-server:latest"
 docker push "$ECR_REGISTRY/prism-web:latest"
 ```
