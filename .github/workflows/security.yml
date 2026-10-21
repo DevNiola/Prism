@@ -23,29 +23,18 @@ jobs:
       - name: Audit Rust dependencies
         run: cargo audit
 
-  npm-audit:
-    name: npm dependency audit (${{ matrix.directory }})
+  javascript-audit:
+    name: JavaScript dependency audit
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        directory:
-          - apps/server
-          - apps/web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Create npm lockfile when absent
-        working-directory: ${{ matrix.directory }}
-        run: |
-          if [ ! -f package-lock.json ]; then
-            npm install --package-lock-only --ignore-scripts --no-audit
-          fi
-      - name: Audit npm dependencies
-        working-directory: ${{ matrix.directory }}
-        run: npm audit --audit-level=high
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Audit JavaScript dependencies
+        run: pnpm audit --audit-level high
 
   codeql:
     name: CodeQL (${{ matrix.language }})
@@ -77,10 +66,10 @@ jobs:
         include:
           - app: server
             dockerfile: apps/server/Dockerfile
-            context: apps/server
+            context: .
           - app: web
             dockerfile: apps/web/Dockerfile
-            context: apps/web
+            context: .
     steps:
       - uses: actions/checkout@v4
       - name: Build container image
