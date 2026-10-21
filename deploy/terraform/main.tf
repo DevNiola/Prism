@@ -89,7 +89,7 @@ module "server" {
   target_group_arn     = module.load_balancer.server_target_group_arn
   environment_variables = {
     PORT      = "3001"
-    REDIS_URL = "redis://:${var.redis_auth_token}@${module.redis.primary_endpoint}:6379"
+    REDIS_URL = "rediss://:${var.redis_auth_token}@${module.redis.primary_endpoint}:6379"
     AI_API_KEY = var.ai_api_key
   }
 }
