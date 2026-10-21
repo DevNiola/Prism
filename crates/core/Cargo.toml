@@ -67,6 +67,7 @@ name = "taxonomy_linter"
 path = "src/bin/taxonomy_linter.rs"
 
 [dev-dependencies]
+proptest = "1"
 tokio-test = "0.4"
 insta = { version = "1", features = ["json"] }
 tracing-subscriber = { workspace = true }
