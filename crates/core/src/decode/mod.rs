@@ -33,6 +33,11 @@ pub use auth::{
     AuthorizationType,
 };
 pub use auth_address_nonce::AddressWithNonce;
+pub use auth_address_nonce::AddressCredentialV2;
+pub use auth_signature::{
+    decode_auth_entry_signatures, decode_auth_entry_signatures_v2, decode_signature_bytes,
+    parse_signature_format, SignatureFormat, V2SignerEntry,
+};
 pub use chain_analyzer::{analyze_call_chain, CallChain, ChainAnalyzer, ChainFrame, FrameRole};
 pub use deepest_error::{find_deepest_error, DeepestError, DeepestErrorFinder};
 pub use enum_decoder::EnumDecoder;
@@ -49,3 +54,4 @@ pub use struct_decoder::{StructDecodeReport, StructDecoder};
 pub use walker::{
     walk_diagnostic_events, DiagnosticEventKind, DiagnosticEventWalker, StructuredDiagnosticEvent,
 };
+pub use cross_contract::build_call_graph;
