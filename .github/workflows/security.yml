@@ -1,0 +1,100 @@
+name: Security
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "23 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-audit:
+    name: Rust dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Generate dependency lockfile
+        run: cargo generate-lockfile
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit Rust dependencies
+        run: cargo audit
+
+  npm-audit:
+    name: npm dependency audit (${{ matrix.directory }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        directory:
+          - apps/server
+          - apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Create npm lockfile when absent
+        working-directory: ${{ matrix.directory }}
+        run: |
+          if [ ! -f package-lock.json ]; then
+            npm install --package-lock-only --ignore-scripts --no-audit
+          fi
+      - name: Audit npm dependencies
+        working-directory: ${{ matrix.directory }}
+        run: npm audit --audit-level=high
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - javascript-typescript
+          - rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+
+  trivy:
+    name: Container scan (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: server
+            dockerfile: apps/server/Dockerfile
+            context: apps/server
+          - app: web
+            dockerfile: apps/web/Dockerfile
+            context: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build container image
+        if: hashFiles(matrix.dockerfile) != ''
+        run: |
+          docker build \
+            --file "${{ matrix.dockerfile }}" \
+            --tag "prism-${{ matrix.app }}:security-scan" \
+            "${{ matrix.context }}"
+      - name: Scan image with Trivy
+        if: hashFiles(matrix.dockerfile) != ''
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: prism-${{ matrix.app }}:security-scan
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "1"
