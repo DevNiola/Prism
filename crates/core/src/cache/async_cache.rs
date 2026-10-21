@@ -26,7 +26,7 @@ impl AsyncCache {
         let key = key.to_owned();
         let handle = tokio::runtime::Handle::current();
 
-        tokio::task::spawn_blocking(move || handle.block_on(cache.get::<V>(&key)))
+        tokio::task::spawn_blocking(move || handle.block_on(cache.get::<V>(&key, None)))
             .await
             .expect("blocking cache task failed")
     }
@@ -39,7 +39,7 @@ impl AsyncCache {
         let key = key.to_owned();
         let handle = tokio::runtime::Handle::current();
 
-        tokio::task::spawn_blocking(move || handle.block_on(cache.put(&key, &value)))
+        tokio::task::spawn_blocking(move || handle.block_on(cache.put(&key, &value, None)))
             .await
             .expect("blocking cache task failed")
     }

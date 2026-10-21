@@ -24,6 +24,7 @@ pub mod resource_analyzer;
 pub mod return_decoder;
 pub mod scval_to_json;
 pub mod struct_decoder;
+pub mod tuple_decoder;
 pub mod walker;
 
 pub use argument_decoder::ArgumentDecoder;
