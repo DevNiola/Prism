@@ -1,0 +1,28 @@
+days-before-issue-stale: 30
+days-before-issue-close: 7
+days-before-pr-stale: 30
+days-before-pr-close: 7
+
+stale-issue-label: stale
+stale-pr-label: stale
+exempt-issue-labels: pinned, security
+exempt-pr-labels: pinned, security
+
+stale-issue-message: >-
+  This issue has been inactive for 30 days and is now marked as stale. It will
+  be closed in 7 days if there is no further activity. Comment or update the
+  issue to keep it open.
+close-issue-message: >-
+  This issue was closed because it remained inactive for 7 days after being
+  marked stale. Reopen it or create a new issue if the problem is still
+  relevant.
+stale-pr-message: >-
+  This pull request has been inactive for 30 days and is now marked as stale.
+  It will be closed in 7 days if there is no further activity. Comment or
+  update the pull request to keep it open.
+close-pr-message: >-
+  This pull request was closed because it remained inactive for 7 days after
+  being marked stale. Reopen it if the change is still needed.
+
+remove-stale-when-updated: true
+delete-branch: false
