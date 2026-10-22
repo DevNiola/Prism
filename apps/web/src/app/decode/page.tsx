@@ -8,6 +8,7 @@ import {
   DecodeForm,
   ErrorCard,
   ContractErrorView,
+  ContextSummary,
 } from "@/components";
 import type { DiagnosticReport } from "@/lib/types";
 import { useSessionStore } from "@/store/session";
@@ -96,6 +97,9 @@ function DecodePageContent() {
               {report && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <ErrorCard report={report} />
+                  {report.transaction_context && (
+                    <ContextSummary context={report.transaction_context} />
+                  )}
                 </div>
               )}
             </div>
