@@ -44,16 +44,18 @@ impl DiagnosticEventWalker {
             let topics: Vec<String> = v0.topics.iter().filter_map(Self::topic_to_string).collect();
             let first_topic = topics.first().map(String::as_str);
 
-            match first_topic {
-                Some("fn_call") => {
-                    if let Some(ref hash) = event.event.contract_id {
-                        stack.push(Self::hash_to_strkey(hash));
+            if event.event.type_ == stellar_xdr::curr::ContractEventType::System {
+                match first_topic {
+                    Some("fn_call") => {
+                        if let Some(ref hash) = event.event.contract_id {
+                            stack.push(Self::hash_to_strkey(hash));
+                        }
                     }
+                    Some("fn_return") => {
+                        stack.pop();
+                    }
+                    _ => {}
                 }
-                Some("fn_return") => {
-                    stack.pop();
-                }
-                _ => {}
             }
 
             if Self::is_failure_event(event, &topics, &v0.data) {
@@ -638,6 +640,47 @@ mod tests {
                 .locate_failing_contract(&events)
                 .as_deref(),
             Some(strkey_of(&h1()).as_str())
+        );
+    }
+
+    #[test]
+    fn non_system_fn_return_does_not_pop_the_call_stack() {
+        let events = vec![
+            make_event(
+                ContractEventType::System,
+                Some(h2()),
+                vec![sym("fn_call"), sym("b_func")],
+                ScVal::Void,
+                true,
+            ),
+            make_event(
+                ContractEventType::System,
+                Some(h3()),
+                vec![sym("fn_call"), sym("c_func")],
+                ScVal::Void,
+                true,
+            ),
+            make_event(
+                ContractEventType::Contract,
+                Some(h3()),
+                vec![sym("fn_return")],
+                ScVal::Void,
+                true,
+            ),
+            make_event(
+                ContractEventType::Diagnostic,
+                None,
+                vec![sym("panic")],
+                ScVal::Void,
+                false,
+            ),
+        ];
+
+        assert_eq!(
+            DiagnosticEventWalker::new()
+                .locate_failing_contract(&events)
+                .as_deref(),
+            Some(strkey_of(&h3()).as_str())
         );
     }
 }
