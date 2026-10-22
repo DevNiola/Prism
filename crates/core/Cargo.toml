@@ -67,8 +67,13 @@ name = "taxonomy_linter"
 path = "src/bin/taxonomy_linter.rs"
 
 [dev-dependencies]
+criterion = "0.5"
 tokio-test = "0.4"
 insta = { version = "1", features = ["json"] }
 tracing-subscriber = { workspace = true }
 ctor = "0.2"
 tempfile = "3"
+
+[[bench]]
+name = "decode_pipeline"
+harness = false
