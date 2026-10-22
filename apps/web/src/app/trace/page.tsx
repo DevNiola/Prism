@@ -6,6 +6,29 @@ import { ExecutionTimeline } from "@/components/trace/ExecutionTimeline";
 import { StateDiffViewer } from "@/components/trace/StateDiffViewer";
 import { ResourceProfile } from "@/components/trace/ResourceProfile";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
+import Skeleton from "@/components/shared/Skeleton";
+
+/** Mirrors the Transaction Info card so the page keeps its height while the
+ *  trace stream is still being established. */
+function TransactionInfoSkeleton() {
+  return (
+    <div className="bg-white rounded-lg shadow p-6" aria-busy="true">
+      <h2 className="text-xl font-semibold mb-4">Transaction Info</h2>
+      <dl className="grid grid-cols-2 gap-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index}>
+            <dt className="text-sm text-gray-600">
+              <Skeleton className="h-4 w-32" />
+            </dt>
+            <dd className="mt-1">
+              <Skeleton className="h-4 w-40" />
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
 
 export default function TracePage() {
   const [txHash, setTxHash] = useState("");
@@ -82,14 +105,18 @@ export default function TracePage() {
         )}
       </form>
 
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <LoadingSpinner />
-          <span className="ml-3 text-gray-600">
-            {trace?.nodes.length
-              ? `Processing trace nodes (${trace.nodes.length} received)...`
-              : "Reconstructing state and starting replay..."}
-          </span>
+      {loading && !trace && (
+        <div className="space-y-8">
+          <div className="flex items-center justify-center py-4">
+            <LoadingSpinner label="Reconstructing state and starting replay" />
+            <span className="ml-3 text-gray-600">
+              Reconstructing state and starting replay...
+            </span>
+          </div>
+          <TransactionInfoSkeleton />
+          <ResourceProfile loading />
+          <ExecutionTimeline nodes={[]} loading />
+          <StateDiffViewer entries={[]} loading />
         </div>
       )}
 
@@ -119,6 +146,17 @@ export default function TracePage() {
               </div>
             </dl>
 
+            {loading && (
+              <div className="mt-4 flex items-center text-sm text-gray-600">
+                <LoadingSpinner label="Streaming trace" className="mr-3" />
+                <span>
+                  {trace.nodes.length
+                    ? `Processing trace nodes (${trace.nodes.length} received)...`
+                    : "Waiting for the first trace node..."}
+                </span>
+              </div>
+            )}
+
             {trace.error && (
               <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-red-800 font-medium">Error</p>
@@ -127,20 +165,15 @@ export default function TracePage() {
             )}
           </div>
 
-          {trace.resource_profile && (
-            <ResourceProfile profile={trace.resource_profile} />
-          )}
+          <ResourceProfile profile={trace.resource_profile} loading={loading} />
 
-          {trace.nodes.length > 0 && (
-            <ExecutionTimeline
-              nodes={trace.nodes}
-              resourceProfile={trace.resource_profile}
-            />
-          )}
+          <ExecutionTimeline
+            nodes={trace.nodes}
+            resourceProfile={trace.resource_profile}
+            loading={loading}
+          />
 
-          {trace.state_diff.length > 0 && (
-            <StateDiffViewer entries={trace.state_diff} />
-          )}
+          <StateDiffViewer entries={trace.state_diff} loading={loading} />
         </div>
       )}
     </main>
