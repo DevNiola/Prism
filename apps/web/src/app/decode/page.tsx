@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect, Suspense, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Header,
   Footer,
@@ -12,39 +12,48 @@ import {
 import type { DiagnosticReport } from "@/lib/types";
 import { useSessionStore } from "@/store/session";
 import { useNetworkStore } from "@/store/network";
+import { useDecode } from "@/hooks/useDecode";
 
 function DecodePageContent() {
   const [activeTab, setActiveTab] = useState<"diagnose" | "lookup">("diagnose");
-  const [report, setReport] = useState<DiagnosticReport | null>(null);
-
-  const { addToHistory, history } = useSessionStore();
-  const { network } = useNetworkStore();
+  const [restoredReport, setRestoredReport] =
+    useState<DiagnosticReport | null>(null);
+  const { report: decodedReport, loading, error, decode } = useDecode();
+  const report = decodedReport ?? restoredReport;
+  const history = useSessionStore((state) => state.history);
+  const hasHydrated = useSessionStore((state) => state.hasHydrated);
+  const addToHistory = useSessionStore((state) => state.addToHistory);
+  const network = useNetworkStore((state) => state.network);
+  const router = useRouter();
 
   const searchParams = useSearchParams();
   const txHashParam = searchParams.get("txHash");
 
-  // If the user navigated here from the history list, pre-load the last matching report
   useEffect(() => {
-    if (txHashParam) {
-      const entry = history.find((h) => h.txHash === txHashParam);
-      if (entry) {
-        setReport(entry.report);
-      }
-    }
-    // Only run on initial mount / txHashParam change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [txHashParam]);
+    if (!txHashParam || !hasHydrated) return;
 
-  function handleDecode(decoded: DiagnosticReport | null) {
-    setReport(decoded);
-    if (decoded) {
-      // Use the txHash from the URL param if present; otherwise generate a placeholder key
-      const txHash =
-        txHashParam ??
-        `${decoded.error_category.toLowerCase()}-${decoded.error_code}-${Date.now()}`;
-      addToHistory(txHash, network, decoded);
+    const entry = history.find((item) => item.txHash === txHashParam);
+    if (entry) {
+      setRestoredReport(entry.report);
+    } else {
+      setRestoredReport(null);
+      void decode(txHashParam, network).then((decoded) => {
+        if (decoded) addToHistory(txHashParam, network, decoded);
+      });
     }
-  }
+  }, [txHashParam, hasHydrated, history, network, decode, addToHistory]);
+
+  const handleDecode = useCallback(
+    async (txHash: string) => {
+      const decoded = await decode(txHash, network);
+      if (!decoded) return;
+      addToHistory(txHash, network, decoded);
+      router.replace(`/decode?txHash=${encodeURIComponent(txHash)}`, {
+        scroll: false,
+      });
+    },
+    [addToHistory, decode, network, router]
+  );
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-violet-500/30 selection:text-violet-200">
@@ -92,7 +101,11 @@ function DecodePageContent() {
         <div className="transition-all duration-300">
           {activeTab === "diagnose" ? (
             <div className="space-y-6">
-              <DecodeForm onDecode={handleDecode} />
+              <DecodeForm
+                onDecode={handleDecode}
+                loading={loading}
+                error={error}
+              />
               {report && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <ErrorCard report={report} />

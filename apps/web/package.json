@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:e2e": "playwright test",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf .next out"
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "@iarna/toml": "^2.2.5",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/diff": "^7.0.0",
     "@types/node": "^22.0.0",
