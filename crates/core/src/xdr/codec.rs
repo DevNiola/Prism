@@ -1,3 +1,16 @@
+//! XDR encoding and decoding helpers for all Soroban/Stellar types used by Prism.
+//!
+//! Soroban uses XDR (eXternal Data Representation) as its canonical binary
+//! serialisation format.  Every on-chain value — transaction envelopes, contract
+//! events, ledger entries, etc. — is XDR-encoded, and the Horizon/RPC APIs
+//! return these values as Base64-encoded XDR strings.
+//!
+//! This module provides:
+//! - [`XdrCodec`]: a uniform trait for encoding/decoding any XDR type to/from
+//!   raw bytes or Base64 strings.
+//! - Individual `impl XdrCodec for …` blocks for every XDR type Prism needs.
+//! - Standalone helper functions for Base64 and hex transcoding.
+
 use crate::error::{GratError, GratResult};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use stellar_xdr::curr::{
@@ -6,6 +19,14 @@ use stellar_xdr::curr::{
     TransactionEnvelope, TransactionMeta, TransactionResult, WriteXdr,
 };
 
+/// Uniform interface for XDR serialisation/deserialisation.
+///
+/// Implementing this trait for a type gives it four codec methods:
+/// - byte-level encode/decode (the canonical form)
+/// - Base64 encode/decode (the form returned by Stellar APIs)
+///
+/// The `TYPE_NAME` associated constant is used exclusively in error messages so
+/// the caller always knows which type failed, even when decoding opaque bytes.
 pub trait XdrCodec: Sized {
     const TYPE_NAME: &'static str;
 
@@ -16,17 +37,33 @@ pub trait XdrCodec: Sized {
     fn to_xdr_bytes(&self) -> GratResult<Vec<u8>>;
 
     /// Decode from a base64-encoded XDR string.
+    ///
+    /// This is a two-step operation: Base64 → raw bytes → XDR decode.
+    /// A failure at either step is surfaced as a [`GratError`].
     fn from_xdr_base64(b64: &str) -> GratResult<Self> {
         let bytes = decode_xdr_base64(b64)?;
         Self::from_xdr_bytes(&bytes)
     }
 
     /// Encode to a base64-encoded XDR string.
+    ///
+    /// This is a two-step operation: XDR encode → Base64.
     fn to_xdr_base64(&self) -> GratResult<String> {
         let bytes = self.to_xdr_bytes()?;
         Ok(encode_xdr_base64(&bytes))
     }
 }
+
+// ---------------------------------------------------------------------------
+// XdrCodec implementations for every XDR type Prism needs to handle.
+//
+// Each impl follows the same pattern:
+//   - `from_xdr_bytes`: call the stellar-xdr `ReadXdr::from_xdr` with
+//     `Limits::none()` (no artificial size cap) and map any error to the
+//     typed `GratError::XdrDecodingFailed` variant.
+//   - `to_xdr_bytes`: call `WriteXdr::to_xdr` and map errors to
+//     `GratError::XdrError` with a descriptive message.
+// ---------------------------------------------------------------------------
 
 impl XdrCodec for TransactionMeta {
     const TYPE_NAME: &'static str = "TransactionMeta";
@@ -306,16 +343,30 @@ impl XdrCodec for LedgerKey {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Standalone helpers
+// ---------------------------------------------------------------------------
+
+/// Decode a Base64-encoded XDR string into raw bytes.
+///
+/// Uses the standard Base64 alphabet (RFC 4648) with padding.
+/// Returns [`GratError::XdrError`] on malformed input.
 pub fn decode_xdr_base64(xdr_base64: &str) -> GratResult<Vec<u8>> {
     STANDARD
         .decode(xdr_base64)
         .map_err(|e| GratError::XdrError(format!("Base64 decode failed: {e}")))
 }
 
+/// Encode raw bytes as a standard Base64 string.
 pub fn encode_xdr_base64(bytes: &[u8]) -> String {
     STANDARD.encode(bytes)
 }
 
+/// Parse a 64-hex-character transaction hash into a 32-byte array.
+///
+/// Transaction hashes on Stellar are SHA-256 digests, always exactly 32 bytes.
+/// This function validates both the length and the hex encoding, returning a
+/// descriptive error if either check fails.
 pub fn decode_tx_hash(hash_hex: &str) -> GratResult<[u8; 32]> {
     let bytes = hex_decode(hash_hex)
         .map_err(|e| GratError::XdrError(format!("Invalid tx hash hex: {e}")))?;
@@ -332,7 +383,13 @@ pub fn decode_tx_hash(hash_hex: &str) -> GratResult<[u8; 32]> {
     Ok(arr)
 }
 
+/// Decode a lowercase or uppercase hex string into bytes.
+///
+/// Processes the input in 2-character chunks (one byte each).
+/// Returns an error string (not a [`GratError`]) so it can be used before the
+/// error type is fully constructed in `decode_tx_hash`.
 fn hex_decode(input: &str) -> Result<Vec<u8>, String> {
+    // Hex strings must have an even number of characters (2 per byte).
     if !input.len().is_multiple_of(2) {
         return Err("Hex input must have an even length".to_string());
     }
@@ -340,6 +397,7 @@ fn hex_decode(input: &str) -> Result<Vec<u8>, String> {
     (0..input.len())
         .step_by(2)
         .map(|i| {
+            // Parse one two-character hex chunk into a single byte.
             u8::from_str_radix(&input[i..i + 2], 16)
                 .map_err(|e| format!("Invalid hex at position {i}: {e}"))
         })
@@ -350,9 +408,9 @@ fn hex_decode(input: &str) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
     use stellar_xdr::curr::{
-        ExtensionPoint, Memo, MuxedAccount, OperationMeta, Preconditions, ScMapEntry, ScVal,
-        SequenceNumber, Transaction, TransactionExt, TransactionMetaV3, TransactionV1Envelope,
-        Uint256,
+        ExtensionPoint, Memo, MuxedAccount, OperationMeta, Preconditions, ScAddress, ScMapEntry,
+        ScVal, ScVec, SequenceNumber, Transaction, TransactionExt, TransactionMetaV3,
+        TransactionV1Envelope, Uint256,
     };
 
     fn make_test_envelope() -> TransactionEnvelope {
@@ -646,7 +704,7 @@ mod tests {
     #[test]
     fn test_scval_string_codec_standalone() {
         use stellar_xdr::curr::StringM;
-        let val = ScString(StringM::try_from(b"Grat".to_vec()).unwrap());
+        let val = ScString(StringM::try_from(b"Prism".to_vec()).unwrap());
         let b64 = XdrCodec::to_xdr_base64(&val).expect("encode");
         let decoded = <ScString as XdrCodec>::from_xdr_base64(&b64).expect("decode");
         assert_eq!(val, decoded);
@@ -754,5 +812,329 @@ mod tests {
         assert_eq!(decoded.0[0].val, ScVal::Void);
         assert_eq!(decoded.0[1].val, ScVal::Bool(true));
         assert_eq!(decoded.0[2].val, ScVal::Bool(false));
+    }
+
+    // ── SorobanAuthorizationEntry round-trip ─────────────────────────────────
+
+    #[test]
+    fn test_soroban_auth_entry_source_account_round_trip() {
+        use stellar_xdr::curr::{
+            AccountId, Hash, InvokeContractArgs, PublicKey, SorobanAuthorizationEntry,
+            SorobanAuthorizedFunction, SorobanAuthorizedInvocation, SorobanCredentials, Uint256,
+        };
+
+        let entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::SourceAccount,
+            root_invocation: SorobanAuthorizedInvocation {
+                function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                    contract_address: ScAddress::Contract(Hash([0u8; 32])),
+                    function_name: stellar_xdr::curr::ScSymbol(
+                        stellar_xdr::curr::StringM::try_from("transfer").unwrap(),
+                    ),
+                    args: vec![ScVal::U32(100)].try_into().unwrap(),
+                }),
+                sub_invocations: vec![].try_into().unwrap(),
+            },
+        };
+
+        let b64 = XdrCodec::to_xdr_base64(&entry).expect("encode");
+        let decoded =
+            <SorobanAuthorizationEntry as XdrCodec>::from_xdr_base64(&b64).expect("decode");
+        assert_eq!(entry, decoded);
+        assert!(matches!(decoded.credentials, SorobanCredentials::SourceAccount));
+    }
+
+    #[test]
+    fn test_soroban_auth_entry_address_credentials_round_trip() {
+        use stellar_xdr::curr::{
+            AccountId, Hash, InvokeContractArgs, PublicKey, ScNonce, SorobanAddressCredentials,
+            SorobanAuthorizationEntry, SorobanAuthorizedFunction, SorobanAuthorizedInvocation,
+            SorobanCredentials, Uint256, VecM,
+        };
+
+        let entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                address: ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(
+                    [1u8; 32],
+                )))),
+                nonce: 42,
+                signature_expiration_ledger: 1000,
+                signature: ScVal::Void,
+            }),
+            root_invocation: SorobanAuthorizedInvocation {
+                function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                    contract_address: ScAddress::Contract(Hash([0xFFu8; 32])),
+                    function_name: stellar_xdr::curr::ScSymbol(
+                        stellar_xdr::curr::StringM::try_from("mint").unwrap(),
+                    ),
+                    args: VecM::default(),
+                }),
+                sub_invocations: vec![].try_into().unwrap(),
+            },
+        };
+
+        let b64 = XdrCodec::to_xdr_base64(&entry).expect("encode");
+        let decoded =
+            <SorobanAuthorizationEntry as XdrCodec>::from_xdr_base64(&b64).expect("decode");
+        assert_eq!(entry, decoded);
+        match &decoded.credentials {
+            SorobanCredentials::Address(creds) => {
+                assert_eq!(creds.nonce, 42);
+                assert_eq!(creds.signature_expiration_ledger, 1000);
+            }
+            other => panic!("expected Address credentials, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_soroban_auth_entry_with_sub_invocations_round_trip() {
+        use stellar_xdr::curr::{
+            Hash, InvokeContractArgs, SorobanAuthorizationEntry, SorobanAuthorizedFunction,
+            SorobanAuthorizedInvocation, SorobanCredentials, VecM,
+        };
+
+        let sub = SorobanAuthorizedInvocation {
+            function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                contract_address: ScAddress::Contract(Hash([0x11u8; 32])),
+                function_name: stellar_xdr::curr::ScSymbol(
+                    stellar_xdr::curr::StringM::try_from("approve").unwrap(),
+                ),
+                args: VecM::default(),
+            }),
+            sub_invocations: vec![].try_into().unwrap(),
+        };
+
+        let entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::SourceAccount,
+            root_invocation: SorobanAuthorizedInvocation {
+                function: SorobanAuthorizedFunction::ContractFn(InvokeContractArgs {
+                    contract_address: ScAddress::Contract(Hash([0x22u8; 32])),
+                    function_name: stellar_xdr::curr::ScSymbol(
+                        stellar_xdr::curr::StringM::try_from("transfer_from").unwrap(),
+                    ),
+                    args: VecM::default(),
+                }),
+                sub_invocations: vec![sub].try_into().unwrap(),
+            },
+        };
+
+        let b64 = XdrCodec::to_xdr_base64(&entry).expect("encode");
+        let decoded =
+            <SorobanAuthorizationEntry as XdrCodec>::from_xdr_base64(&b64).expect("decode");
+        assert_eq!(entry, decoded);
+        assert_eq!(decoded.root_invocation.sub_invocations.len(), 1);
+    }
+
+    // ── DiagnosticEvent additional round-trip ────────────────────────────────
+
+    #[test]
+    fn test_diagnostic_event_with_contract_id_round_trip() {
+        use stellar_xdr::curr::{
+            ContractEventBody, ContractEventType, ContractEventV0, Hash,
+        };
+
+        let event = DiagnosticEvent {
+            in_successful_contract_call: false,
+            event: stellar_xdr::curr::ContractEvent {
+                ext: ExtensionPoint::V0,
+                contract_id: Some(Hash([0xBEu8; 32])),
+                type_: ContractEventType::Contract,
+                body: ContractEventBody::V0(ContractEventV0 {
+                    topics: vec![ScVal::Symbol(stellar_xdr::curr::ScSymbol(
+                        stellar_xdr::curr::StringM::try_from("error").unwrap(),
+                    ))]
+                    .try_into()
+                    .unwrap(),
+                    data: ScVal::U32(42),
+                }),
+            },
+        };
+
+        let b64 = XdrCodec::to_xdr_base64(&event).expect("encode");
+        let decoded = <DiagnosticEvent as XdrCodec>::from_xdr_base64(&b64).expect("decode");
+        assert_eq!(event, decoded);
+        assert!(!decoded.in_successful_contract_call);
+        assert!(decoded.event.contract_id.is_some());
+    }
+
+    #[test]
+    fn test_diagnostic_event_system_type_round_trip() {
+        use stellar_xdr::curr::{
+            ContractEventBody, ContractEventType, ContractEventV0,
+        };
+
+        let event = DiagnosticEvent {
+            in_successful_contract_call: true,
+            event: stellar_xdr::curr::ContractEvent {
+                ext: ExtensionPoint::V0,
+                contract_id: None,
+                type_: ContractEventType::System,
+                body: ContractEventBody::V0(ContractEventV0 {
+                    topics: vec![].try_into().unwrap(),
+                    data: ScVal::Void,
+                }),
+            },
+        };
+
+        let b64 = XdrCodec::to_xdr_base64(&event).expect("encode");
+        let decoded = <DiagnosticEvent as XdrCodec>::from_xdr_base64(&b64).expect("decode");
+        assert_eq!(event, decoded);
+    }
+
+    // ── Malformed XDR rejection ───────────────────────────────────────────────
+
+    #[test]
+    fn test_malformed_xdr_transaction_envelope_rejected() {
+        let junk = "not_valid_base64!!!";
+        let result = <TransactionEnvelope as XdrCodec>::from_xdr_base64(junk);
+        assert!(result.is_err(), "Expected error for malformed base64");
+    }
+
+    #[test]
+    fn test_malformed_xdr_bytes_rejected_for_transaction_meta() {
+        // Valid base64 but garbage content — not valid XDR for TransactionMeta.
+        let garbage_b64 = encode_xdr_base64(&[0xFF, 0xFE, 0xFD, 0x01, 0x02, 0x03]);
+        let result = <TransactionMeta as XdrCodec>::from_xdr_base64(&garbage_b64);
+        assert!(result.is_err(), "Expected error for invalid XDR bytes");
+    }
+
+    #[test]
+    fn test_malformed_xdr_empty_bytes_rejected() {
+        let empty_b64 = encode_xdr_base64(&[]);
+        let result = <TransactionEnvelope as XdrCodec>::from_xdr_base64(&empty_b64);
+        assert!(result.is_err(), "Expected error for empty XDR bytes");
+    }
+
+    #[test]
+    fn test_malformed_xdr_short_bytes_diagnostic_event_rejected() {
+        // Too short to be a valid DiagnosticEvent.
+        let short_b64 = encode_xdr_base64(&[0x00, 0x01]);
+        let result = <DiagnosticEvent as XdrCodec>::from_xdr_base64(&short_b64);
+        assert!(result.is_err(), "Expected error for truncated XDR bytes");
+    }
+
+    #[test]
+    fn test_malformed_xdr_soroban_auth_entry_rejected() {
+        let garbage = encode_xdr_base64(&[0xDE, 0xAD, 0xBE, 0xEF]);
+        let result =
+            <SorobanAuthorizationEntry as XdrCodec>::from_xdr_base64(&garbage);
+        assert!(result.is_err());
+    }
+
+    // ── decode_tx_hash edge cases ────────────────────────────────────────────
+
+    #[test]
+    fn test_decode_tx_hash_too_short_rejected() {
+        let short = "deadbeef"; // Only 4 bytes
+        assert!(decode_tx_hash(short).is_err());
+    }
+
+    #[test]
+    fn test_decode_tx_hash_odd_length_rejected() {
+        let odd = "abc"; // odd hex length
+        assert!(decode_tx_hash(odd).is_err());
+    }
+
+    #[test]
+    fn test_decode_tx_hash_invalid_hex_rejected() {
+        let invalid = "ZZZZ".repeat(16); // 64 chars but not valid hex
+        assert!(decode_tx_hash(&invalid).is_err());
+    }
+
+    #[test]
+    fn test_decode_tx_hash_too_long_rejected() {
+        let too_long = "ab".repeat(33); // 33 bytes → 66 chars
+        assert!(decode_tx_hash(&too_long).is_err());
+    }
+
+    // ── TransactionEnvelope additional round-trip ────────────────────────────
+
+    #[test]
+    fn test_transaction_envelope_bytes_round_trip() {
+        let envelope = make_test_envelope();
+        let bytes = XdrCodec::to_xdr_bytes(&envelope).expect("encode");
+        let decoded = <TransactionEnvelope as XdrCodec>::from_xdr_bytes(&bytes).expect("decode");
+        assert_eq!(envelope, decoded);
+    }
+
+    #[test]
+    fn test_transaction_envelope_idempotent_encode() {
+        let envelope = make_test_envelope();
+        let b64_1 = XdrCodec::to_xdr_base64(&envelope).expect("first encode");
+        let b64_2 = XdrCodec::to_xdr_base64(&envelope).expect("second encode");
+        assert_eq!(b64_1, b64_2, "Encoding must be deterministic");
+    }
+
+    // ── ScVal numeric edge cases ─────────────────────────────────────────────
+
+    #[test]
+    fn test_scval_u32_zero_and_one_round_trip() {
+        scval_round_trip(ScVal::U32(0));
+        scval_round_trip(ScVal::U32(1));
+    }
+
+    #[test]
+    fn test_scval_timepoint_round_trip() {
+        use stellar_xdr::curr::TimePoint;
+        scval_round_trip(ScVal::Timepoint(TimePoint(0)));
+        scval_round_trip(ScVal::Timepoint(TimePoint(u64::MAX)));
+    }
+
+    #[test]
+    fn test_scval_duration_round_trip() {
+        use stellar_xdr::curr::Duration;
+        scval_round_trip(ScVal::Duration(Duration(0)));
+        scval_round_trip(ScVal::Duration(Duration(u64::MAX)));
+    }
+
+    #[test]
+    fn test_scval_u256_round_trip() {
+        use stellar_xdr::curr::UInt256Parts;
+        scval_round_trip(ScVal::U256(UInt256Parts {
+            hi_hi: 0,
+            hi_lo: 0,
+            lo_hi: 0,
+            lo_lo: 0,
+        }));
+        scval_round_trip(ScVal::U256(UInt256Parts {
+            hi_hi: u64::MAX,
+            hi_lo: u64::MAX,
+            lo_hi: u64::MAX,
+            lo_lo: u64::MAX,
+        }));
+    }
+
+    #[test]
+    fn test_scval_i256_round_trip() {
+        use stellar_xdr::curr::Int256Parts;
+        scval_round_trip(ScVal::I256(Int256Parts {
+            hi_hi: i64::MIN,
+            hi_lo: u64::MAX,
+            lo_hi: u64::MAX,
+            lo_lo: u64::MAX,
+        }));
+    }
+
+    // ── encode_xdr_base64 / decode_xdr_base64 helpers ───────────────────────
+
+    #[test]
+    fn test_base64_encode_decode_round_trip() {
+        let data = b"hello xdr world";
+        let b64 = encode_xdr_base64(data);
+        let decoded = decode_xdr_base64(&b64).expect("decode");
+        assert_eq!(data.as_slice(), decoded.as_slice());
+    }
+
+    #[test]
+    fn test_base64_empty_bytes_round_trip() {
+        let b64 = encode_xdr_base64(&[]);
+        let decoded = decode_xdr_base64(&b64).expect("decode empty");
+        assert!(decoded.is_empty());
+    }
+
+    #[test]
+    fn test_base64_invalid_string_rejected() {
+        let result = decode_xdr_base64("!!!not_base64!!!");
+        assert!(result.is_err());
     }
 }
