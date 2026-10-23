@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTrace } from "@/hooks/useTrace";
 import { ExecutionTimeline } from "@/components/trace/ExecutionTimeline";
 import { StateDiffViewer } from "@/components/trace/StateDiffViewer";
@@ -42,6 +42,11 @@ export default function TracePage() {
 
   const { trace, loading, requestTrace, streaming, streamError } =
     useTrace(wsUrl);
+
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.search).get("txHash");
+    if (hash) setTxHash(hash);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

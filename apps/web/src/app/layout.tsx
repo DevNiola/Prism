@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import CommandPalette from "@/components/shared/CommandPalette";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -23,6 +24,7 @@ export default function RootLayout({
           Skip to main content
         </a>
         <div id="main-content">{children}</div>
+        <CommandPalette />
       </body>
     </html>
   );
