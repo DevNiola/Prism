@@ -5,7 +5,9 @@ use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
-const BASE_DELAY_MS: u64 = 100;
+/// Base delay for exponential backoff. With the formula `BASE_DELAY_MS × 2^attempt`,
+/// this yields 1 s, 2 s, 4 s for retry attempts 1, 2, 3 respectively.
+const BASE_DELAY_MS: u64 = 500;
 
 const MAX_DELAY_MS: u64 = 10_000;
 
@@ -244,6 +246,7 @@ impl SorobanRpcClient {
                 );
                 tokio::time::sleep(delay).await;
                 tracing::debug!(attempt, method, "Retrying RPC request");
+                crate::rpc::record_rpc_retry(&self.rpc_url, method);
             }
 
             // Start the Prometheus latency timer before the network request.
@@ -447,12 +450,13 @@ mod tests {
 
     #[test]
     fn backoff_increases_exponentially() {
-        assert_eq!(backoff_duration(1), Duration::from_millis(200));
-        assert_eq!(backoff_duration(2), Duration::from_millis(400));
-        assert_eq!(backoff_duration(3), Duration::from_millis(800));
-        assert_eq!(backoff_duration(4), Duration::from_millis(1_600));
-        assert_eq!(backoff_duration(5), Duration::from_millis(3_200));
-        assert_eq!(backoff_duration(6), Duration::from_millis(6_400));
+        // BASE_DELAY_MS (500) × 2^attempt → 1 s, 2 s, 4 s, 8 s …
+        assert_eq!(backoff_duration(1), Duration::from_millis(1_000));
+        assert_eq!(backoff_duration(2), Duration::from_millis(2_000));
+        assert_eq!(backoff_duration(3), Duration::from_millis(4_000));
+        assert_eq!(backoff_duration(4), Duration::from_millis(8_000));
+        assert_eq!(backoff_duration(5), Duration::from_millis(MAX_DELAY_MS));
+        assert_eq!(backoff_duration(6), Duration::from_millis(MAX_DELAY_MS));
     }
 
     #[test]
