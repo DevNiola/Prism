@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prism-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: prism-server
+  template:
+    metadata:
+      labels:
+        app: prism-server
+    spec:
+      containers:
+        - name: server
+          image: ghcr.io/devniola/prism-server:0.1.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: prism-config
+            - secretRef:
+                name: prism-secrets
+          ports:
+            - name: http
+              containerPort: 3001
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+spec:
+  selector:
+    app: prism-server
+  ports:
+    - name: http
+      port: 3001
+      targetPort: http
