@@ -10,6 +10,9 @@ importers:
       "@iarna/toml":
         specifier: ^2.2.5
         version: 2.2.5
+      prettier:
+        specifier: ^3.6.2
+        version: 3.9.10
 
   apps/server:
     dependencies:
@@ -5366,6 +5369,14 @@ packages:
       }
     engines: { node: ">= 0.8.0" }
 
+  prettier@3.9.10:
+    resolution:
+      {
+        integrity: sha512-skGHTH1Yb9QvaTC4hWnRTzEYtCpApF0UMBPz+t/0ZPzP8ihefo/btKd+QA7pUE0fEwA1SbS/NmhyEcstdXOIdA==,
+      }
+    engines: { node: ">=14" }
+    hasBin: true
+
   process-warning@4.0.1:
     resolution:
       {
@@ -9911,6 +9922,8 @@ snapshots:
     optional: true
 
   prelude-ls@1.2.1: {}
+
+  prettier@3.9.10: {}
 
   process-warning@4.0.1: {}
 
