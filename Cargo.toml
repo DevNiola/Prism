@@ -75,7 +75,7 @@ thiserror = "1"
 colored = "2"
 indicatif = "0.17"
 dialoguer = "0.11"
-tabled = "0.16"
+tabled = "0.22"
 termcolor = "1.4"
 
 # WASM Processing
