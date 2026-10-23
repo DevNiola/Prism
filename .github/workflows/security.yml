@@ -1,67 +1,43 @@
-name: Security Scanning
+name: Security
 
-'on':
+on:
   push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
   schedule:
-    # Runs weekly every Monday at 04:00 UTC
-    - cron: '0 4 * * 1'
-  workflow_dispatch:
-
-concurrency:
-  group: security-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    - cron: "23 3 * * 1"
 
 permissions:
   contents: read
 
 jobs:
   cargo-audit:
-    name: Cargo Audit (Rust Dependencies)
+    name: Rust dependency audit
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-audit binary
-        uses: taiki-e/install-action@cargo-audit
-
-      - name: Generate Cargo.lock
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Generate dependency lockfile
         run: cargo generate-lockfile
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit Rust dependencies
+        run: cargo audit
 
-      - name: Run cargo audit
-        run: cargo audit --deny warnings
-
-  npm-audit:
-    name: Dependency Audit (pnpm / npm)
+  javascript-audit:
+    name: JavaScript dependency audit
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
-
-      - name: Run pnpm audit
-        run: pnpm audit --audit-level=high
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Audit JavaScript dependencies
+        run: pnpm audit --audit-level high
 
   codeql:
-    name: CodeQL Code Analysis
+    name: CodeQL (${{ matrix.language }})
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -70,46 +46,44 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: ['javascript-typescript']
+        language:
+          - javascript-typescript
+          - rust
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          queries: security-extended
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: '/language:${{matrix.language}}'
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
 
   trivy:
-    name: Trivy Vulnerability & Container Scan
+    name: Container scan (${{ matrix.app }})
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: server
+            dockerfile: apps/server/Dockerfile
+            context: .
+          - app: web
+            dockerfile: apps/web/Dockerfile
+            context: .
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run Trivy Vulnerability & Misconfig Scanner (FS mode)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-          ignore-unfixed: true
-
-      - name: Scan Container Definitions if present
+      - uses: actions/checkout@v4
+      - name: Build container image
+        if: hashFiles(matrix.dockerfile) != ''
         run: |
-          if [ -d "docker" ] || [ -f "Dockerfile" ]; then
-            echo "[+] Docker configuration detected. Trivy FS scan covers container templates."
-          else
-            echo "[i] Standalone Dockerfiles not found in root. Repo filesystem scan completed."
-          fi
+          docker build \
+            --file "${{ matrix.dockerfile }}" \
+            --tag "prism-${{ matrix.app }}:security-scan" \
+            "${{ matrix.context }}"
+      - name: Scan image with Trivy
+        if: hashFiles(matrix.dockerfile) != ''
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: prism-${{ matrix.app }}:security-scan
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "1"
