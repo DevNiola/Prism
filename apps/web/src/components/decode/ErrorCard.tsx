@@ -1,6 +1,7 @@
 "use client";
 
 import type { DiagnosticReport } from "@/lib/types";
+import SuggestedFixes from "./SuggestedFixes";
 
 interface ErrorCardProps {
   report: DiagnosticReport;
@@ -10,119 +11,127 @@ export default function ErrorCard({ report }: ErrorCardProps) {
   const getSeverityStyles = (severity: string) => {
     switch (severity.toLowerCase()) {
       case "fatal":
-        return "bg-red-950/40 border-red-900/50 text-red-400";
+        return {
+          panel: "border-red-800 bg-red-950/40",
+          accent: "bg-red-500",
+          text: "text-red-300",
+          icon: "!",
+        };
       case "error":
-        return "bg-red-950/40 border-red-900/50 text-red-400";
+        return {
+          panel: "border-rose-800 bg-rose-950/40",
+          accent: "bg-rose-500",
+          text: "text-rose-300",
+          icon: "!",
+        };
       case "warning":
-        return "bg-amber-950/40 border-amber-900/50 text-amber-400";
+        return {
+          panel: "border-amber-800 bg-amber-950/40",
+          accent: "bg-amber-500",
+          text: "text-amber-300",
+          icon: "⚠",
+        };
       case "info":
-        return "bg-blue-950/40 border-blue-900/50 text-blue-400";
+        return {
+          panel: "border-sky-800 bg-sky-950/40",
+          accent: "bg-sky-500",
+          text: "text-sky-300",
+          icon: "i",
+        };
       default:
-        return "bg-slate-950/40 border-slate-900/50 text-slate-400";
+        return {
+          panel: "border-slate-700 bg-slate-900",
+          accent: "bg-slate-500",
+          text: "text-slate-300",
+          icon: "?",
+        };
     }
   };
+  const severity = getSeverityStyles(report.severity);
 
   return (
-    <div className="card-interactive bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl max-w-3xl mx-auto my-6 text-slate-100">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <span className="text-xs font-bold text-violet-400 uppercase tracking-wider">
-            Category: {report.error_category}
-          </span>
-          <h3 className="text-xl font-bold text-slate-100 flex items-center gap-2 mt-1">
-            {report.error_name}
-            <span className="text-sm font-mono text-slate-500 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-              Code {report.error_code}
-            </span>
-          </h3>
-        </div>
+    <article className="mx-auto my-6 max-w-3xl overflow-hidden rounded-lg border border-slate-800 bg-slate-900 text-slate-100 shadow-xl">
+      <header className={`relative border-b p-5 sm:p-6 ${severity.panel}`}>
         <span
-          className={`text-xs px-2.5 py-1 rounded border font-medium ${getSeverityStyles(report.severity)}`}
-        >
-          {report.severity.toUpperCase()}
-        </span>
-      </div>
-
-      <div className="bg-slate-950 rounded-lg p-4 border border-slate-800 mb-6">
-        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-          Summary
-        </h4>
-        <p className="text-slate-300 text-sm">{report.summary}</p>
-      </div>
-
-      <div className="mb-6">
-        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-          Detailed Explanation
-        </h4>
-        <p className="text-slate-400 text-sm leading-relaxed whitespace-pre-line">
-          {report.detailed_explanation}
+          aria-hidden="true"
+          className={`absolute inset-y-0 left-0 w-1 ${severity.accent}`}
+        />
+        <div className="flex flex-wrap items-start justify-between gap-4 pl-2">
+          <div>
+            <p className={`text-xs font-bold uppercase tracking-wider ${severity.text}`}>
+              <span aria-hidden="true" className="mr-2">{severity.icon}</span>
+              {report.severity} severity · {report.error_category}
+            </p>
+            <h2 className="mt-2 text-2xl font-bold text-slate-50">
+              {report.error_name}
+            </h2>
+            <p className="mt-1 font-mono text-xs text-slate-400">
+              Error code {report.error_code}
+            </p>
+          </div>
+          <span className={`rounded border px-2.5 py-1 text-xs font-semibold uppercase ${severity.text} ${severity.panel}`}>
+            {report.severity}
+          </span>
+        </div>
+        <p className="mt-5 pl-2 text-base leading-relaxed text-slate-100">
+          {report.summary}
         </p>
-      </div>
+      </header>
+      <div className="space-y-7 p-5 sm:p-6">
+        <section aria-labelledby="error-explanation-heading">
+          <h3 id="error-explanation-heading" className="text-xs font-bold uppercase tracking-wider text-slate-500">
+            What happened
+          </h3>
+          <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-300">
+            {report.detailed_explanation}
+          </p>
+        </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 border-t border-slate-800 pt-6">
-        <div>
-          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-            Common Causes
-          </h4>
-          {report.root_causes && report.root_causes.length > 0 ? (
-            <ul className="space-y-3">
-              {report.root_causes.map((cause, i) => (
-                <li
-                  key={i}
-                  className="text-sm text-slate-300 flex items-start gap-2"
-                >
-                  <span className="text-red-400 mt-1">•</span>
-                  <div>
-                    <p>{cause.description}</p>
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">
-                      Likelihood: {cause.likelihood}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-slate-500 italic">
-              No common causes documented.
-            </p>
-          )}
-        </div>
-
-        <div>
-          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-            Suggested Fixes
-          </h4>
-          {report.suggested_fixes && report.suggested_fixes.length > 0 ? (
-            <ul className="space-y-3">
-              {report.suggested_fixes.map((fix, i) => (
-                <li
-                  key={i}
-                  className="text-sm text-slate-300 flex items-start gap-2"
-                >
-                  <span className="text-emerald-400 mt-1">✓</span>
-                  <div>
-                    <p>{fix.description}</p>
-                    <div className="flex gap-2 mt-1">
-                      <span className="text-[10px] text-slate-500 uppercase tracking-wider font-mono">
-                        Difficulty: {fix.difficulty}
+        <section aria-labelledby="root-causes-heading">
+          <details className="group rounded border border-slate-800 bg-slate-950/60">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 [&::-webkit-details-marker]:hidden">
+              <span>
+                <span id="root-causes-heading" className="block text-sm font-semibold text-slate-100">
+                  Root causes
+                </span>
+                <span className="mt-1 block text-xs text-slate-500">
+                  {report.root_causes?.length ?? 0} possible causes
+                </span>
+              </span>
+              <span aria-hidden="true" className="text-slate-400 transition-transform group-open:rotate-180">
+                ⌄
+              </span>
+            </summary>
+            <div className="border-t border-slate-800 px-4 py-4">
+              {report.root_causes?.length ? (
+                <ol className="space-y-4">
+                  {report.root_causes.map((cause, index) => (
+                    <li key={`${cause.description}-${index}`} className="flex gap-3">
+                      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-amber-950 text-xs font-semibold text-amber-300">
+                        {index + 1}
                       </span>
-                      {fix.requires_upgrade && (
-                        <span className="text-[10px] text-amber-500 uppercase tracking-wider font-mono">
-                          Requires Upgrade
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-slate-500 italic">
-              No suggested fixes documented.
-            </p>
-          )}
-        </div>
+                      <div>
+                        <p className="text-sm leading-relaxed text-slate-200">
+                          {cause.description}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Likelihood: {cause.likelihood}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  No root causes are documented for this error.
+                </p>
+              )}
+            </div>
+          </details>
+        </section>
+
+        <SuggestedFixes fixes={report.suggested_fixes ?? []} />
       </div>
-    </div>
+    </article>
   );
 }
