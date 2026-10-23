@@ -1,22 +1,29 @@
 "use client";
 
-import { useNetworkStore } from "@/store/network";
+import { useState } from "react";
 
 export default function NetworkSwitcher() {
-  const network = useNetworkStore((state) => state.network);
-  const setNetwork = useNetworkStore((state) => state.setNetwork);
+  const [network, setNetwork] = useState("testnet");
 
   return (
-    <select
-      aria-label="Network"
-      value={network}
-      onChange={(event) => setNetwork(event.target.value as typeof network)}
-      className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200"
-    >
-      <option value="testnet">Testnet</option>
-      <option value="mainnet">Mainnet</option>
-      <option value="futurenet">Futurenet</option>
-      <option value="custom">Custom</option>
-    </select>
+    <div className="flex items-center gap-2">
+      <label
+        htmlFor="network-select"
+        className="text-sm font-medium text-slate-400 sr-only"
+      >
+        Select network
+      </label>
+      <select
+        id="network-select"
+        value={network}
+        onChange={(e) => setNetwork(e.target.value)}
+        aria-label="Select Stellar network"
+        className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors"
+      >
+        <option value="testnet">Testnet</option>
+        <option value="mainnet">Mainnet</option>
+        <option value="futurenet">Futurenet</option>
+      </select>
+    </div>
   );
 }
