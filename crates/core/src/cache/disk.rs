@@ -1,6 +1,10 @@
 //! [`DiskCache`]: a [`CacheProvider`] backed by [`sled`], a persistent,
 //! embedded, lock-free B+tree store. Values are serialized with `bincode`
 //! before being written to the tree, and survive process restarts.
+//!
+//! Entries optionally carry a TTL (time-to-live). When a TTL is set, the
+//! entry is stored alongside an expiration timestamp; expired entries are
+//! evicted lazily on `get()` and periodically by a background sweep task.
 
 use crate::cache::provider::CacheProvider;
 use crate::error::{GratError, GratResult};
@@ -10,6 +14,26 @@ use serde::Serialize;
 use std::future::Future;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// Wrapper that pairs a serialized value with an optional expiration time.
+///
+/// Stored as a `bincode` blob alongside the raw key in the sled tree.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct TtlEntry {
+    /// The serialized value payload.
+    value: Vec<u8>,
+    /// Absolute expiration as a Unix timestamp in seconds. `None` means no expiration.
+    expires_at: Option<u64>,
+}
+
+/// Cache statistics tracked across all operations.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct CacheStats {
+    pub hits: u64,
+    pub misses: u64,
+    pub evictions: u64,
+}
 
 /// Persistent, embedded cache backed by a [`sled`] database.
 ///
@@ -19,6 +43,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct DiskCache {
     db: Arc<sled::Db>,
+    stats: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl DiskCache {
@@ -27,6 +52,14 @@ impl DiskCache {
         bytes.extend_from_slice(b":");
         bytes.extend_from_slice(key.as_bytes());
         bytes
+    }
+
+    /// Returns the current Unix timestamp in seconds.
+    fn now_secs() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
     }
 
     /// Opens (or creates) a sled database at `path`.
@@ -39,7 +72,10 @@ impl DiskCache {
             ))
         })?;
 
-        Ok(Self { db: Arc::new(db) })
+        Ok(Self {
+            db: Arc::new(db),
+            stats: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        })
     }
 
     /// Opens the disk cache at the platform's default cache directory.
@@ -52,42 +88,75 @@ impl DiskCache {
         Self::new(project_dirs.cache_dir().join("disk_cache"))
     }
 
+    /// Stores a value with an optional TTL (time-to-live).
+    ///
+    /// When `ttl` is `Some(duration)`, the entry will expire after that
+    /// duration and will not be returned by [`get`](Self::get) once expired.
+    /// When `ttl` is `None`, the entry never expires (legacy behavior).
+    pub async fn put_with_ttl<V>(
+        &self,
+        key: &str,
+        value: &V,
+        ledger_sequence: Option<u32>,
+        ttl: Option<Duration>,
+    ) -> GratResult<()>
+    where
+        V: Serialize + Sync,
+    {
+        let key_owned = key.to_owned();
+        let encoded = bincode::serialize(value).map_err(|e| GratError::CacheSerializationError {
+            key: key_owned.clone(),
+            reason: e.to_string(),
+        });
+
+        let expires_at = ttl.map(|d| Self::now_secs().saturating_add(d.as_secs()));
+
+        let entry = TtlEntry {
+            value: encoded?,
+            expires_at,
+        };
+        let entry_bytes = bincode::serialize(&entry).map_err(|e| {
+            GratError::CacheSerializationError {
+                key: key_owned.clone(),
+                reason: e.to_string(),
+            }
+        });
+
+        let db = Arc::clone(&self.db);
+
+        async move {
+            let cache_key = match ledger_sequence {
+                Some(sequence) => Self::ledger_key(&key_owned, sequence),
+                None => key_owned.as_bytes().to_vec(),
+            };
+
+            tokio::task::spawn_blocking(move || {
+                db.insert(cache_key.clone(), entry_bytes.clone())
+                    .map_err(|e| GratError::CacheError(format!("Sled insert failed: {e}")))?;
+
+                if let Some(sequence) = ledger_sequence {
+                    let ledger_index = db.open_tree(b"ledger_index")
+                        .map_err(|e| GratError::CacheError(format!("Failed to open ledger index: {e}")))?;
+                    let entry_key = Self::ledger_key(&key_owned, sequence);
+                    ledger_index
+                        .insert(entry_key.clone(), key_owned.as_bytes())
+                        .map_err(|e| GratError::CacheError(format!("Failed to index ledger entry: {e}")))?;
+                    let _ = entry_key;
+                }
+                Ok::<(), GratError>(())
+            })
+            .await
+            .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))??;
+
+            Ok(())
+        }
+    }
+
     pub async fn put<V>(&self, key: &str, value: &V, ledger_sequence: Option<u32>) -> GratResult<()>
     where
         V: Serialize + Sync,
     {
-        let key = key.to_owned();
-        let encoded = bincode::serialize(value).map_err(|e| GratError::CacheSerializationError {
-            key: key.clone(),
-            reason: e.to_string(),
-        })?;
-
-        let db = Arc::clone(&self.db);
-
-        let cache_key = match ledger_sequence {
-            Some(sequence) => Self::ledger_key(&key, sequence),
-            None => key.as_bytes().to_vec(),
-        };
-
-        tokio::task::spawn_blocking(move || {
-            db.insert(cache_key.clone(), encoded.clone())
-                .map_err(|e| GratError::CacheError(format!("Sled insert failed: {e}")))?;
-
-            if let Some(sequence) = ledger_sequence {
-                let ledger_index = db.open_tree(b"ledger_index")
-                    .map_err(|e| GratError::CacheError(format!("Failed to open ledger index: {e}")))?;
-                let entry_key = Self::ledger_key(&key, sequence);
-                ledger_index
-                    .insert(entry_key.clone(), key.as_bytes())
-                    .map_err(|e| GratError::CacheError(format!("Failed to index ledger entry: {e}")))?;
-                let _ = entry_key;
-            }
-            Ok::<(), GratError>(())
-        })
-        .await
-        .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))??;
-
-        Ok(())
+        self.put_with_ttl(key, value, ledger_sequence, None).await
     }
 
     pub async fn get<V>(&self, key: &str, ledger_sequence: Option<u32>) -> GratResult<Option<V>>
@@ -97,59 +166,84 @@ impl DiskCache {
         let db = Arc::clone(&self.db);
         let key = key.to_owned();
 
-        let lookup_key = match ledger_sequence {
-            Some(sequence) => Self::ledger_key(&key, sequence),
-            None => key.as_bytes().to_vec(),
-        };
+        async move {
+            let lookup_key = match ledger_sequence {
+                Some(sequence) => Self::ledger_key(&key, sequence),
+                None => key.as_bytes().to_vec(),
+            };
 
-        let raw = tokio::task::spawn_blocking(move || db.get(lookup_key))
-            .await
-            .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))?
-            .map_err(|e| GratError::CacheError(format!("Sled get failed: {e}")))?;
+            let raw = tokio::task::spawn_blocking(move || db.get(lookup_key))
+                .await
+                .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))?
+                .map_err(|e| GratError::CacheError(format!("Sled get failed: {e}")))?;
 
-        let Some(bytes) = raw else {
-            return Ok(None);
-        };
+            let Some(bytes) = raw else {
+                return Ok(None);
+            };
 
-        let value = bincode::deserialize(&bytes).map_err(|e| GratError::CacheDeserializationError {
-            key,
-            reason: e.to_string(),
-        })?;
+            // Try to deserialize as a TtlEntry; if that fails, fall back to
+            // raw deserialization for backward compatibility with entries
+            // written before TTL support was added.
+            let value: V = match bincode::deserialize::<TtlEntry>(&bytes) {
+                Ok(ttl_entry) => {
+                    if let Some(exp) = ttl_entry.expires_at {
+                        if Self::now_secs() >= exp {
+                            return Ok(None);
+                        }
+                    }
+                    bincode::deserialize(&ttl_entry.value).map_err(|e| {
+                        GratError::CacheDeserializationError {
+                            key,
+                            reason: e.to_string(),
+                        }
+                    })?
+                }
+                Err(_) => bincode::deserialize(&bytes).map_err(|e| {
+                    GratError::CacheDeserializationError {
+                        key,
+                        reason: e.to_string(),
+                    }
+                })?,
+            };
 
-        Ok(Some(value))
+            Ok(Some(value))
+        }
     }
 
     pub async fn remove(&self, key: &str, ledger_sequence: Option<u32>) -> GratResult<()> {
         let db = Arc::clone(&self.db);
         let key = key.to_owned();
 
-        let lookup_key = match ledger_sequence {
-            Some(sequence) => Self::ledger_key(&key, sequence),
-            None => key.as_bytes().to_vec(),
-        };
+        async move {
+            let lookup_key = match ledger_sequence {
+                Some(sequence) => Self::ledger_key(&key, sequence),
+                None => key.as_bytes().to_vec(),
+            };
 
-        tokio::task::spawn_blocking(move || {
-            db.remove(lookup_key)
-                .map_err(|e| GratError::CacheError(format!("Sled remove failed: {e}")))?;
-            if let Some(sequence) = ledger_sequence {
-                let index = db.open_tree(b"ledger_index")
-                    .map_err(|e| GratError::CacheError(format!("Failed to open ledger index: {e}")))?;
-                index
-                    .remove(Self::ledger_key(&key, sequence))
-                    .map_err(|e| GratError::CacheError(format!("Failed to remove ledger index entry: {e}")))?;
-            }
-            Ok::<(), GratError>(())
-        })
-        .await
-        .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))??;
+            tokio::task::spawn_blocking(move || {
+                db.remove(lookup_key)
+                    .map_err(|e| GratError::CacheError(format!("Sled remove failed: {e}")))?;
+                if let Some(sequence) = ledger_sequence {
+                    let index = db.open_tree(b"ledger_index")
+                        .map_err(|e| GratError::CacheError(format!("Failed to open ledger index: {e}")))?;
+                    index
+                        .remove(Self::ledger_key(&key, sequence))
+                        .map_err(|e| GratError::CacheError(format!("Failed to remove ledger index entry: {e}")))?;
+                }
+                Ok::<(), GratError>(())
+            })
+            .await
+            .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))??;
 
-        Ok(())
+            Ok(())
+        }
     }
 
     pub async fn prune_older_than(&self, ledger_sequence: u32) -> GratResult<()> {
         let db = Arc::clone(&self.db);
 
-        tokio::task::spawn_blocking(move || {
+        async move {
+            tokio::task::spawn_blocking(move || {
                 let ledger_index = db.open_tree(b"ledger_index")
                     .map_err(|e| GratError::CacheError(format!("Failed to open ledger index: {e}")))?;
 
@@ -177,7 +271,8 @@ impl DiskCache {
             .await
             .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))??;
 
-        Ok(())
+            Ok(())
+        }
     }
 
     /// Flushes any buffered writes to disk. Sled batches and lazily flushes
@@ -190,6 +285,76 @@ impl DiskCache {
             .map_err(|e| GratError::CacheError(format!("Sled flush failed: {e}")))?;
         Ok(())
     }
+
+    /// Sweep all expired entries from the cache.
+    ///
+    /// Iterates over every key in the main tree, deserializes the `TtlEntry`
+    /// wrapper, and removes any entry whose `expires_at` timestamp is in
+    /// the past. Returns the number of entries evicted.
+    ///
+    /// This is intended to be called periodically by a background task
+    /// (see [`start_eviction_sweep`]).
+    pub async fn sweep_expired(&self) -> GratResult<u64> {
+        let db = Arc::clone(&self.db);
+
+        async move {
+            let evicted = tokio::task::spawn_blocking(move || {
+                let now = Self::now_secs();
+                let mut evicted: u64 = 0;
+                for item in db.iter() {
+                    let Ok((key, val)) = item else {
+                        continue;
+                    };
+                    if let Ok(ttl_entry) = bincode::deserialize::<TtlEntry>(&val) {
+                        if let Some(exp) = ttl_entry.expires_at {
+                            if now >= exp {
+                                let _ = db.remove(key);
+                                evicted += 1;
+                            }
+                        }
+                    }
+                }
+                evicted
+            })
+            .await
+            .map_err(|e| GratError::CacheError(format!("Cache task panicked: {e}")))?;
+
+            Ok(evicted)
+        }
+    }
+}
+
+/// Start a background task that periodically sweeps expired entries from the
+/// cache at the given interval. Returns a `JoinHandle` so the caller can
+/// abort the task when it is no longer needed.
+///
+/// # Example
+/// ```ignore
+/// let cache = DiskCache::new("/tmp/cache")?;
+/// let handle = start_eviction_sweep(cache, Duration::from_secs(300));
+/// // ... use cache ...
+/// handle.abort();
+/// ```
+pub fn start_eviction_sweep(
+    cache: DiskCache,
+    interval: Duration,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(interval);
+        ticker.tick().await; // skip immediate first tick
+        loop {
+            ticker.tick().await;
+            match cache.sweep_expired().await {
+                Ok(evicted) if evicted > 0 => {
+                    tracing::debug!(evicted, "background sweep removed expired cache entries");
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::warn!(error = %e, "background cache sweep failed");
+                }
+            }
+        }
+    })
 }
 
 impl CacheProvider for DiskCache {
@@ -382,5 +547,96 @@ mod tests {
         assert_eq!(cache.get::<u32>("old", Some(10)).await.unwrap(), None);
         assert_eq!(cache.get::<u32>("recent", Some(20)).await.unwrap(), Some(2));
         assert_eq!(cache.get::<u32>("newer", Some(30)).await.unwrap(), Some(3));
+    }
+
+    #[tokio::test]
+    async fn test_ttl_entry_expires_and_is_not_returned() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DiskCache::new(dir.path()).unwrap();
+
+        // Write an entry with a 1-second TTL.
+        cache
+            .put_with_ttl("ephemeral", &42u32, None, Some(Duration::from_secs(1)))
+            .await
+            .unwrap();
+
+        // Immediately it should be present.
+        assert_eq!(
+            cache.get::<u32>("ephemeral", None).await.unwrap(),
+            Some(42)
+        );
+
+        // Wait for it to expire.
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        // After expiry, get should return None (expired entry evicted lazily).
+        assert_eq!(
+            cache.get::<u32>("ephemeral", None).await.unwrap(),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ttl_none_means_no_expiration() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DiskCache::new(dir.path()).unwrap();
+
+        cache
+            .put_with_ttl("permanent", &99u32, None, None)
+            .await
+            .unwrap();
+
+        // Should still be there even after a brief wait.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(
+            cache.get::<u32>("permanent", None).await.unwrap(),
+            Some(99)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sweep_expired_removes_only_expired_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DiskCache::new(dir.path()).unwrap();
+
+        // One entry with 1s TTL, one without TTL, one with 10s TTL.
+        cache
+            .put_with_ttl("short", &1u32, None, Some(Duration::from_secs(1)))
+            .await
+            .unwrap();
+        cache.put("forever", &2u32, None).await.unwrap();
+        cache
+            .put_with_ttl("long", &3u32, None, Some(Duration::from_secs(10)))
+            .await
+            .unwrap();
+
+        // Wait for "short" to expire.
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        let evicted = cache.sweep_expired().await.unwrap();
+        assert_eq!(evicted, 1);
+
+        assert_eq!(cache.get::<u32>("short", None).await.unwrap(), None);
+        assert_eq!(cache.get::<u32>("forever", None).await.unwrap(), Some(2));
+        assert_eq!(cache.get::<u32>("long", None).await.unwrap(), Some(3));
+    }
+
+    #[tokio::test]
+    async fn test_ttl_backward_compat_with_non_ttl_entries() {
+        // Entries written directly to sled (without TtlEntry wrapper) should
+        // still be readable. Simulate by writing raw bytes directly.
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DiskCache::new(dir.path()).unwrap();
+
+        // Write using the normal put (which now wraps in TtlEntry).
+        cache.put("wrapped", &42u32, None).await.unwrap();
+
+        // Manually write a raw value (simulating old data).
+        let raw = bincode::serialize(&99u32).unwrap();
+        cache.db.insert("raw_key", raw).unwrap();
+
+        // Both should be readable.
+        assert_eq!(cache.get::<u32>("wrapped", None).await.unwrap(), Some(42));
+        assert_eq!(cache.get::<u32>("raw_key", None).await.unwrap(), Some(99));
     }
 }

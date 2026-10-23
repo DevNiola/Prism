@@ -1,3 +1,25 @@
+//! # Decode Module
+//!
+//! Provides comprehensive decoding functionality for Soroban contract invocations,
+//! function arguments, error reports, call-chains, and resource diagnostics.
+//!
+//! ## Submodules
+//! - [`argument_decoder`]: Typed decoding of contract function arguments.
+//! - [`enum_decoder`]: Decoder for Soroban enums, Options, and Results.
+//! - [`multi_op_decoder`]: Multi-operation transaction batch decoder.
+//! - [`chain_analyzer`]: Reconstructs contract call chains and detects failure patterns.
+//! - [`resource_analyzer`]: Analyzes CPU, memory, and storage resource limits.
+//!
+//! ## Example
+//! ```rust,no_run
+//! use grat_core::decode::ArgumentDecoder;
+//!
+//! let decoder = ArgumentDecoder::new();
+//! let args = vec![];
+//! let decoded = decoder.decode_dynamic(&args);
+//! println!("Decoded {} arguments", decoded.len());
+//! ```
+
 pub mod argument_decoder;
 pub mod auth;
 pub mod auth_address_nonce;
