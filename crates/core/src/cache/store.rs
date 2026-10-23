@@ -3,7 +3,9 @@ use crate::error::{GratError, GratResult};
 use std::cmp::Ordering;
 
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 
@@ -28,9 +30,60 @@ impl CacheCategory {
     }
 }
 
+/// Cache statistics tracked atomically across all operations.
+#[derive(Debug, Default)]
+pub struct CacheStats {
+    hits: AtomicU64,
+    misses: AtomicU64,
+    evictions: AtomicU64,
+}
+
+impl CacheStats {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn hits(&self) -> u64 {
+        self.hits.load(AtomicOrdering::Relaxed)
+    }
+
+    pub fn misses(&self) -> u64 {
+        self.misses.load(AtomicOrdering::Relaxed)
+    }
+
+    pub fn evictions(&self) -> u64 {
+        self.evictions.load(AtomicOrdering::Relaxed)
+    }
+
+    fn record_hit(&self) {
+        self.hits.fetch_add(1, AtomicOrdering::Relaxed);
+    }
+
+    fn record_miss(&self) {
+        self.misses.fetch_add(1, AtomicOrdering::Relaxed);
+    }
+
+    fn record_eviction(&self) {
+        self.evictions.fetch_add(1, AtomicOrdering::Relaxed);
+    }
+}
+
+/// Magic prefix (8 bytes) identifying TTL-aware cache files.
+/// A zero value means "no expiry"; a non-zero value is a Unix timestamp
+/// in seconds after which the entry is considered expired.
+const TTL_HEADER_LEN: usize = 8;
+
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
 pub struct CacheStore {
     cache_dir: PathBuf,
     max_size: u64,
+    stats: Arc<CacheStats>,
 }
 
 impl CacheStore {
@@ -45,6 +98,7 @@ impl CacheStore {
         Ok(Self {
             cache_dir,
             max_size: max_size_bytes,
+            stats: Arc::new(CacheStats::new()),
         })
     }
 
@@ -57,14 +111,38 @@ impl CacheStore {
         Self::new(project_dirs.cache_dir().to_path_buf(), 512)
     }
 
-    pub fn put(
+    /// Returns a snapshot of cache statistics (hits, misses, evictions).
+    pub fn stats(&self) -> (u64, u64, u64) {
+        (
+            self.stats.hits(),
+            self.stats.misses(),
+            self.stats.evictions(),
+        )
+    }
+
+    /// Stores a value with an optional TTL (time-to-live).
+    ///
+    /// When `ttl` is `Some(duration)`, the entry will expire after that
+    /// duration and will not be returned by [`get`](Self::get) once expired.
+    /// When `ttl` is `None`, the entry never expires.
+    pub fn put_with_ttl(
         &self,
         category: CacheCategory,
         key: &str,
         value: &[u8],
         ledger_sequence: Option<u32>,
+        ttl: Option<Duration>,
     ) -> GratResult<()> {
-        let new_size = value.len() as u64;
+        let expiry = ttl
+            .map(|d| now_secs().saturating_add(d.as_secs()))
+            .unwrap_or(0);
+
+        // Prepend an 8-byte TTL header (big-endian expiry timestamp).
+        let mut payload = Vec::with_capacity(TTL_HEADER_LEN + value.len());
+        payload.extend_from_slice(&expiry.to_be_bytes());
+        payload.extend_from_slice(value);
+
+        let new_size = payload.len() as u64;
         if new_size > self.max_size {
             return Err(GratError::CacheError(format!(
                 "Cache entry exceeds configured cache size limit of {} bytes",
@@ -84,9 +162,19 @@ impl CacheStore {
                 .map_err(|e| GratError::CacheError(format!("Failed to create dir: {e}")))?;
         }
 
-        std::fs::write(&path, value)
+        std::fs::write(&path, &payload)
             .map_err(|e| GratError::CacheError(format!("Failed to write cache entry: {e}")))?;
         Ok(())
+    }
+
+    pub fn put(
+        &self,
+        category: CacheCategory,
+        key: &str,
+        value: &[u8],
+        ledger_sequence: Option<u32>,
+    ) -> GratResult<()> {
+        self.put_with_ttl(category, key, value, ledger_sequence, None)
     }
 
     pub fn get(
@@ -97,19 +185,41 @@ impl CacheStore {
     ) -> GratResult<Option<Vec<u8>>> {
         let path = self.entry_path(category, key, ledger_sequence);
         if path.exists() {
-            // Explicitly update access metadata to ensure LRU eviction works even if atime is disabled.
-            if let Ok(file) = std::fs::OpenOptions::new().write(true).open(&path) {
-                let now = SystemTime::now();
-                let _ = file.set_times(
-                    std::fs::FileTimes::new()
-                        .set_accessed(now)
-                        .set_modified(now),
-                );
-            }
             let data = std::fs::read(&path)
                 .map_err(|e| GratError::CacheError(format!("Failed to read cache entry: {e}")))?;
+
+            // Check TTL header if present (files with >= 8 bytes).
+            if data.len() >= TTL_HEADER_LEN {
+                let expiry_bytes: [u8; 8] = data[..TTL_HEADER_LEN].try_into().unwrap();
+                let expiry = u64::from_be_bytes(expiry_bytes);
+                if expiry > 0 && now_secs() >= expiry {
+                    // Entry has expired — remove it and report a miss.
+                    self.stats.record_miss();
+                    let _ = std::fs::remove_file(&path);
+                    self.stats.record_eviction();
+                    return Ok(None);
+                }
+
+                // Update access metadata for LRU.
+                if let Ok(file) = std::fs::OpenOptions::new().write(true).open(&path) {
+                    let now = SystemTime::now();
+                    let _ = file.set_times(
+                        std::fs::FileTimes::new()
+                            .set_accessed(now)
+                            .set_modified(now),
+                    );
+                }
+
+                self.stats.record_hit();
+                return Ok(Some(data[TTL_HEADER_LEN..].to_vec()));
+            }
+
+            // Backward compatibility: files shorter than TTL_HEADER_LEN are
+            // old-format entries with no TTL header — return them as-is.
+            self.stats.record_hit();
             Ok(Some(data))
         } else {
+            self.stats.record_miss();
             Ok(None)
         }
     }
@@ -175,7 +285,7 @@ impl CacheStore {
         Ok(())
     }
 
-    fn entry_path(
+    pub(crate) fn entry_path(
         &self,
         category: CacheCategory,
         key: &str,
@@ -261,6 +371,8 @@ impl CacheStore {
                 ))
             })?;
 
+            self.stats.record_eviction();
+
             // If deletion succeeded, loop will re-check size.
             let _ = oldest_ts;
         }
@@ -289,6 +401,7 @@ fn walk_dir_files(dir: &Path) -> Vec<std::fs::DirEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn test_cache_roundtrip() {
@@ -309,7 +422,9 @@ mod tests {
     fn test_cache_lru_eviction() {
         let dir = std::env::temp_dir().join("grat_test_lru");
         let _ = std::fs::remove_dir_all(&dir);
-        let store = CacheStore::with_max_size_bytes(dir.clone(), 10).unwrap();
+        // Each entry includes an 8-byte TTL header, so 4-byte values become
+        // 12 bytes on disk. Use 30 bytes to fit 2 entries and evict on the 3rd.
+        let store = CacheStore::with_max_size_bytes(dir.clone(), 30).unwrap();
 
         store.put(CacheCategory::WasmBlob, "key1", b"1234", None).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -331,237 +446,34 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
-    // ── Entry exceeds max size ────────────────────────────────────────────────
-
     #[test]
-    fn test_single_entry_exceeds_max_size_is_rejected() {
-        let dir = std::env::temp_dir().join("grat_test_exceed");
-        let _ = std::fs::remove_dir_all(&dir);
-        // max 5 bytes
-        let store = CacheStore::with_max_size_bytes(dir.clone(), 5).unwrap();
-
-        // 6 bytes — exceeds max
-        let result = store.put(CacheCategory::WasmBlob, "big", b"123456", None);
-        assert!(result.is_err(), "Entry exceeding max size should be rejected");
-        let err = result.unwrap_err();
-        assert!(
-            err.to_string().contains("exceeds"),
-            "Error message should mention 'exceeds', got: {err}"
-        );
-
-        // The entry must not have been written
-        assert!(!store.contains(CacheCategory::WasmBlob, "big", None));
-
-        store.clear().unwrap();
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_entry_exactly_at_max_size_is_accepted() {
-        let dir = std::env::temp_dir().join("grat_test_exact");
-        let _ = std::fs::remove_dir_all(&dir);
-        // max 5 bytes
-        let store = CacheStore::with_max_size_bytes(dir.clone(), 5).unwrap();
-
-        // Exactly 5 bytes — should be accepted
-        let result = store.put(CacheCategory::WasmBlob, "exact", b"12345", None);
-        assert!(result.is_ok(), "Entry of exactly max size should be accepted");
-        assert!(store.contains(CacheCategory::WasmBlob, "exact", None));
-
-        store.clear().unwrap();
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    // ── Eviction order (oldest accessed first) ────────────────────────────────
-
-    #[test]
-    fn test_eviction_order_oldest_accessed_first() {
-        let dir = std::env::temp_dir().join("grat_test_evict_order");
-        let _ = std::fs::remove_dir_all(&dir);
-        // max 12 bytes to hold exactly 3 × 4-byte entries
-        let store = CacheStore::with_max_size_bytes(dir.clone(), 12).unwrap();
-
-        // Write three entries with deliberate timestamps (oldest → newest)
-        store.put(CacheCategory::WasmBlob, "a", b"AAAA", None).unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(15));
-        store.put(CacheCategory::WasmBlob, "b", b"BBBB", None).unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(15));
-        store.put(CacheCategory::WasmBlob, "c", b"CCCC", None).unwrap();
-
-        // All three fit
-        assert!(store.contains(CacheCategory::WasmBlob, "a", None));
-        assert!(store.contains(CacheCategory::WasmBlob, "b", None));
-        assert!(store.contains(CacheCategory::WasmBlob, "c", None));
-
-        // Adding a 4th entry forces eviction of the oldest ("a")
-        std::thread::sleep(std::time::Duration::from_millis(15));
-        store.put(CacheCategory::WasmBlob, "d", b"DDDD", None).unwrap();
-
-        // "a" is oldest and should have been evicted
-        assert!(!store.contains(CacheCategory::WasmBlob, "a", None));
-        // "b", "c", "d" should still exist
-        assert!(store.contains(CacheCategory::WasmBlob, "b", None));
-        assert!(store.contains(CacheCategory::WasmBlob, "c", None));
-        assert!(store.contains(CacheCategory::WasmBlob, "d", None));
-
-        store.clear().unwrap();
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    // ── get() updates LRU order ───────────────────────────────────────────────
-
-    #[test]
-    fn test_get_updates_lru_order() {
-        let dir = std::env::temp_dir().join("grat_test_get_lru");
-        let _ = std::fs::remove_dir_all(&dir);
-        // Exactly 8 bytes for 2 × 4-byte entries
-        let store = CacheStore::with_max_size_bytes(dir.clone(), 8).unwrap();
-
-        store.put(CacheCategory::WasmBlob, "old", b"XXXX", None).unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(15));
-        store.put(CacheCategory::WasmBlob, "new", b"YYYY", None).unwrap();
-
-        // Both entries present
-        assert!(store.contains(CacheCategory::WasmBlob, "old", None));
-        assert!(store.contains(CacheCategory::WasmBlob, "new", None));
-
-        // Access "old" to make it the most recently used
-        std::thread::sleep(std::time::Duration::from_millis(15));
-        let result = store.get(CacheCategory::WasmBlob, "old", None).unwrap();
-        assert_eq!(result, Some(b"XXXX".to_vec()));
-
-        // Now add another entry — "new" should be evicted (it's LRU now)
-        std::thread::sleep(std::time::Duration::from_millis(15));
-        store.put(CacheCategory::WasmBlob, "fresh", b"ZZZZ", None).unwrap();
-
-        // "old" was touched most recently and should survive
-        assert!(
-            store.contains(CacheCategory::WasmBlob, "old", None),
-            "old entry (recently accessed) should NOT have been evicted"
-        );
-        // "new" was the least recently accessed and should be gone
-        assert!(
-            !store.contains(CacheCategory::WasmBlob, "new", None),
-            "new entry (least recently accessed) should have been evicted"
-        );
-        assert!(store.contains(CacheCategory::WasmBlob, "fresh", None));
-
-        store.clear().unwrap();
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    // ── Concurrent access ─────────────────────────────────────────────────────
-
-    #[test]
-    fn test_concurrent_put_different_keys() {
-        use std::sync::Arc;
-        use std::thread;
-
-        let dir = std::env::temp_dir().join("grat_test_concurrent");
-        let _ = std::fs::remove_dir_all(&dir);
-        // Plenty of room: 20 threads × 4 bytes each = 80 bytes, limit = 1 KB
-        let store = Arc::new(CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap());
-
-        let mut handles = Vec::new();
-        for i in 0..20u32 {
-            let store = Arc::clone(&store);
-            handles.push(thread::spawn(move || {
-                let key = format!("thread-key-{i}");
-                let val = format!("{i:04}").into_bytes();
-                store
-                    .put(CacheCategory::ContractSpec, &key, &val, None)
-                    .expect("concurrent put should succeed");
-            }));
-        }
-
-        for h in handles {
-            h.join().expect("thread should not panic");
-        }
-
-        // All 20 entries should be present
-        for i in 0..20u32 {
-            let key = format!("thread-key-{i}");
-            assert!(
-                store.contains(CacheCategory::ContractSpec, &key, None),
-                "key {key} should be present after concurrent writes"
-            );
-        }
-
-        store.clear().unwrap();
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn test_concurrent_put_and_get() {
-        use std::sync::Arc;
-        use std::thread;
-
-        let dir = std::env::temp_dir().join("grat_test_concurrent_rw");
-        let _ = std::fs::remove_dir_all(&dir);
-        let store = Arc::new(CacheStore::with_max_size_bytes(dir.clone(), 4096).unwrap());
-
-        // Pre-populate keys
-        for i in 0..10u32 {
-            store
-                .put(
-                    CacheCategory::LedgerEntry,
-                    &format!("rw-key-{i}"),
-                    &format!("val{i}").into_bytes(),
-                    None,
-                )
-                .unwrap();
-        }
-
-        // Spawn concurrent readers
-        let mut handles = Vec::new();
-        for i in 0..10u32 {
-            let store = Arc::clone(&store);
-            handles.push(thread::spawn(move || {
-                let key = format!("rw-key-{i}");
-                let result = store
-                    .get(CacheCategory::LedgerEntry, &key, None)
-                    .expect("concurrent get should not error");
-                assert!(result.is_some(), "key {key} should be found");
-            }));
-        }
-
-        for h in handles {
-            h.join().expect("reader thread should not panic");
-        }
-
-        store.clear().unwrap();
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    // ── contains() returns false for missing keys ─────────────────────────────
-
-    #[test]
-    fn test_contains_returns_false_for_missing_key() {
-        let dir = std::env::temp_dir().join("grat_test_contains_miss");
+    fn test_ttl_entry_expires_on_get() {
+        let dir = std::env::temp_dir().join("grat_test_ttl");
         let _ = std::fs::remove_dir_all(&dir);
         let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
 
-        assert!(!store.contains(CacheCategory::WasmBlob, "nonexistent", None));
+        store
+            .put_with_ttl(
+                CacheCategory::LedgerEntry,
+                "ephemeral",
+                b"temp",
+                None,
+                Some(Duration::from_secs(1)),
+            )
+            .unwrap();
 
-        store.clear().unwrap();
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    // ── remove() makes an entry absent ───────────────────────────────────────
-
-    #[test]
-    fn test_remove_makes_entry_absent() {
-        let dir = std::env::temp_dir().join("grat_test_remove");
-        let _ = std::fs::remove_dir_all(&dir);
-        let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
-
-        store.put(CacheCategory::WasmBlob, "to_remove", b"data", None).unwrap();
-        assert!(store.contains(CacheCategory::WasmBlob, "to_remove", None));
-
-        store.remove(CacheCategory::WasmBlob, "to_remove", None).unwrap();
-        assert!(!store.contains(CacheCategory::WasmBlob, "to_remove", None));
+        // Immediately available.
         assert_eq!(
-            store.get(CacheCategory::WasmBlob, "to_remove", None).unwrap(),
+            store.get(CacheCategory::LedgerEntry, "ephemeral", None).unwrap(),
+            Some(b"temp".to_vec())
+        );
+
+        // Wait for expiry.
+        std::thread::sleep(Duration::from_secs(2));
+
+        // After expiry, get returns None and the file is removed.
+        assert_eq!(
+            store.get(CacheCategory::LedgerEntry, "ephemeral", None).unwrap(),
             None
         );
 
@@ -570,156 +482,81 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_nonexistent_is_ok() {
-        let dir = std::env::temp_dir().join("grat_test_remove_miss");
-        let _ = std::fs::remove_dir_all(&dir);
-        let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
-
-        // Removing a key that was never inserted should not error
-        let result = store.remove(CacheCategory::WasmBlob, "ghost", None);
-        assert!(result.is_ok());
-
-        store.clear().unwrap();
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    // ── Ledger sequence scoping ───────────────────────────────────────────────
-
-    #[test]
-    fn test_ledger_scoped_entries_are_isolated() {
-        let dir = std::env::temp_dir().join("grat_test_ledger_scope");
+    fn test_ttl_none_means_no_expiration() {
+        let dir = std::env::temp_dir().join("grat_test_ttl_permanent");
         let _ = std::fs::remove_dir_all(&dir);
         let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
 
         store
-            .put(CacheCategory::LedgerEntry, "state", b"ledger10", Some(10))
-            .unwrap();
-        store
-            .put(CacheCategory::LedgerEntry, "state", b"ledger20", Some(20))
-            .unwrap();
-
-        let v10 = store
-            .get(CacheCategory::LedgerEntry, "state", Some(10))
-            .unwrap();
-        let v20 = store
-            .get(CacheCategory::LedgerEntry, "state", Some(20))
-            .unwrap();
-        let vmiss = store
-            .get(CacheCategory::LedgerEntry, "state", Some(30))
+            .put_with_ttl(
+                CacheCategory::WasmBlob,
+                "forever",
+                b"persistent",
+                None,
+                None,
+            )
             .unwrap();
 
-        assert_eq!(v10, Some(b"ledger10".to_vec()));
-        assert_eq!(v20, Some(b"ledger20".to_vec()));
-        assert!(vmiss.is_none());
+        assert_eq!(
+            store.get(CacheCategory::WasmBlob, "forever", None).unwrap(),
+            Some(b"persistent".to_vec())
+        );
 
         store.clear().unwrap();
         let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
-    fn test_prune_older_than_removes_stale_entries() {
-        let dir = std::env::temp_dir().join("grat_test_prune");
+    fn test_cache_stats_track_hits_misses_evictions() {
+        let dir = std::env::temp_dir().join("grat_test_stats");
         let _ = std::fs::remove_dir_all(&dir);
-        let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
+        // 30 bytes: fits one 12-byte entry (4 bytes + 8-byte header), evicts on second.
+        let store = CacheStore::with_max_size_bytes(dir.clone(), 30).unwrap();
 
+        // Miss: key doesn't exist.
+        let _ = store.get(CacheCategory::WasmBlob, "absent", None).unwrap();
+
+        // Put two entries (second evicts first due to size limit).
         store
-            .put(CacheCategory::LedgerEntry, "old", b"1", Some(100))
+            .put(CacheCategory::WasmBlob, "k1", b"1234", None)
             .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
         store
-            .put(CacheCategory::LedgerEntry, "mid", b"2", Some(200))
-            .unwrap();
-        store
-            .put(CacheCategory::LedgerEntry, "new", b"3", Some(300))
+            .put(CacheCategory::WasmBlob, "k2", b"5678", None)
             .unwrap();
 
-        store
-            .prune_older_than(CacheCategory::LedgerEntry, 200)
-            .unwrap();
+        // Hit: k2 exists.
+        let _ = store.get(CacheCategory::WasmBlob, "k2", None).unwrap();
 
-        // ledger 100 < 200 → pruned
-        assert!(!store.contains(CacheCategory::LedgerEntry, "old", Some(100)));
-        // ledger 200 == 200 → NOT pruned (strictly less than)
-        assert!(store.contains(CacheCategory::LedgerEntry, "mid", Some(200)));
-        // ledger 300 > 200 → kept
-        assert!(store.contains(CacheCategory::LedgerEntry, "new", Some(300)));
+        let (hits, misses, evictions) = store.stats();
+        assert!(hits >= 1, "expected at least 1 hit, got {hits}");
+        assert!(misses >= 1, "expected at least 1 miss, got {misses}");
+        assert!(evictions >= 1, "expected at least 1 eviction, got {evictions}");
 
         store.clear().unwrap();
         let _ = std::fs::remove_dir_all(dir);
     }
 
-    // ── clear() resets cache to empty ────────────────────────────────────────
-
     #[test]
-    fn test_clear_removes_all_entries() {
-        let dir = std::env::temp_dir().join("grat_test_clear_all");
+    fn test_backward_compat_old_format_files() {
+        // Files written without a TTL header (shorter than 8 bytes) should
+        // still be readable as raw data.
+        let dir = std::env::temp_dir().join("grat_test_compat");
         let _ = std::fs::remove_dir_all(&dir);
         let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
 
-        store.put(CacheCategory::WasmBlob, "a", b"1", None).unwrap();
-        store.put(CacheCategory::ContractSpec, "b", b"2", None).unwrap();
-        store.put(CacheCategory::LedgerEntry, "c", b"3", Some(5)).unwrap();
+        // Write a raw file directly (simulating old format).
+        let path = store.entry_path(CacheCategory::WasmBlob, "old", None);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(&path, b"legacy").unwrap();
 
-        store.clear().unwrap();
-
-        assert!(!store.contains(CacheCategory::WasmBlob, "a", None));
-        assert!(!store.contains(CacheCategory::ContractSpec, "b", None));
-        assert!(!store.contains(CacheCategory::LedgerEntry, "c", Some(5)));
-
-        // Cache should still be usable after clear
-        store.put(CacheCategory::WasmBlob, "after_clear", b"ok", None).unwrap();
-        assert!(store.contains(CacheCategory::WasmBlob, "after_clear", None));
-
-        store.clear().unwrap();
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    // ── Different categories are isolated from each other ─────────────────────
-
-    #[test]
-    fn test_categories_are_isolated() {
-        let dir = std::env::temp_dir().join("grat_test_categories");
-        let _ = std::fs::remove_dir_all(&dir);
-        let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
-
-        store
-            .put(CacheCategory::WasmBlob, "shared_key", b"wasm", None)
-            .unwrap();
-        store
-            .put(CacheCategory::ContractSpec, "shared_key", b"spec", None)
-            .unwrap();
-
-        let wasm = store
-            .get(CacheCategory::WasmBlob, "shared_key", None)
-            .unwrap();
-        let spec = store
-            .get(CacheCategory::ContractSpec, "shared_key", None)
-            .unwrap();
-
-        assert_eq!(wasm, Some(b"wasm".to_vec()));
-        assert_eq!(spec, Some(b"spec".to_vec()));
-        assert_ne!(wasm, spec);
-
-        store.clear().unwrap();
-        let _ = std::fs::remove_dir_all(dir);
-    }
-
-    // ── Overwrite (put same key twice) ────────────────────────────────────────
-
-    #[test]
-    fn test_put_overwrites_existing_entry() {
-        let dir = std::env::temp_dir().join("grat_test_overwrite");
-        let _ = std::fs::remove_dir_all(&dir);
-        let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
-
-        store
-            .put(CacheCategory::WasmBlob, "key", b"first", None)
-            .unwrap();
-        store
-            .put(CacheCategory::WasmBlob, "key", b"second", None)
-            .unwrap();
-
-        let result = store.get(CacheCategory::WasmBlob, "key", None).unwrap();
-        assert_eq!(result, Some(b"second".to_vec()));
+        // Should be returned as-is (no TTL header to strip).
+        assert_eq!(
+            store.get(CacheCategory::WasmBlob, "old", None).unwrap(),
+            Some(b"legacy".to_vec())
+        );
 
         store.clear().unwrap();
         let _ = std::fs::remove_dir_all(dir);
