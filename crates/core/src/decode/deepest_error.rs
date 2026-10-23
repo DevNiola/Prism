@@ -405,6 +405,65 @@ mod tests {
     }
 
     #[test]
+    fn five_level_nested_failure_pinpoints_the_deepest_layer() {
+        let contracts = [
+            contract_hash(1),
+            contract_hash(2),
+            contract_hash(3),
+            contract_hash(4),
+            contract_hash(5),
+        ];
+        let events = vec![
+            fn_call(contracts[0].clone(), "route"),
+            fn_call(contracts[1].clone(), "swap"),
+            fn_call(contracts[2].clone(), "withdraw"),
+            fn_call(contracts[3].clone(), "transfer_from"),
+            fn_call(contracts[4].clone(), "transfer"),
+            contract_error(contracts[4].clone(), 17),
+        ];
+
+        let deepest = DeepestErrorFinder::new()
+            .find_deepest(&events)
+            .expect("deepest error should be found");
+
+        assert_eq!(deepest.contract_address, strkey(5));
+        assert_eq!(deepest.function_name.as_deref(), Some("transfer"));
+        assert_eq!(deepest.depth, 4);
+        assert_eq!(deepest.error_code, Some(17));
+    }
+
+    #[test]
+    fn deepest_failure_wins_across_independent_error_branches() {
+        let (root_a, child_a, root_b, child_b, leaf_b) = (
+            contract_hash(10),
+            contract_hash(11),
+            contract_hash(20),
+            contract_hash(21),
+            contract_hash(22),
+        );
+        let events = vec![
+            fn_call(root_a.clone(), "first"),
+            fn_call(child_a.clone(), "fail_shallow"),
+            contract_error(child_a.clone(), 3),
+            fn_return(child_a),
+            fn_return(root_a),
+            fn_call(root_b.clone(), "second"),
+            fn_call(child_b.clone(), "middle"),
+            fn_call(leaf_b.clone(), "fail_deep"),
+            contract_error(leaf_b, 9),
+        ];
+
+        let deepest = DeepestErrorFinder::new()
+            .find_deepest(&events)
+            .expect("deepest error should be found");
+
+        assert_eq!(deepest.contract_address, strkey(22));
+        assert_eq!(deepest.function_name.as_deref(), Some("fail_deep"));
+        assert_eq!(deepest.depth, 2);
+        assert_eq!(deepest.error_code, Some(9));
+    }
+
+    #[test]
     fn find_deepest_prefers_deeper_of_two_failures_regardless_of_order() {
         let (h1, h2, h3) = (contract_hash(10), contract_hash(20), contract_hash(30));
 

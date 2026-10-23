@@ -1,214 +1,145 @@
-import fs from "node:fs";
-import path from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { parse } from "dotenv";
 
-/**
- * Loads environment variables from hierarchical .env files:
- * 1. .env.{NODE_ENV}.local
- * 2. .env.local
- * 3. .env.{NODE_ENV} (e.g. .env.production, .env.development)
- * 4. .env
- *
- * Pre-existing process.env variables always take precedence.
- */
-export function loadEnvFiles(baseDir: string = process.cwd()): string[] {
-  const nodeEnv = process.env.NODE_ENV || "development";
-  const filesToTry = [
-    `.env.${nodeEnv}.local`,
-    ".env.local",
-    `.env.${nodeEnv}`,
-    ".env",
-  ];
-
-  const loadedFiles: string[] = [];
-
-  for (const filename of filesToTry) {
-    const fullPath = path.resolve(baseDir, filename);
-    if (fs.existsSync(fullPath)) {
-      try {
-        const content = fs.readFileSync(fullPath, "utf-8");
-        for (const line of content.split("\n")) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith("#")) continue;
-          const eqIdx = trimmed.indexOf("=");
-          if (eqIdx !== -1) {
-            const key = trimmed.slice(0, eqIdx).trim();
-            let val = trimmed.slice(eqIdx + 1).trim();
-            if (
-              (val.startsWith('"') && val.endsWith('"')) ||
-              (val.startsWith("'") && val.endsWith("'"))
-            ) {
-              val = val.slice(1, -1);
-            }
-            if (!(key in process.env)) {
-              process.env[key] = val;
-            }
-          }
-        }
-        loadedFiles.push(filename);
-      } catch {
-        // Ignore read errors gracefully
-      }
-    }
-  }
-
-  return loadedFiles;
-}
-
-// Bootstrap environment files immediately upon module import
-loadEnvFiles();
-
-export interface AIConfig {
-  apiKey: string;
-  apiBaseUrl: string;
-  model: string;
-  maxTokensPerRequest: number;
-  temperature: number;
-  timeoutMs: number;
-}
-
-export interface BudgetConfig {
-  hourlyTokenLimit: number;
-  dailyTokenLimit: number;
-  maxConcurrentRequests: number;
-}
-
-export interface CacheConfig {
-  decodeTtl: number;
-  profileTtl: number;
-  dedupWindowMs: number;
-}
-
-export interface AppConfig {
+type Environment = Record<string, string | undefined>;
+type ServerConfig = {
   port: number;
   redisUrl: string;
   gratBinaryPath: string;
-  nodeEnv: string;
-  ai: AIConfig;
-  budget: BudgetConfig;
-  cache: CacheConfig;
-}
-
-export const config: AppConfig = {
-  port: Number(process.env.PORT) || 3001,
-  redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
-  gratBinaryPath: process.env.GRAT_BINARY || "grat",
-  nodeEnv: process.env.NODE_ENV || "development",
-
-  // AI provider
   ai: {
-    apiKey: process.env.AI_API_KEY || "",
-    apiBaseUrl: process.env.AI_API_BASE_URL || "https://api.openai.com/v1",
-    model: process.env.AI_MODEL || "gpt-4o-mini",
-    maxTokensPerRequest: Number(process.env.AI_MAX_TOKENS_PER_REQUEST) || 2048,
-    temperature: Number(process.env.AI_TEMPERATURE) || 0.2,
-    timeoutMs: Number(process.env.AI_TIMEOUT_MS) || 30_000,
-  },
-
-  // Token budget enforcement
+    apiKey: string;
+    apiBaseUrl: string;
+    model: string;
+    maxTokensPerRequest: number;
+    temperature: number;
+    timeoutMs: number;
+  };
   budget: {
-    hourlyTokenLimit: Number(process.env.AI_HOURLY_TOKEN_LIMIT) || 100_000,
-    dailyTokenLimit: Number(process.env.AI_DAILY_TOKEN_LIMIT) || 1_000_000,
-    maxConcurrentRequests: Number(process.env.AI_MAX_CONCURRENT) || 5,
-  },
-
-  // Cache TTLs (seconds)
+    hourlyTokenLimit: number;
+    dailyTokenLimit: number;
+    maxConcurrentRequests: number;
+  };
   cache: {
-    decodeTtl: Number(process.env.CACHE_DECODE_TTL) || 86_400, // 24h
-    profileTtl: Number(process.env.CACHE_PROFILE_TTL) || 3_600, // 1h
-    dedupWindowMs: Number(process.env.DEDUP_WINDOW_MS) || 10_000, // 10s
-  },
+    decodeTtl: number;
+    profileTtl: number;
+    dedupWindowMs: number;
+  };
 };
 
-export interface ValidationResult {
-  valid: boolean;
-  errors: string[];
+function loadEnvironment(): Environment {
+  const nodeEnv = process.env.NODE_ENV || "development";
+  const fileEnvironment: Environment = {};
+
+  for (const filename of [".env", ".env.local", `.env.${nodeEnv}`]) {
+    const filepath = resolve(process.cwd(), filename);
+    if (existsSync(filepath)) {
+      Object.assign(fileEnvironment, parse(readFileSync(filepath)));
+    }
+  }
+
+  return { ...fileEnvironment, ...process.env };
 }
 
-/**
- * Validates configuration values and required environment variables.
- */
-export function validateConfig(cfg: AppConfig = config): ValidationResult {
-  const errors: string[] = [];
+const environment = loadEnvironment();
 
-  // Port validation
-  if (isNaN(cfg.port) || cfg.port < 1 || cfg.port > 65535 || !Number.isInteger(cfg.port)) {
-    errors.push(`Invalid PORT: must be an integer between 1 and 65535, received '${cfg.port}'`);
+function requiredString(name: string): string {
+  const value = environment[name]?.trim();
+  if (!value) {
+    throw new Error(`Missing required environment variable ${name}`);
   }
-
-  // Redis URL validation
-  if (!cfg.redisUrl || (!cfg.redisUrl.startsWith("redis://") && !cfg.redisUrl.startsWith("rediss://"))) {
-    errors.push(`Invalid REDIS_URL: must start with 'redis://' or 'rediss://', received '${cfg.redisUrl}'`);
-  }
-
-  // AI configuration validation
-  if (cfg.ai.apiKey && !cfg.ai.apiBaseUrl) {
-    errors.push("Missing AI_API_BASE_URL: required when AI_API_KEY is configured");
-  }
-
-  if (isNaN(cfg.ai.maxTokensPerRequest) || cfg.ai.maxTokensPerRequest <= 0) {
-    errors.push(`Invalid AI_MAX_TOKENS_PER_REQUEST: must be > 0, received '${cfg.ai.maxTokensPerRequest}'`);
-  }
-
-  if (isNaN(cfg.ai.temperature) || cfg.ai.temperature < 0 || cfg.ai.temperature > 2) {
-    errors.push(`Invalid AI_TEMPERATURE: must be between 0.0 and 2.0, received '${cfg.ai.temperature}'`);
-  }
-
-  // Budget validation
-  if (isNaN(cfg.budget.hourlyTokenLimit) || cfg.budget.hourlyTokenLimit <= 0) {
-    errors.push(`Invalid AI_HOURLY_TOKEN_LIMIT: must be > 0, received '${cfg.budget.hourlyTokenLimit}'`);
-  }
-
-  if (isNaN(cfg.budget.dailyTokenLimit) || cfg.budget.dailyTokenLimit <= 0) {
-    errors.push(`Invalid AI_DAILY_TOKEN_LIMIT: must be > 0, received '${cfg.budget.dailyTokenLimit}'`);
-  }
-
-  if (isNaN(cfg.budget.maxConcurrentRequests) || cfg.budget.maxConcurrentRequests <= 0) {
-    errors.push(`Invalid AI_MAX_CONCURRENT: must be > 0, received '${cfg.budget.maxConcurrentRequests}'`);
-  }
-
-  // Cache validation
-  if (isNaN(cfg.cache.decodeTtl) || cfg.cache.decodeTtl < 0) {
-    errors.push(`Invalid CACHE_DECODE_TTL: must be >= 0, received '${cfg.cache.decodeTtl}'`);
-  }
-
-  if (isNaN(cfg.cache.profileTtl) || cfg.cache.profileTtl < 0) {
-    errors.push(`Invalid CACHE_PROFILE_TTL: must be >= 0, received '${cfg.cache.profileTtl}'`);
-  }
-
-  if (isNaN(cfg.cache.dedupWindowMs) || cfg.cache.dedupWindowMs < 0) {
-    errors.push(`Invalid DEDUP_WINDOW_MS: must be >= 0, received '${cfg.cache.dedupWindowMs}'`);
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-  };
+  return value;
 }
 
-/**
- * Asserts configuration is valid, throwing a descriptive error if invalid.
- */
-export function assertValidConfig(cfg: AppConfig = config): void {
-  const result = validateConfig(cfg);
-  if (!result.valid) {
-    const errorMsg = `Configuration validation failed with ${result.errors.length} error(s):\n${result.errors.map((e) => `  - ${e}`).join("\n")}`;
-    throw new Error(errorMsg);
-  }
+function stringValue(name: string, fallback: string): string {
+  const value = environment[name]?.trim();
+  return value || fallback;
 }
 
-// Support CLI execution: node/tsx src/config.ts --validate or config:validate
-if (
-  process.argv.includes("--validate") ||
-  process.argv.includes("config:validate") ||
-  process.argv.includes("-v")
-) {
-  const result = validateConfig();
-  if (result.valid) {
-    console.log("Configuration validation successful: all configuration parameters are nominal.");
-    process.exit(0);
-  } else {
-    console.error(`Configuration validation failed with ${result.errors.length} error(s):`);
-    result.errors.forEach((err) => console.error(`  [ERROR] ${err}`));
-    process.exit(1);
+function numberValue(
+  name: string,
+  fallback: number,
+  options: { integer?: boolean; min: number; max?: number },
+): number {
+  const rawValue = environment[name];
+  if (rawValue === undefined || rawValue.trim() === "") {
+    return fallback;
   }
+
+  const value = Number(rawValue);
+  const valid =
+    Number.isFinite(value) &&
+    value >= options.min &&
+    (options.max === undefined || value <= options.max) &&
+    (!options.integer || Number.isInteger(value));
+
+  if (!valid) {
+    const range = options.max === undefined ? `at least ${options.min}` : `between ${options.min} and ${options.max}`;
+    const type = options.integer ? "an integer" : "a number";
+    throw new Error(`Invalid ${name}: expected ${type} ${range}, got "${rawValue}"`);
+  }
+
+  return value;
 }
+
+function validateUrl(name: string, value: string, protocols: string[]): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`Invalid ${name}: expected a valid URL, got "${value}"`);
+  }
+
+  if (!protocols.includes(url.protocol)) {
+    throw new Error(`Invalid ${name}: protocol must be ${protocols.join(" or ")}`);
+  }
+
+  return value;
+}
+
+function urlValue(name: string, fallback: string, protocols: string[]): string {
+  return validateUrl(name, stringValue(name, fallback), protocols);
+}
+
+const isProduction = environment.NODE_ENV === "production";
+
+export const config: ServerConfig = {
+  port: numberValue("PORT", 3001, { integer: true, min: 1, max: 65535 }),
+  redisUrl: isProduction
+    ? validateUrl("REDIS_URL", requiredString("REDIS_URL"), ["redis:", "rediss:"])
+    : urlValue("REDIS_URL", "redis://localhost:6379", ["redis:", "rediss:"]),
+  gratBinaryPath: stringValue("GRAT_BINARY", "grat"),
+
+  ai: {
+    apiKey: environment.AI_API_KEY?.trim() || "",
+    apiBaseUrl: urlValue("AI_API_BASE_URL", "https://api.openai.com/v1", ["http:", "https:"]),
+    model: stringValue("AI_MODEL", "gpt-4o-mini"),
+    maxTokensPerRequest: numberValue("AI_MAX_TOKENS_PER_REQUEST", 2048, {
+      integer: true,
+      min: 1,
+    }),
+    temperature: numberValue("AI_TEMPERATURE", 0.2, { min: 0, max: 2 }),
+    timeoutMs: numberValue("AI_TIMEOUT_MS", 30_000, { integer: true, min: 1 }),
+  },
+
+  budget: {
+    hourlyTokenLimit: numberValue("AI_HOURLY_TOKEN_LIMIT", 100_000, {
+      integer: true,
+      min: 1,
+    }),
+    dailyTokenLimit: numberValue("AI_DAILY_TOKEN_LIMIT", 1_000_000, {
+      integer: true,
+      min: 1,
+    }),
+    maxConcurrentRequests: numberValue("AI_MAX_CONCURRENT", 5, {
+      integer: true,
+      min: 1,
+    }),
+  },
+
+  cache: {
+    decodeTtl: numberValue("CACHE_DECODE_TTL", 86_400, { integer: true, min: 1 }),
+    profileTtl: numberValue("CACHE_PROFILE_TTL", 3_600, { integer: true, min: 1 }),
+    dedupWindowMs: numberValue("DEDUP_WINDOW_MS", 10_000, { integer: true, min: 1 }),
+  },
+};
