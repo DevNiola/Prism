@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/DevNiola/Prism/compare/v1.1.0...v1.2.0) (2026-10-23)
+
+
+### Features
+
+* **dedup:** add repeated-failure blacklist circuit breaker ([96a902d](https://github.com/DevNiola/Prism/commit/96a902dbb9151b47663b60ac4cb7861553dbaf44))
+
 # [1.1.0](https://github.com/DevNiola/Prism/compare/v1.0.0...v1.1.0) (2026-10-23)
 
 
