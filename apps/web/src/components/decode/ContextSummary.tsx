@@ -187,30 +187,29 @@ function ResourcePanel({ context }: { context: TransactionContext }) {
 
 export default function ContextSummary({ context }: Props) {
   return (
-    <div className="rounded-lg border border-gray-700 bg-gray-900 p-4 space-y-6 text-sm">
-      {}
+    <section className="mx-auto my-4 max-w-3xl space-y-6 rounded-lg border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-200 sm:p-5">
       <section aria-labelledby="tx-summary-heading">
         <h3
           id="tx-summary-heading"
-          className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2"
+          className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500"
         >
           Transaction Summary
         </h3>
         <div className="space-y-1">
           <div className="flex justify-between">
-            <span className="text-gray-400">TX Hash</span>
-            <span className="font-mono text-xs text-gray-200 truncate max-w-[60%]">
+            <span className="text-slate-400">TX Hash</span>
+            <span className="max-w-[60%] truncate font-mono text-xs text-slate-200">
               {context.tx_hash}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-400">Ledger</span>
-            <span className="text-gray-200">{context.ledger_sequence}</span>
+            <span className="text-slate-400">Ledger</span>
+            <span className="text-slate-200">{context.ledger_sequence}</span>
           </div>
           {context.function_name && (
             <div className="flex justify-between">
-              <span className="text-gray-400">Function</span>
-              <span className="font-mono text-xs text-gray-200">
+              <span className="text-slate-400">Function</span>
+              <span className="font-mono text-xs text-slate-200">
                 {context.function_name}
               </span>
             </div>
@@ -220,6 +219,6 @@ export default function ContextSummary({ context }: Props) {
 
       <FeeBreakdownPanel fee={context.fee} />
       <ResourcePanel context={context} />
-    </div>
+    </section>
   );
 }
