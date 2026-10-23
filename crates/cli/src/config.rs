@@ -49,6 +49,10 @@ impl ConfigManager {
             )
         })?;
 
+        config.validate().map_err(|error| {
+            anyhow::anyhow!("Invalid config file {}: {error}", self.config_path.display())
+        })?;
+
         Ok(config)
     }
 

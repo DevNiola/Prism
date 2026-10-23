@@ -263,3 +263,171 @@ fn test_struct_with_no_nesting() {
     assert_eq!(inner.fields[0].name, "value");
     assert_eq!(inner.fields[0].type_name, "U32");
 }
+
+// ── Generic type resolver integration tests (Issue #61) ──────────────────
+
+#[test]
+fn test_vec_of_u32_resolves_generic() {
+    use crate::spec::type_resolver::TypeResolver;
+    use stellar_xdr::curr::{ScSpecTypeDef, ScSpecTypeVec};
+
+    let vec_t = ScSpecTypeDef::Vec(Box::new(ScSpecTypeVec {
+        element_type: Box::new(ScSpecTypeDef::U32),
+    }));
+    assert_eq!(TypeResolver::resolve(&vec_t).unwrap(), "Vec<u32>");
+}
+
+#[test]
+fn test_map_symbol_to_u64_resolves_generic() {
+    use crate::spec::type_resolver::TypeResolver;
+    use stellar_xdr::curr::{ScSpecTypeDef, ScSpecTypeMap};
+
+    let map_t = ScSpecTypeDef::Map(Box::new(ScSpecTypeMap {
+        key_type: Box::new(ScSpecTypeDef::Symbol),
+        value_type: Box::new(ScSpecTypeDef::U64),
+    }));
+    assert_eq!(TypeResolver::resolve(&map_t).unwrap(), "Map<Symbol, u64>");
+}
+
+#[test]
+fn test_map_symbol_to_inner_udt_resolves_name() {
+    use crate::spec::type_resolver::TypeResolver;
+    use stellar_xdr::curr::{ScSpecTypeDef, ScSpecTypeMap, ScSpecTypeUdt};
+
+    let map_t = ScSpecTypeDef::Map(Box::new(ScSpecTypeMap {
+        key_type: Box::new(ScSpecTypeDef::Symbol),
+        value_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+            name: "Inner".try_into().unwrap(),
+        }))),
+    }));
+    assert_eq!(TypeResolver::resolve(&map_t).unwrap(), "Map<Symbol, Inner>");
+}
+
+#[test]
+fn test_context_resolves_map_k_v_to_concrete_types() {
+    use crate::spec::type_resolver::{GenericContext, TypeResolver};
+    use stellar_xdr::curr::{ScSpecTypeDef, ScSpecTypeMap, ScSpecTypeUdt};
+
+    let mut ctx = GenericContext::new();
+    ctx.bind("K", ScSpecTypeDef::Address);
+    ctx.bind("V", ScSpecTypeDef::U128);
+
+    let map_t = ScSpecTypeDef::Map(Box::new(ScSpecTypeMap {
+        key_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+            name: "K".try_into().unwrap(),
+        }))),
+        value_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+            name: "V".try_into().unwrap(),
+        }))),
+    }));
+
+    assert_eq!(
+        TypeResolver::resolve_with_context(&map_t, &ctx).unwrap(),
+        "Map<Address, u128>"
+    );
+}
+
+#[test]
+fn test_context_resolves_vec_t_to_concrete_element_type() {
+    use crate::spec::type_resolver::{GenericContext, TypeResolver};
+    use stellar_xdr::curr::{ScSpecTypeDef, ScSpecTypeUdt, ScSpecTypeVec};
+
+    let mut ctx = GenericContext::new();
+    ctx.bind("T", ScSpecTypeDef::Bytes);
+
+    let vec_t = ScSpecTypeDef::Vec(Box::new(ScSpecTypeVec {
+        element_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+            name: "T".try_into().unwrap(),
+        }))),
+    }));
+
+    assert_eq!(
+        TypeResolver::resolve_with_context(&vec_t, &ctx).unwrap(),
+        "Vec<Bytes>"
+    );
+}
+
+#[test]
+fn test_context_resolves_custom_generic_udt_field() {
+    // Simulate resolving the `items` field of Outer (Vec<Inner>) but
+    // treating Inner as a generic parameter T bound to the struct spec.
+    use crate::spec::type_resolver::{GenericContext, TypeResolver};
+    use stellar_xdr::curr::{ScSpecTypeDef, ScSpecTypeUdt, ScSpecTypeVec};
+
+    let mut ctx = GenericContext::new();
+    // The field is Vec<T> and T is bound to Inner (a user-defined struct)
+    ctx.bind(
+        "T",
+        ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+            name: "Inner".try_into().unwrap(),
+        })),
+    );
+
+    let vec_t = ScSpecTypeDef::Vec(Box::new(ScSpecTypeVec {
+        element_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+            name: "T".try_into().unwrap(),
+        }))),
+    }));
+
+    // T → Inner (a UDT with no further substitution in context)
+    assert_eq!(
+        TypeResolver::resolve_with_context(&vec_t, &ctx).unwrap(),
+        "Vec<Inner>"
+    );
+}
+
+#[test]
+fn test_nested_generic_map_inside_vec_with_context() {
+    // Vec<Map<K, V>> where K = Symbol, V = u32  →  Vec<Map<Symbol, u32>>
+    use crate::spec::type_resolver::{GenericContext, TypeResolver};
+    use stellar_xdr::curr::{ScSpecTypeDef, ScSpecTypeMap, ScSpecTypeUdt, ScSpecTypeVec};
+
+    let mut ctx = GenericContext::new();
+    ctx.bind("K", ScSpecTypeDef::Symbol);
+    ctx.bind("V", ScSpecTypeDef::U32);
+
+    let map_t = ScSpecTypeDef::Map(Box::new(ScSpecTypeMap {
+        key_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+            name: "K".try_into().unwrap(),
+        }))),
+        value_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+            name: "V".try_into().unwrap(),
+        }))),
+    }));
+    let vec_t = ScSpecTypeDef::Vec(Box::new(ScSpecTypeVec {
+        element_type: Box::new(map_t),
+    }));
+
+    assert_eq!(
+        TypeResolver::resolve_with_context(&vec_t, &ctx).unwrap(),
+        "Vec<Map<Symbol, u32>>"
+    );
+}
+
+#[test]
+fn test_context_from_wasm_spec_outer_struct_items_field() {
+    // Build a wasm spec containing Outer{ items: Vec<Inner> } and verify
+    // the type_name is correctly resolved using TypeResolver.
+    use crate::spec::decoder::decode_contract_spec;
+    use crate::spec::type_resolver::TypeResolver;
+
+    let entries = vec![inner_struct_entry(), outer_struct_entry()];
+    let wasm = build_wasm_with_spec_entries(&entries);
+    let spec = decode_contract_spec(&wasm).unwrap();
+
+    let outer = spec
+        .structs
+        .iter()
+        .find(|s| s.name == "Outer")
+        .expect("Outer struct");
+
+    let items_field = outer.fields.iter().find(|f| f.name == "items").expect("items field");
+    // The type_def for Vec<Inner> — resolve it to verify TypeResolver handles it.
+    if let Some(type_def) = &items_field.type_def {
+        let resolved = TypeResolver::resolve(type_def).unwrap();
+        assert_eq!(resolved, "Vec<Inner>");
+    } else {
+        // type_def may be stored inline in type_name — just check the name.
+        assert_eq!(items_field.type_name, "Vec<Inner>");
+    }
+}
