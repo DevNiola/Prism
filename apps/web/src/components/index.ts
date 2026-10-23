@@ -22,5 +22,5 @@ export { default as ComparisonView } from "./debug/ComparisonView";
 export { default as JsonTreeView } from "./shared/JsonTreeView";
 export { default as XdrViewer } from "./shared/XdrViewer";
 export { default as LoadingSpinner } from "./shared/LoadingSpinner";
-export { default as Button } from "./shared/Button";
-export type { ButtonProps, ButtonVariant, ButtonSize } from "./shared/Button";
+export { default as RecentTransactions } from "./shared/RecentTransactions";
+export { default as ErrorBoundary, withErrorBoundary } from "./shared/ErrorBoundary";
