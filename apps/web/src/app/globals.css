@@ -1,1 +1,142 @@
 @import "tailwindcss";
+
+/* ── Micro-interaction utilities ───────────────────────────────────────────── */
+
+/* Card hover lift */
+.card-interactive {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px 0 rgba(139, 92, 246, 0.12);
+}
+
+/* Button press (scale-down feedback) */
+.btn-press {
+  transition: transform 0.1s ease, opacity 0.1s ease;
+}
+.btn-press:active {
+  transform: scale(0.96);
+  opacity: 0.9;
+}
+
+/* Pulse glow on the primary Decode / Diagnose button */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(139, 92, 246, 0);
+  }
+}
+.btn-pulse {
+  animation: pulse-glow 2.4s ease-in-out infinite;
+}
+.btn-pulse:disabled {
+  animation: none;
+}
+
+/* Accordion expand / collapse */
+@keyframes accordion-down {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+@keyframes accordion-up {
+  from { opacity: 1; transform: translateY(0);    }
+  to   { opacity: 0; transform: translateY(-6px); }
+}
+.accordion-content[data-state="open"] {
+  animation: accordion-down 0.22s ease forwards;
+}
+.accordion-content[data-state="closed"] {
+  animation: accordion-up 0.18s ease forwards;
+}
+
+/* Indeterminate loading spinner used as a fallback for unknown content shapes */
+.spinner {
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  border-top-color: currentColor;
+  border-radius: 9999px;
+  animation: spinner-rotate 0.7s linear infinite;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.6s;
+  }
+}
+
+/* Smooth focus ring for all interactive elements */
+:focus-visible {
+  outline: 2px solid rgba(139, 92, 246, 0.7);
+  outline-offset: 2px;
+}
+
+/* Link / nav hover underline slide */
+.link-hover {
+  position: relative;
+  text-decoration: none;
+}
+.link-hover::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: currentColor;
+  transition: width 0.2s ease;
+}
+.link-hover:hover::after {
+  width: 100%;
+}
+
+/* Generic smooth transition for all interactive elements */
+button,
+a,
+select,
+input,
+[role="button"] {
+  transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+/* ── Debugger Step Transitions ─────────────────────────────────────────── */
+:root {
+  --debug-transition-duration: 200ms;
+}
+
+.debug-step-transition {
+  transition: all var(--debug-transition-duration) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.debug-step-active {
+  transition: all var(--debug-transition-duration) ease-in-out;
+  transform: translateX(4px);
+  border-left-width: 4px;
+}
+
+@keyframes debugFadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.debug-fade-slide-enter {
+  animation: debugFadeSlideIn var(--debug-transition-duration) ease-out forwards;
+}
