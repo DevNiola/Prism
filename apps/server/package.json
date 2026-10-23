@@ -1,7 +1,14 @@
 {
   "name": "grat-server",
   "version": "0.1.0",
-  "private": true,
+  "description": "HTTP and WebSocket server for Grat",
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
