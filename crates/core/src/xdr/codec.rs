@@ -1,3 +1,16 @@
+//! XDR encoding and decoding helpers for all Soroban/Stellar types used by Prism.
+//!
+//! Soroban uses XDR (eXternal Data Representation) as its canonical binary
+//! serialisation format.  Every on-chain value — transaction envelopes, contract
+//! events, ledger entries, etc. — is XDR-encoded, and the Horizon/RPC APIs
+//! return these values as Base64-encoded XDR strings.
+//!
+//! This module provides:
+//! - [`XdrCodec`]: a uniform trait for encoding/decoding any XDR type to/from
+//!   raw bytes or Base64 strings.
+//! - Individual `impl XdrCodec for …` blocks for every XDR type Prism needs.
+//! - Standalone helper functions for Base64 and hex transcoding.
+
 use crate::error::{GratError, GratResult};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use stellar_xdr::curr::{
@@ -6,6 +19,14 @@ use stellar_xdr::curr::{
     TransactionEnvelope, TransactionMeta, TransactionResult, WriteXdr,
 };
 
+/// Uniform interface for XDR serialisation/deserialisation.
+///
+/// Implementing this trait for a type gives it four codec methods:
+/// - byte-level encode/decode (the canonical form)
+/// - Base64 encode/decode (the form returned by Stellar APIs)
+///
+/// The `TYPE_NAME` associated constant is used exclusively in error messages so
+/// the caller always knows which type failed, even when decoding opaque bytes.
 pub trait XdrCodec: Sized {
     const TYPE_NAME: &'static str;
 
@@ -16,17 +37,33 @@ pub trait XdrCodec: Sized {
     fn to_xdr_bytes(&self) -> GratResult<Vec<u8>>;
 
     /// Decode from a base64-encoded XDR string.
+    ///
+    /// This is a two-step operation: Base64 → raw bytes → XDR decode.
+    /// A failure at either step is surfaced as a [`GratError`].
     fn from_xdr_base64(b64: &str) -> GratResult<Self> {
         let bytes = decode_xdr_base64(b64)?;
         Self::from_xdr_bytes(&bytes)
     }
 
     /// Encode to a base64-encoded XDR string.
+    ///
+    /// This is a two-step operation: XDR encode → Base64.
     fn to_xdr_base64(&self) -> GratResult<String> {
         let bytes = self.to_xdr_bytes()?;
         Ok(encode_xdr_base64(&bytes))
     }
 }
+
+// ---------------------------------------------------------------------------
+// XdrCodec implementations for every XDR type Prism needs to handle.
+//
+// Each impl follows the same pattern:
+//   - `from_xdr_bytes`: call the stellar-xdr `ReadXdr::from_xdr` with
+//     `Limits::none()` (no artificial size cap) and map any error to the
+//     typed `GratError::XdrDecodingFailed` variant.
+//   - `to_xdr_bytes`: call `WriteXdr::to_xdr` and map errors to
+//     `GratError::XdrError` with a descriptive message.
+// ---------------------------------------------------------------------------
 
 impl XdrCodec for TransactionMeta {
     const TYPE_NAME: &'static str = "TransactionMeta";
@@ -306,16 +343,30 @@ impl XdrCodec for LedgerKey {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Standalone helpers
+// ---------------------------------------------------------------------------
+
+/// Decode a Base64-encoded XDR string into raw bytes.
+///
+/// Uses the standard Base64 alphabet (RFC 4648) with padding.
+/// Returns [`GratError::XdrError`] on malformed input.
 pub fn decode_xdr_base64(xdr_base64: &str) -> GratResult<Vec<u8>> {
     STANDARD
         .decode(xdr_base64)
         .map_err(|e| GratError::XdrError(format!("Base64 decode failed: {e}")))
 }
 
+/// Encode raw bytes as a standard Base64 string.
 pub fn encode_xdr_base64(bytes: &[u8]) -> String {
     STANDARD.encode(bytes)
 }
 
+/// Parse a 64-hex-character transaction hash into a 32-byte array.
+///
+/// Transaction hashes on Stellar are SHA-256 digests, always exactly 32 bytes.
+/// This function validates both the length and the hex encoding, returning a
+/// descriptive error if either check fails.
 pub fn decode_tx_hash(hash_hex: &str) -> GratResult<[u8; 32]> {
     let bytes = hex_decode(hash_hex)
         .map_err(|e| GratError::XdrError(format!("Invalid tx hash hex: {e}")))?;
@@ -332,7 +383,13 @@ pub fn decode_tx_hash(hash_hex: &str) -> GratResult<[u8; 32]> {
     Ok(arr)
 }
 
+/// Decode a lowercase or uppercase hex string into bytes.
+///
+/// Processes the input in 2-character chunks (one byte each).
+/// Returns an error string (not a [`GratError`]) so it can be used before the
+/// error type is fully constructed in `decode_tx_hash`.
 fn hex_decode(input: &str) -> Result<Vec<u8>, String> {
+    // Hex strings must have an even number of characters (2 per byte).
     if !input.len().is_multiple_of(2) {
         return Err("Hex input must have an even length".to_string());
     }
@@ -340,6 +397,7 @@ fn hex_decode(input: &str) -> Result<Vec<u8>, String> {
     (0..input.len())
         .step_by(2)
         .map(|i| {
+            // Parse one two-character hex chunk into a single byte.
             u8::from_str_radix(&input[i..i + 2], 16)
                 .map_err(|e| format!("Invalid hex at position {i}: {e}"))
         })
@@ -646,7 +704,7 @@ mod tests {
     #[test]
     fn test_scval_string_codec_standalone() {
         use stellar_xdr::curr::StringM;
-        let val = ScString(StringM::try_from(b"Grat".to_vec()).unwrap());
+        let val = ScString(StringM::try_from(b"Prism".to_vec()).unwrap());
         let b64 = XdrCodec::to_xdr_base64(&val).expect("encode");
         let decoded = <ScString as XdrCodec>::from_xdr_base64(&b64).expect("decode");
         assert_eq!(val, decoded);
