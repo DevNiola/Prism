@@ -20,6 +20,7 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --platform=node --watch",
     "package": "vsce package",
+    "publish": "vsce publish",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },
