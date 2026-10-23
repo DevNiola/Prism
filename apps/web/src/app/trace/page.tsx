@@ -8,6 +8,7 @@ import { ResourceProfile } from "@/components/trace/ResourceProfile";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import Skeleton from "@/components/shared/Skeleton";
 import EmptyState from "@/components/shared/EmptyState";
+import { useToast } from "@/hooks/useToast";
 
 /** Mirrors the Transaction Info card so the page keeps its height while the
  *  trace stream is still being established. */
@@ -42,6 +43,15 @@ export default function TracePage() {
 
   const { trace, loading, requestTrace, streaming, streamError } =
     useTrace(wsUrl);
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    if (streamError) showToast(streamError, "error");
+  }, [showToast, streamError]);
+
+  useEffect(() => {
+    if (trace?.error) showToast(trace.error, "error");
+  }, [showToast, trace?.error]);
 
   useEffect(() => {
     const hash = new URLSearchParams(window.location.search).get("txHash");

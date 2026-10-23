@@ -6,6 +6,7 @@ type Environment = Record<string, string | undefined>;
 type ServerConfig = {
   port: number;
   redisUrl: string;
+  sorobanRpcUrl: string;
   gratBinaryPath: string;
   ai: {
     apiKey: string;
@@ -19,6 +20,9 @@ type ServerConfig = {
     hourlyTokenLimit: number;
     dailyTokenLimit: number;
     maxConcurrentRequests: number;
+    cpuWarningThresholdPercent: number;
+    memoryWarningThresholdPercent: number;
+    alertWebhookUrl: string;
   };
   cache: {
     decodeTtl: number;
@@ -108,6 +112,11 @@ export const config: ServerConfig = {
   redisUrl: isProduction
     ? validateUrl("REDIS_URL", requiredString("REDIS_URL"), ["redis:", "rediss:"])
     : urlValue("REDIS_URL", "redis://localhost:6379", ["redis:", "rediss:"]),
+  sorobanRpcUrl: urlValue(
+    "SOROBAN_RPC_URL",
+    "https://soroban-testnet.stellar.org",
+    ["http:", "https:"],
+  ),
   gratBinaryPath: stringValue("GRAT_BINARY", "grat"),
 
   ai: {
@@ -135,6 +144,23 @@ export const config: ServerConfig = {
       integer: true,
       min: 1,
     }),
+    cpuWarningThresholdPercent: numberValue(
+      "BUDGET_CPU_WARNING_THRESHOLD_PERCENT",
+      80,
+      { min: 1, max: 100 },
+    ),
+    memoryWarningThresholdPercent: numberValue(
+      "BUDGET_MEMORY_WARNING_THRESHOLD_PERCENT",
+      80,
+      { min: 1, max: 100 },
+    ),
+    alertWebhookUrl: environment.BUDGET_ALERT_WEBHOOK_URL?.trim()
+      ? validateUrl(
+          "BUDGET_ALERT_WEBHOOK_URL",
+          environment.BUDGET_ALERT_WEBHOOK_URL.trim(),
+          ["http:", "https:"],
+        )
+      : "",
   },
 
   cache: {
