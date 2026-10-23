@@ -1,14 +1,19 @@
+import Skeleton from "@/components/shared/Skeleton";
+
+interface ResourceProfileData {
+  cpu_used: number;
+  memory_used: number;
+  cpu_limit: number;
+  memory_limit: number;
+  read_bytes: number;
+  read_limit: number;
+  write_bytes: number;
+  write_limit: number;
+}
+
 interface ResourceProfileProps {
-  profile: {
-    cpu_used: number;
-    memory_used: number;
-    cpu_limit: number;
-    memory_limit: number;
-    read_bytes: number;
-    read_limit: number;
-    write_bytes: number;
-    write_limit: number;
-  };
+  profile?: ResourceProfileData;
+  loading?: boolean;
 }
 
 function ResourceBar({
@@ -57,7 +62,39 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1 << (i * 10))).toFixed(i > 0 ? 2 : 0)} ${units[i]}`;
 }
 
-export function ResourceProfile({ profile }: ResourceProfileProps) {
+/**
+ * Placeholder that mirrors the four-bar layout of {@link ResourceProfile} so
+ * the card keeps its final height while the profile is still streaming in.
+ */
+export function ResourceProfileSkeleton() {
+  return (
+    <div className="bg-white rounded-lg shadow p-6" aria-busy="true">
+      <h2 className="text-xl font-semibold mb-4">Resource Profile</h2>
+
+      <div className="space-y-6">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index}>
+            <div className="flex justify-between mb-2">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-5 w-40" />
+            </div>
+            <Skeleton className="h-4 w-full rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function ResourceProfile({ profile, loading }: ResourceProfileProps) {
+  if (loading && !profile) {
+    return <ResourceProfileSkeleton />;
+  }
+
+  if (!profile) {
+    return null;
+  }
+
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <h2 className="text-xl font-semibold mb-4">Resource Profile</h2>
