@@ -1,71 +1,73 @@
 variable "aws_region" {
-  description = "The AWS region to deploy resources in"
+  description = "AWS region in which to deploy Prism."
   type        = string
   default     = "us-east-1"
 }
 
-variable "environment" {
-  description = "Environment name (e.g. staging, production)"
+variable "name" {
+  description = "Prefix used to name AWS resources."
   type        = string
-  default     = "production"
-}
-
-variable "project_name" {
-  description = "Project identifier used in resource names"
-  type        = string
-  default     = "grat-prism"
-}
-
-variable "vpc_cidr" {
-  description = "CIDR block for the VPC"
-  type        = string
-  default     = "10.0.0.0/16"
+  default     = "prism"
 }
 
 variable "domain_name" {
-  description = "Optional domain name for Route53 and ACM (leave empty to use ALB DNS directly)"
+  description = "Fully qualified hostname served by the load balancer, such as prism.example.com."
   type        = string
-  default     = ""
+}
+
+variable "route53_zone_id" {
+  description = "ID of the existing Route53 hosted zone for domain_name."
+  type        = string
 }
 
 variable "server_image" {
-  description = "Docker image repository URL for the Grat server service"
+  description = "Container image URI for the Prism server."
   type        = string
-  default     = "ghcr.io/devniola/grat-server:latest"
 }
 
 variable "web_image" {
-  description = "Docker image repository URL for the Grat web UI service"
+  description = "Container image URI for the Prism web application."
   type        = string
-  default     = "ghcr.io/devniola/grat-web:latest"
+}
+
+variable "redis_auth_token" {
+  description = "Redis AUTH token. Use 16-128 alphanumeric characters."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9]{16,128}$", var.redis_auth_token))
+    error_message = "redis_auth_token must contain 16-128 alphanumeric characters."
+  }
+}
+
+variable "ai_api_key" {
+  description = "Optional API key for the server's AI provider."
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 variable "server_cpu" {
-  description = "Fargate CPU units for the server task (1024 = 1 vCPU)"
+  description = "CPU units for the server task."
   type        = number
   default     = 512
 }
 
 variable "server_memory" {
-  description = "Fargate Memory (MB) for the server task"
+  description = "Memory in MiB for the server task."
   type        = number
   default     = 1024
 }
 
 variable "web_cpu" {
-  description = "Fargate CPU units for the web UI task"
+  description = "CPU units for the web task."
   type        = number
   default     = 512
 }
 
 variable "web_memory" {
-  description = "Fargate Memory (MB) for the web UI task"
+  description = "Memory in MiB for the web task."
   type        = number
   default     = 1024
-}
-
-variable "redis_node_type" {
-  description = "ElastiCache Redis node type"
-  type        = string
-  default     = "cache.t4g.micro"
 }
