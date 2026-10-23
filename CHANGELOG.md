@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/DevNiola/Prism/compare/v1.2.0...v1.3.0) (2026-10-23)
+
+
+### Features
+
+* **decode:** add support for decoding Soroban host error code 50 ([#58](https://github.com/DevNiola/Prism/issues/58)) ([4d3f65b](https://github.com/DevNiola/Prism/commit/4d3f65baf341b7347cc96af24c55d1c4d003474f))
+
 # [1.2.0](https://github.com/DevNiola/Prism/compare/v1.1.0...v1.2.0) (2026-10-23)
 
 
