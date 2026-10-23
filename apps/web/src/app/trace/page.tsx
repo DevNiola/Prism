@@ -53,6 +53,11 @@ export default function TracePage() {
     if (trace?.error) showToast(trace.error, "error");
   }, [showToast, trace?.error]);
 
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.search).get("txHash");
+    if (hash) setTxHash(hash);
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (txHash) {

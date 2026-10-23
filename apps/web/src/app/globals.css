@@ -1,5 +1,35 @@
 @import "tailwindcss";
 
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+html[data-theme="light"] body,
+html[data-theme="light"] .bg-slate-950 {
+  background-color: #f1f5f9 !important;
+  color: #0f172a;
+}
+
+html[data-theme="light"] .bg-slate-900 {
+  background-color: #ffffff !important;
+}
+
+html[data-theme="light"] .text-slate-100 {
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] .text-slate-400 {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .border-slate-800 {
+  border-color: #cbd5e1 !important;
+}
+
 /* ── Micro-interaction utilities ───────────────────────────────────────────── */
 
 /* Card hover lift */
