@@ -2,6 +2,8 @@
 
 <!-- Briefly describe what this PR does and why it is needed. -->
 
+Closes #
+
 ## How It Was Done
 
 <!-- Explain the technical details of the implementation. -->
@@ -17,6 +19,10 @@
 ## How It Was Tested
 
 <!-- Explain how the changes were verified (unit tests, manual testing, etc.) -->
+
+- [ ] Tests pass or were not run (explain why)
+- [ ] Lint and type checks pass, where applicable
+- [ ] Documentation updated, where applicable
 
 ## Screenshots / Video (If Applicable)
 

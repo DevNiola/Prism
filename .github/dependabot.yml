@@ -1,49 +1,67 @@
 version: 2
-updates:
-  # Maintain dependencies for GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      actions-dependencies:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-    open-pull-requests-limit: 10
-    commit-message:
-      prefix: "chore(deps-actions)"
 
-  # Maintain dependencies for Cargo (Rust workspace)
+updates:
+  # Cargo (Rust) dependencies
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
     groups:
-      cargo-dependencies:
-        patterns:
-          - "*"
+      rust-minor-patch:
         update-types:
           - "minor"
           - "patch"
-    open-pull-requests-limit: 10
-    commit-message:
-      prefix: "chore(deps-cargo)"
 
-  # Maintain dependencies for npm / pnpm monorepo
+  # npm dependencies for the web app
   - package-ecosystem: "npm"
+    directory: "/apps/web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      npm-web-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # npm dependencies for the server
+  - package-ecosystem: "npm"
+    directory: "/apps/server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      npm-server-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # npm dependencies for the VS Code extension
+  - package-ecosystem: "npm"
+    directory: "/extensions/vscode"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      npm-vscode-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
     groups:
-      npm-dependencies:
-        patterns:
-          - "*"
+      github-actions-minor-patch:
         update-types:
           - "minor"
           - "patch"
-    open-pull-requests-limit: 10
-    commit-message:
-      prefix: "chore(deps-npm)"
