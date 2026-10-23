@@ -1,11 +1,16 @@
-name: "Stale Management"
+name: Stale issues and pull requests
 
-"on":
+on:
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
+  issues:
+    types: [opened, edited, labeled]
+  pull_request:
+    types: [opened, synchronize, edited, labeled]
 
 permissions:
+  contents: read
   issues: write
   pull-requests: write
 
@@ -13,32 +18,7 @@ jobs:
   stale:
     runs-on: ubuntu-latest
     steps:
-      - name: Manage Stale Issues and PRs
-        uses: actions/stale@v9
+      - uses: actions/stale@v9
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          days-before-issue-stale: 30
-          days-before-issue-close: 7
-          days-before-pr-stale: 30
-          days-before-pr-close: 7
-          exempt-issue-labels: "pinned,security"
-          exempt-pr-labels: "pinned,security"
-          stale-issue-label: "stale"
-          stale-pr-label: "stale"
-          stale-issue-message: >
-            This issue has been automatically marked as stale because it has not had
-            recent activity for 30 days. It will be closed in 7 days if no further
-            activity occurs. Thank you for your contributions to Prism! If this issue
-            is still relevant, please leave a comment to keep it open.
-          stale-pr-message: >
-            This pull request has been automatically marked as stale because it has not had
-            recent activity for 30 days. It will be closed in 7 days if no further
-            activity occurs. Thank you for your contributions to Prism!
-          close-issue-message: >
-            This issue has been automatically closed due to inactivity after being marked
-            stale. If you still believe this issue is relevant or have further details,
-            feel free to reopen it or file a new issue following our templates.
-          close-pr-message: >
-            This pull request has been automatically closed due to inactivity. If you wish
-            to continue work on this solution, please feel free to reopen it.
-          operations-per-run: 50
+          config-path: .github/stale.yml
