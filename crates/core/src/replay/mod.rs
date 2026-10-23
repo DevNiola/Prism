@@ -1,3 +1,15 @@
+//! # Replay Module
+//!
+//! Provides deterministic sandbox re-execution of historical Soroban transactions,
+//! reconstructing ledger state, computing state diffs, and profiling resource consumption.
+//!
+//! ## Submodules
+//! - [`sandbox`]: Embedded host environment for re-executing transactions.
+//! - [`state`]: Fetches and reconstructs ledger state from RPC/archives.
+//! - [`differ`]: Computes pre- and post-state differences.
+//! - [`profiler`]: Profiles CPU instructions and memory consumption per host function.
+//! - [`trace`]: Assembles hierarchical execution trees.
+
 pub mod differ;
 pub mod profiler;
 pub mod sandbox;
@@ -10,6 +22,20 @@ use crate::error::GratResult;
 use crate::types::config::NetworkConfig;
 use crate::types::trace::{DiagnosticEvent, ExecutionTrace, TraceId};
 
+/// Replays a transaction by hash against the specified network, generating an execution trace and resource profile.
+///
+/// ## Example
+/// ```rust,no_run
+/// use grat_core::replay::replay_transaction;
+/// use grat_core::types::config::NetworkConfig;
+///
+/// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+/// let config = NetworkConfig::default();
+/// let trace = replay_transaction("abcd1234", &config).await?;
+/// println!("Replayed transaction in ledger {}", trace.ledger_sequence);
+/// # Ok(())
+/// # }
+/// ```
 pub async fn replay_transaction(
     tx_hash: &str,
     network: &NetworkConfig,

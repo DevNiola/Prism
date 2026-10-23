@@ -46,12 +46,20 @@ export default function NetworkSwitcher() {
   };
 
   return (
-    <div className="relative">
+    <div className="relative flex items-center gap-2">
+      <label
+        htmlFor="network-select"
+        className="text-sm font-medium text-slate-400 sr-only"
+      >
+        Select network
+      </label>
       <select
+        id="network-select"
         value={network}
         onChange={handleNetworkChange}
         disabled={isValidating}
-        className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm transition-colors hover:border-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+        aria-label="Select Stellar network"
+        className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       >
         <option value="testnet">Testnet</option>
         <option value="mainnet">Mainnet</option>
