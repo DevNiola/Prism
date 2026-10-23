@@ -46,6 +46,7 @@ pub mod resource_analyzer;
 pub mod return_decoder;
 pub mod scval_to_json;
 pub mod struct_decoder;
+pub mod tuple_decoder;
 pub mod walker;
 
 pub use argument_decoder::ArgumentDecoder;
@@ -54,6 +55,11 @@ pub use auth::{
     AuthorizationType,
 };
 pub use auth_address_nonce::AddressWithNonce;
+pub use auth_address_nonce::AddressCredentialV2;
+pub use auth_signature::{
+    decode_auth_entry_signatures, decode_auth_entry_signatures_v2, decode_signature_bytes,
+    parse_signature_format, SignatureFormat, V2SignerEntry,
+};
 pub use chain_analyzer::{analyze_call_chain, CallChain, ChainAnalyzer, ChainFrame, FrameRole};
 pub use deepest_error::{find_deepest_error, DeepestError, DeepestErrorFinder};
 pub use enum_decoder::EnumDecoder;
@@ -70,3 +76,23 @@ pub use struct_decoder::{StructDecodeReport, StructDecoder};
 pub use walker::{
     walk_diagnostic_events, DiagnosticEventKind, DiagnosticEventWalker, StructuredDiagnosticEvent,
 };
+pub use cross_contract::build_call_graph;
+
+/// Decodes a transaction using the async cache with a cache-aside pattern, preventing blocking on cache I/O.
+pub async fn decode_with_cache(
+    cache: &crate::cache::async_cache::AsyncCache,
+    tx_data: &serde_json::Value,
+) -> crate::error::GratResult<Vec<crate::types::report::DiagnosticReport>> {
+    let hash = tx_data
+        .get("hash")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    let cache_key = format!("decode_tx:{hash}");
+
+    cache
+        .get_or_compute(&cache_key, || async {
+            let decoder = MultiOpDecoder::new();
+            decoder.decode_transaction(tx_data)
+        })
+        .await
+}

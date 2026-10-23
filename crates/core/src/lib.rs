@@ -42,10 +42,13 @@ pub mod xdr;
 #[cfg(feature = "decode")]
 pub use decode::{
     scval_to_json, scval_to_json_with_contract_spec, scval_to_json_with_spec,
-    walk_diagnostic_events, AddressCredential, AddressWithNonce, ArgumentDecoder, AuthChain,
+    walk_diagnostic_events, AddressCredential, AddressWithNonce, AddressCredentialV2,
+    ArgumentDecoder, AuthChain,
     AuthCredential, AuthFunctionKind, AuthInvocation, DecodedArgument, DecodedFunctionCall,
     DiagnosticEventKind, DiagnosticEventWalker, EnumDecoder, FunctionCallDecoder, MultiOpDecoder,
     ReturnValueDecoder, StructDecodeReport, StructDecoder, StructuredDiagnosticEvent,
+    build_call_graph, SignatureFormat, V2SignerEntry, decode_auth_entry_signatures_v2,
+    parse_signature_format,
 };
 pub use error::{GratError, GratResult};
 #[cfg(feature = "decode")]

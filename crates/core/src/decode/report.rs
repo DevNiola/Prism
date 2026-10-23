@@ -47,9 +47,11 @@ pub fn build_report(error: &ClassifiedError) -> GratResult<DiagnosticReport> {
             auth_entries: Vec::new(),
             failing_contract_id: None,
             call_chain: None,
+            call_graph: None,
             resource_diagnostics: None,
             operation_index: None,
             operation_count: None,
+            is_first_failure: None,
             learn_more: "https://developers.stellar.org/docs/learn/smart-contracts/errors"
                 .to_string(),
         };
