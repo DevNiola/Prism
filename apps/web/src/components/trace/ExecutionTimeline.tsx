@@ -1,7 +1,14 @@
 import Skeleton from "@/components/shared/Skeleton";
 
+"use client";
+
+import React, { useEffect, useRef } from "react";
+
 interface ExecutionTimelineProps {
   nodes: any[];
+  currentStep?: number;
+  transitionDurationMs?: number;
+  onSelectStep?: (index: number) => void;
   resourceProfile?: {
     read_bytes: number;
     read_limit: number;
@@ -40,9 +47,24 @@ export function ExecutionTimelineSkeleton() {
 
 export function ExecutionTimeline({
   nodes,
+  currentStep = 0,
+  transitionDurationMs = 200,
+  onSelectStep,
   resourceProfile,
   loading,
 }: ExecutionTimelineProps) {
+  const activeItemRef = useRef<HTMLDivElement | null>(null);
+
+  // Smooth scroll to keep current step visible in timeline
+  useEffect(() => {
+    if (activeItemRef.current) {
+      activeItemRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [currentStep]);
+
   if (loading && nodes.length === 0) {
     return <ExecutionTimelineSkeleton />;
   }
@@ -67,30 +89,64 @@ export function ExecutionTimeline({
           </span>
         )}
       </div>
-      <div className="space-y-2">
-        {nodes.map((node, idx) => (
-          <div
-            key={idx}
-            className="p-3 border border-gray-200 rounded hover:bg-gray-50 transition-colors"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <span className="text-xs font-mono text-gray-500">#{idx}</span>
-                <span className="font-mono text-sm">
-                  {node.node?.event_type || "Unknown"}
+      <div
+        className="space-y-2 max-h-[600px] overflow-y-auto pr-1"
+        style={{
+          scrollBehavior: "smooth",
+        }}
+      >
+        {nodes.map((node, idx) => {
+          const isActive = idx === currentStep;
+          return (
+            <div
+              key={idx}
+              ref={isActive ? activeItemRef : null}
+              onClick={() => onSelectStep?.(idx)}
+              style={{
+                transitionDuration: `${transitionDurationMs}ms`,
+              }}
+              className={`p-3 border rounded cursor-pointer transition-all ${
+                isActive
+                  ? "bg-purple-50 border-purple-500 shadow-sm translate-x-1 border-l-4 border-l-purple-600"
+                  : "border-gray-200 hover:bg-gray-50"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <span
+                    className={`text-xs font-mono px-1.5 py-0.5 rounded ${
+                      isActive
+                        ? "bg-purple-600 text-white font-bold"
+                        : "text-gray-500 bg-gray-100"
+                    }`}
+                  >
+                    #{idx}
+                  </span>
+                  <span className="font-mono text-sm font-medium">
+                    {node.node?.event_type || "Unknown"}
+                  </span>
+                  {isActive && (
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full animate-pulse">
+                      Current Step
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs text-gray-500">
+                  Path: {node.path?.join(" → ") || "root"}
                 </span>
               </div>
-              <span className="text-xs text-gray-500">
-                Path: {node.path?.join(" → ") || "root"}
-              </span>
+              {node.node?.data && (
+                <pre
+                  className={`mt-2 text-xs overflow-x-auto transition-opacity ${
+                    isActive ? "text-purple-900" : "text-gray-600"
+                  }`}
+                >
+                  {JSON.stringify(node.node.data, null, 2)}
+                </pre>
+              )}
             </div>
-            {node.node?.data && (
-              <pre className="mt-2 text-xs text-gray-600 overflow-x-auto">
-                {JSON.stringify(node.node.data, null, 2)}
-              </pre>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
       {nodes.length === 0 && (
         <p className="text-gray-500 text-center py-8">

@@ -7,6 +7,7 @@ import { StateDiffViewer } from "@/components/trace/StateDiffViewer";
 import { ResourceProfile } from "@/components/trace/ResourceProfile";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import Skeleton from "@/components/shared/Skeleton";
+import EmptyState from "@/components/shared/EmptyState";
 
 /** Mirrors the Transaction Info card so the page keeps its height while the
  *  trace stream is still being established. */
@@ -118,6 +119,32 @@ export default function TracePage() {
           <ExecutionTimeline nodes={[]} loading />
           <StateDiffViewer entries={[]} loading />
         </div>
+      )}
+
+      {!loading && !trace && (
+        <EmptyState
+          title="Your trace will appear here"
+          description="Enter a transaction hash above and choose a network to start replaying its execution."
+          illustration={
+            <svg viewBox="0 0 160 112" className="h-28 w-40" fill="none">
+              <path d="M28 24h92a8 8 0 0 1 8 8v48a8 8 0 0 1-8 8H28a8 8 0 0 1-8-8V32a8 8 0 0 1 8-8Z" stroke="currentColor" strokeWidth="2" />
+              <path d="M45 42h34M45 56h58M45 70h42" stroke="currentColor" strokeLinecap="round" strokeWidth="2" opacity=".4" />
+              <circle cx="112" cy="42" r="5" fill="#60a5fa" />
+              <circle cx="91" cy="56" r="5" fill="#34d399" />
+              <circle cx="78" cy="70" r="5" fill="#fbbf24" />
+              <path d="M112 48v3a5 5 0 0 1-5 5h-11m-5 5v3a5 5 0 0 1-5 5h-3" stroke="#60a5fa" strokeWidth="2" strokeDasharray="3 3" />
+            </svg>
+          }
+          action={
+            <button
+              type="button"
+              onClick={() => document.getElementById("txHash")?.focus()}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Enter a transaction hash
+            </button>
+          }
+        />
       )}
 
       {trace && (
