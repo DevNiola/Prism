@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import Skeleton from "@/components/shared/Skeleton";
 
 interface StateDiffViewerProps {
@@ -11,6 +14,58 @@ interface StateDiffViewerProps {
 }
 
 const DIFF_ROWS = 2;
+
+function parseJson(value?: string): { parsed: unknown; valid: boolean } {
+  if (value === undefined) return { parsed: undefined, valid: false };
+
+  try {
+    return { parsed: JSON.parse(value), valid: true };
+  } catch {
+    return { parsed: value, valid: false };
+  }
+}
+
+function areDeeplyEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (typeof left !== "object" || left === null) return false;
+  if (typeof right !== "object" || right === null) return false;
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => areDeeplyEqual(value, right[index]))
+    );
+  }
+
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key) =>
+        Object.hasOwn(rightRecord, key) &&
+        areDeeplyEqual(leftRecord[key], rightRecord[key]),
+    )
+  );
+}
+
+function getChangeType(entry: StateDiffViewerProps["entries"][number]) {
+  if (entry.before === undefined) return "created";
+  if (entry.after === undefined) return "deleted";
+
+  const before = parseJson(entry.before);
+  const after = parseJson(entry.after);
+  if (before.valid && after.valid) {
+    return areDeeplyEqual(before.parsed, after.parsed) ? "unchanged" : "updated";
+  }
+
+  return entry.change_type.toLowerCase();
+}
 
 /**
  * Placeholder mirroring the two-column before/after layout of the diff entries
@@ -45,16 +100,18 @@ export function StateDiffViewerSkeleton() {
 }
 
 export function StateDiffViewer({ entries, loading }: StateDiffViewerProps) {
+  const [showOnlyChanges, setShowOnlyChanges] = useState(false);
+
   if (loading && entries.length === 0) {
     return <StateDiffViewerSkeleton />;
   }
 
   const getChangeColor = (changeType: string) => {
-    switch (changeType.toLowerCase()) {
+    switch (changeType) {
       case "created":
         return "bg-green-50 border-green-200";
       case "updated":
-        return "bg-blue-50 border-blue-200";
+        return "bg-yellow-50 border-yellow-300";
       case "deleted":
         return "bg-red-50 border-red-200";
       default:
@@ -63,7 +120,7 @@ export function StateDiffViewer({ entries, loading }: StateDiffViewerProps) {
   };
 
   const getChangeBadge = (changeType: string) => {
-    switch (changeType.toLowerCase()) {
+    switch (changeType) {
       case "created":
         return (
           <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
@@ -72,7 +129,7 @@ export function StateDiffViewer({ entries, loading }: StateDiffViewerProps) {
         );
       case "updated":
         return (
-          <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+          <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded">
             Updated
           </span>
         );
@@ -91,19 +148,34 @@ export function StateDiffViewer({ entries, loading }: StateDiffViewerProps) {
     }
   };
 
+  const visibleEntries = entries
+    .map((entry) => ({ entry, changeType: getChangeType(entry) }))
+    .filter(({ changeType }) => !showOnlyChanges || changeType !== "unchanged");
+
   return (
     <div className="bg-white rounded-lg shadow p-6">
-      <h2 className="text-xl font-semibold mb-4">State Diff</h2>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-semibold">State Diff</h2>
+        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={showOnlyChanges}
+            onChange={(event) => setShowOnlyChanges(event.target.checked)}
+            className="h-4 w-4 accent-indigo-600"
+          />
+          Show only changes
+        </label>
+      </div>
 
       <div className="space-y-3">
-        {entries.map((entry, idx) => (
+        {visibleEntries.map(({ entry, changeType }, idx) => (
           <div
-            key={idx}
-            className={`p-4 border rounded-lg ${getChangeColor(entry.change_type)}`}
+            key={`${entry.key}-${idx}`}
+            className={`p-4 border rounded-lg ${getChangeColor(changeType)}`}
           >
             <div className="flex items-center justify-between mb-2">
               <span className="font-mono text-sm font-medium">{entry.key}</span>
-              {getChangeBadge(entry.change_type)}
+              {getChangeBadge(changeType)}
             </div>
 
             <div className="grid grid-cols-2 gap-4 mt-3">
@@ -124,9 +196,11 @@ export function StateDiffViewer({ entries, loading }: StateDiffViewerProps) {
         ))}
       </div>
 
-      {entries.length === 0 && (
+      {visibleEntries.length === 0 && (
         <p className="text-gray-500 text-center py-8">
-          No state changes detected yet.
+          {entries.length > 0 && showOnlyChanges
+            ? "No changes to show."
+            : "No state changes detected yet."}
         </p>
       )}
     </div>
