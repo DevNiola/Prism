@@ -4,6 +4,7 @@
   <img src="https://img.shields.io/badge/Rust-1.77+-orange?style=for-the-badge&logo=rust" alt="Rust 1.77" />
   <img src="https://img.shields.io/badge/Next.js-16.x-black?style=for-the-badge&logo=next.js" alt="Next.js 16" />
   <img src="https://img.shields.io/badge/TypeScript-5.x-blue?style=for-the-badge&logo=typescript" alt="TS 5" />
+  <a href="https://codecov.io/gh/DevNiola/Prism"><img src="https://codecov.io/gh/DevNiola/Prism/branch/main/graph/badge.svg" alt="Codecov coverage" /></a>
   <img src="https://img.shields.io/badge/Documentation-Live-blue?style=for-the-badge&logo=gitbook&logoColor=white" alt="Docs" />
 </p>
 

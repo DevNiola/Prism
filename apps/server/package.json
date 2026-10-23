@@ -8,6 +8,7 @@
     "start": "node dist/index.js",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
+    "test:coverage": "vitest run --coverage --coverage.provider=istanbul --coverage.include=\"src/**/*.ts\" --coverage.exclude=\"src/**/*.test.ts\" --coverage.reportOnFailure --coverage.reporter=lcov --coverage.reporter=text",
     "clean": "rimraf dist"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.0",
+    "@vitest/coverage-istanbul": "^4.1.11",
     "eslint": "^9.0.0",
     "rimraf": "^6.0.0",
     "tsx": "^4.19.0",
