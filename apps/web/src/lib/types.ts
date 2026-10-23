@@ -65,4 +65,11 @@ export interface TransactionContext {
   resources: ResourceSummary;
 }
 
+export interface DiagnosticEventEntry {
+  event_type: string;
+  topics: string[];
+  data: Record<string, string>;
+  timeline_position: number;
+}
+
 export type Network = "mainnet" | "testnet" | "futurenet" | "custom";

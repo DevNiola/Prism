@@ -1,7 +1,9 @@
 import type { TransactionContext, FeeBreakdown } from "@/lib/types";
+import Skeleton from "@/components/shared/Skeleton";
 
 interface Props {
-  context: TransactionContext;
+  context?: TransactionContext;
+  loading?: boolean;
 }
 
 function formatFee(stroops: number): string {
@@ -185,7 +187,68 @@ function ResourcePanel({ context }: { context: TransactionContext }) {
   );
 }
 
-export default function ContextSummary({ context }: Props) {
+/**
+ * Placeholder mirroring the three panels of {@link ContextSummary} (transaction
+ * summary, fee breakdown, resource usage) so the card keeps its height while the
+ * transaction context is still loading.
+ */
+export function ContextSummarySkeleton() {
+  return (
+    <div
+      className="rounded-lg border border-gray-700 bg-gray-900 p-4 space-y-6 text-sm"
+      aria-busy="true"
+    >
+      <section>
+        <Skeleton tone="dark" className="mb-2 h-3 w-40" />
+        <div className="space-y-1">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div key={index} className="flex justify-between">
+              <Skeleton tone="dark" className="h-4 w-24" />
+              <Skeleton tone="dark" className="h-4 w-32" />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <Skeleton tone="dark" className="mb-2 h-3 w-28" />
+        <div className="space-y-1">
+          {Array.from({ length: 4 }, (_, index) => (
+            <div key={index} className="flex justify-between">
+              <Skeleton tone="dark" className="h-4 w-32" />
+              <Skeleton tone="dark" className="h-4 w-24" />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <Skeleton tone="dark" className="mb-2 h-3 w-28" />
+        <div className="space-y-3">
+          {Array.from({ length: 2 }, (_, index) => (
+            <div key={index}>
+              <div className="flex justify-between mb-1">
+                <Skeleton tone="dark" className="h-3 w-28" />
+                <Skeleton tone="dark" className="h-3 w-40" />
+              </div>
+              <Skeleton tone="dark" className="h-2 w-full" />
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export default function ContextSummary({ context, loading }: Props) {
+  if (loading && !context) {
+    return <ContextSummarySkeleton />;
+  }
+
+  if (!context) {
+    return null;
+  }
+
   return (
     <section className="mx-auto my-4 max-w-3xl space-y-6 rounded-lg border border-slate-800 bg-slate-900/70 p-4 text-sm text-slate-200 sm:p-5">
       <section aria-labelledby="tx-summary-heading">

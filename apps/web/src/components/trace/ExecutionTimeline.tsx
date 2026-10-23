@@ -1,3 +1,5 @@
+import Skeleton from "@/components/shared/Skeleton";
+
 "use client";
 
 import React, { useEffect, useRef } from "react";
@@ -13,6 +15,34 @@ interface ExecutionTimelineProps {
     write_bytes: number;
     write_limit: number;
   };
+  loading?: boolean;
+}
+
+const TIMELINE_ROWS = 3;
+
+/**
+ * Placeholder mirroring the height of a short timeline so the card does not
+ * resize when the first trace nodes arrive.
+ */
+export function ExecutionTimelineSkeleton() {
+  return (
+    <div className="bg-white rounded-lg shadow p-6" aria-busy="true">
+      <h2 className="text-xl font-semibold mb-4">Execution Timeline</h2>
+      <div className="space-y-2">
+        {Array.from({ length: TIMELINE_ROWS }, (_, index) => (
+          <div key={index} className="p-3 border border-gray-200 rounded">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <Skeleton className="h-4 w-8" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+              <Skeleton className="h-4 w-32" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function ExecutionTimeline({
@@ -21,6 +51,7 @@ export function ExecutionTimeline({
   transitionDurationMs = 200,
   onSelectStep,
   resourceProfile,
+  loading,
 }: ExecutionTimelineProps) {
   const activeItemRef = useRef<HTMLDivElement | null>(null);
 
@@ -33,6 +64,10 @@ export function ExecutionTimeline({
       });
     }
   }, [currentStep]);
+
+  if (loading && nodes.length === 0) {
+    return <ExecutionTimelineSkeleton />;
+  }
 
   const isApproachingReadLimit =
     resourceProfile &&

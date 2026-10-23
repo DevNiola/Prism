@@ -52,6 +52,29 @@
   animation: accordion-up 0.18s ease forwards;
 }
 
+/* Indeterminate loading spinner used as a fallback for unknown content shapes */
+.spinner {
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  border-top-color: currentColor;
+  border-radius: 9999px;
+  animation: spinner-rotate 0.7s linear infinite;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.6s;
+  }
+}
+
 /* Smooth focus ring for all interactive elements */
 :focus-visible {
   outline: 2px solid rgba(139, 92, 246, 0.7);
