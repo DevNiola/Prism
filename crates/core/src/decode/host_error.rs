@@ -166,6 +166,13 @@ impl HostError {
             }
         }
     }
+
+    pub fn suggested_fix(&self) -> Option<&'static str> {
+        match self {
+            Self::Budget { code } => crate::decode::mappings::budget::suggested_fix(*code),
+            _ => None,
+        }
+    }
 }
 #[derive(Debug, Clone)]
 pub struct ClassifiedError {
@@ -226,9 +233,59 @@ pub fn classify_error(tx_data: &serde_json::Value) -> GratResult<ClassifiedError
         return Err(GratError::TransactionSucceeded);
     }
 
+    let explicit_code = tx_data
+        .get("errorCode")
+        .or_else(|| tx_data.get("error_code"))
+        .or_else(|| tx_data.get("code"))
+        .and_then(serde_json::Value::as_u64)
+        .map(|c| c as u32);
+
+    let memory_budget_exceeded = tx_data
+        .get("diagnosticEvents")
+        .and_then(|e| e.as_array())
+        .is_some_and(|events| {
+            events.iter().any(|ev| {
+                ev.get("type").and_then(|t| t.as_str()) == Some("budget")
+                    && ev
+                        .get("data")
+                        .and_then(|d| d.get("category"))
+                        .and_then(|c| c.as_str())
+                        == Some("memory")
+                    && {
+                        let used = ev
+                            .get("data")
+                            .and_then(|d| d.get("used"))
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0);
+                        let limit = ev
+                            .get("data")
+                            .and_then(|d| d.get("limit"))
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0);
+                        used > limit
+                    }
+            })
+        });
+
+    if explicit_code == Some(50) || memory_budget_exceeded {
+        return Ok(ClassifiedError {
+            category: ErrorCategory::Budget,
+            error_code: 50,
+            is_contract_error: false,
+            contract_id: tx_data
+                .get("contractId")
+                .and_then(|c| c.as_str())
+                .map(String::from),
+            raw_data: tx_data.clone(),
+        });
+    }
+
     if let Some(result_xdr_b64) = tx_data.get("resultXdr").and_then(|r| r.as_str()) {
         if let Ok(tx_result) = TransactionResult::from_xdr_base64(result_xdr_b64) {
             let mut classified = from_transaction_result(tx_result)?;
+            if let Some(code) = explicit_code {
+                classified.error_code = code;
+            }
             classified.raw_data = tx_data.clone();
             return Ok(classified);
         }
@@ -236,7 +293,7 @@ pub fn classify_error(tx_data: &serde_json::Value) -> GratResult<ClassifiedError
 
     Ok(ClassifiedError {
         category: ErrorCategory::Contract,
-        error_code: 0,
+        error_code: explicit_code.unwrap_or(0),
         is_contract_error: false,
         contract_id: None,
         raw_data: tx_data.clone(),
@@ -353,6 +410,16 @@ mod tests {
         );
 
         assert_eq!(
+            HostError::Budget { code: 50 }.summary(),
+            "[BUDGET] MemoryLimitExceeded"
+        );
+
+        assert_eq!(
+            HostError::Budget { code: 50 }.suggested_fix(),
+            Some("Increase memory_bytes in the transaction resources.")
+        );
+
+        assert_eq!(
             HostError::Storage { code: 0 }.summary(),
             "[STORAGE] AccessDenied"
         );
@@ -441,6 +508,7 @@ mod tests {
     fn test_summary_under_80_chars() {
         let errors = vec![
             HostError::Budget { code: 0 },
+            HostError::Budget { code: 50 },
             HostError::Storage { code: 0 },
             HostError::Auth { code: 0 },
             HostError::Context { code: 0 },
@@ -518,5 +586,27 @@ mod tests {
             from_transaction_result(result),
             Err(GratError::TransactionSucceeded)
         ));
+    }
+
+    #[test]
+    fn test_classify_error_code_50_memory_limit_exceeded() {
+        let tx_data = serde_json::json!({
+            "status": "FAILED",
+            "errorCode": 50,
+            "diagnosticEvents": [
+                {
+                    "type": "budget",
+                    "data": {
+                        "category": "memory",
+                        "used": 60_000_000,
+                        "limit": 40_000_000
+                    }
+                }
+            ]
+        });
+
+        let classified = classify_error(&tx_data).unwrap();
+        assert_eq!(classified.category, ErrorCategory::Budget);
+        assert_eq!(classified.error_code, 50);
     }
 }

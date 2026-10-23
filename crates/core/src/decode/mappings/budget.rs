@@ -55,12 +55,34 @@ pub const BUDGET_ERROR_DETAILS: &[BudgetErrorDetail] = &[
         summary: "The transaction did not have enough memory allocated.",
         severity: ErrorSeverity::Critical,
     },
+    BudgetErrorDetail {
+        code: 50,
+        name: "MemoryLimitExceeded",
+        summary: "Memory Limit Exceeded: the transaction exceeded its allocated memory limit — increase memory_bytes in the transaction resources.",
+        severity: ErrorSeverity::Critical,
+    },
 ];
+
+impl BudgetErrorDetail {
+    pub fn suggested_fix(&self) -> Option<&'static str> {
+        suggested_fix(self.code)
+    }
+}
 
 pub fn lookup(code: u32) -> Option<&'static BudgetErrorDetail> {
     BUDGET_ERROR_DETAILS
         .iter()
         .find(|detail| detail.code == code)
+}
+
+/// Return a human-readable suggested fix for a budget error code.
+pub fn suggested_fix(code: u32) -> Option<&'static str> {
+    match code {
+        0 | 1 => Some("Increase cpu_instructions in the transaction resources."),
+        2 | 50 => Some("Increase memory_bytes in the transaction resources."),
+        8 => Some("Re-simulate the transaction and increase the exceeded resource limits."),
+        _ => None,
+    }
 }
 
 /// Map a budget error code to the resource type it relates to.
@@ -70,7 +92,7 @@ pub fn lookup(code: u32) -> Option<&'static BudgetErrorDetail> {
 pub fn resource_type_for_code(code: u32) -> Option<&'static str> {
     match code {
         0 | 1 => Some("CPU Instructions"),
-        2 => Some("Memory Bytes"),
+        2 | 50 => Some("Memory Bytes"),
         _ => None,
     }
 }
@@ -113,8 +135,20 @@ mod tests {
     }
 
     #[test]
+    fn lookup_returns_memory_limit_exceeded_detail() {
+        let detail = lookup(50).expect("memory limit exceeded detail");
+        assert_eq!(detail.name, "MemoryLimitExceeded");
+        assert!(detail.summary.contains("Memory Limit Exceeded"));
+        assert!(detail.summary.contains("memory_bytes"));
+        assert_eq!(
+            detail.suggested_fix(),
+            Some("Increase memory_bytes in the transaction resources.")
+        );
+    }
+
+    #[test]
     fn table_covers_known_budget_codes() {
-        assert_eq!(BUDGET_ERROR_DETAILS.len(), 4);
+        assert_eq!(BUDGET_ERROR_DETAILS.len(), 5);
         assert!(lookup(99).is_none());
     }
 
@@ -123,6 +157,7 @@ mod tests {
         assert_eq!(resource_type_for_code(0), Some("CPU Instructions"));
         assert_eq!(resource_type_for_code(1), Some("CPU Instructions"));
         assert_eq!(resource_type_for_code(2), Some("Memory Bytes"));
+        assert_eq!(resource_type_for_code(50), Some("Memory Bytes"));
         assert_eq!(resource_type_for_code(8), None);
         assert_eq!(resource_type_for_code(99), None);
     }

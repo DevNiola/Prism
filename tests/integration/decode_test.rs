@@ -438,3 +438,56 @@ fn test_mock_rpc_response_structure_for_contract_error() {
     // contractId should be present in the response
     assert!(!mock_rpc_response["result"]["contractId"].is_null());
 }
+
+#[test]
+fn test_decode_host_error_code_50_memory_limit_exceeded() {
+    let tx_data = serde_json::json!({
+        "status": "FAILED",
+        "hash": "def789abc123def456789abc123def456789abc123def456789abc123def4567",
+        "ledger": 50300,
+        "errorCode": 50,
+        "diagnosticEvents": [
+            {
+                "type": "budget",
+                "data": {
+                    "category": "memory",
+                    "used": 60_000_000,
+                    "limit": 40_000_000
+                }
+            }
+        ]
+    });
+
+    let classified =
+        grat_core::decode::host_error::classify_error(&tx_data).expect("should classify code 50");
+    assert_eq!(
+        classified.category,
+        grat_core::taxonomy::schema::ErrorCategory::Budget
+    );
+    assert_eq!(classified.error_code, 50);
+
+    let report =
+        grat_core::decode::report::build_report(&classified).expect("should build report");
+    assert_eq!(report.error_code, 50);
+    assert_eq!(report.error_name, "MemoryLimitExceeded");
+    assert!(
+        report.summary.contains("Memory Limit Exceeded"),
+        "expected summary to mention 'Memory Limit Exceeded', got: {}",
+        report.summary
+    );
+    assert!(
+        report
+            .suggested_fixes
+            .iter()
+            .any(|fix| fix.description.contains("memory_bytes")),
+        "expected a suggested fix mentioning 'memory_bytes', got: {:?}",
+        report.suggested_fixes
+    );
+
+    let host_err = grat_core::decode::host_error::HostError::Budget { code: 50 };
+    assert_eq!(host_err.summary(), "[BUDGET] MemoryLimitExceeded");
+    assert!(host_err
+        .suggested_fix()
+        .expect("suggested fix for code 50")
+        .contains("memory_bytes"));
+}
