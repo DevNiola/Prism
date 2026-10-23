@@ -144,6 +144,11 @@ pub struct DiagnosticReport {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub call_chain: Option<CallChain>,
 
+    /// Full directed call graph for this transaction (populated when cross-contract
+    /// calls are present in the diagnostic events).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub call_graph: Option<crate::types::trace::CallGraph>,
+
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub resource_diagnostics: Option<crate::decode::resource_analyzer::ResourceDiagnostics>,
 
@@ -178,6 +183,7 @@ impl DiagnosticReport {
             auth_entries: Vec::new(),
             failing_contract_id: None,
             call_chain: None,
+            call_graph: None,
             resource_diagnostics: None,
             operation_index: None,
             operation_count: None,

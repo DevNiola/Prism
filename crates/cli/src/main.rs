@@ -293,11 +293,34 @@ mod tests {
     }
 
     #[test]
-    fn parses_diff_tx_hash_argument() {
-        let cli = Cli::try_parse_from(["grat", "diff", "deadbeef"]).expect("cli should parse");
+    fn parses_diff_state_subcommand() {
+        let cli =
+            Cli::try_parse_from(["grat", "diff", "state", "deadbeef"]).expect("cli should parse");
 
         match cli.command {
-            Commands::Diff(args) => assert_eq!(args.tx_hash, "deadbeef"),
+            Commands::Diff(args) => match args.mode {
+                commands::diff::DiffMode::State { tx_hash } => {
+                    assert_eq!(tx_hash, "deadbeef")
+                }
+                _ => panic!("expected State mode"),
+            },
+            _ => panic!("expected diff command"),
+        }
+    }
+
+    #[test]
+    fn parses_diff_tx_subcommand() {
+        let cli = Cli::try_parse_from(["grat", "diff", "tx", "aaa", "bbb"]).expect("cli should parse");
+
+        match cli.command {
+            Commands::Diff(args) => match args.mode {
+                commands::diff::DiffMode::Tx { tx_a, tx_b, json } => {
+                    assert_eq!(tx_a, "aaa");
+                    assert_eq!(tx_b, "bbb");
+                    assert!(!json);
+                }
+                _ => panic!("expected Tx mode"),
+            },
             _ => panic!("expected diff command"),
         }
     }
