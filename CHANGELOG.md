@@ -1,3 +1,43 @@
+# [1.1.0](https://github.com/DevNiola/Prism/compare/v1.0.0...v1.1.0) (2026-10-23)
+
+
+### Bug Fixes
+
+* batch decode, profiler breakdown, function breakpoints, and taxonomy updates ([7cb969f](https://github.com/DevNiola/Prism/commit/7cb969f2e1451671163ed9f54187d0a2d6119ee6)), closes [#71](https://github.com/DevNiola/Prism/issues/71) [#72](https://github.com/DevNiola/Prism/issues/72) [#73](https://github.com/DevNiola/Prism/issues/73) [#74](https://github.com/DevNiola/Prism/issues/74) [#71](https://github.com/DevNiola/Prism/issues/71) [#72](https://github.com/DevNiola/Prism/issues/72) [#73](https://github.com/DevNiola/Prism/issues/73) [#74](https://github.com/DevNiola/Prism/issues/74)
+* **ci:** fix YAML indentation error on workflow triggers in ci.yml ([0244ae4](https://github.com/DevNiola/Prism/commit/0244ae4cd0381b5eacc5e2a72c4cc9808376c94d))
+* resolve async caching, option/result decoding, debug transitions, and diff comparison ([959d421](https://github.com/DevNiola/Prism/commit/959d4210bda58308ac3c714960b6eb2eb406cd6b)), closes [#69](https://github.com/DevNiola/Prism/issues/69) [#70](https://github.com/DevNiola/Prism/issues/70) [#116](https://github.com/DevNiola/Prism/issues/116) [#119](https://github.com/DevNiola/Prism/issues/119) [#69](https://github.com/DevNiola/Prism/issues/69) [#70](https://github.com/DevNiola/Prism/issues/70) [#116](https://github.com/DevNiola/Prism/issues/116) [#119](https://github.com/DevNiola/Prism/issues/119)
+* resolve baseline compilation errors from dependency API changes ([093e21a](https://github.com/DevNiola/Prism/commit/093e21a18cc3827bfa6baf7c2ed297fca290b2b6))
+* **terraform:** build ECS images from pnpm workspace ([0694170](https://github.com/DevNiola/Prism/commit/06941702c71f66f2b717f0abbfa7c05655d11b6d))
+* **terraform:** enable TLS for Redis connections ([22502c5](https://github.com/DevNiola/Prism/commit/22502c5df569aecc2601c056badff18699b9e893))
+
+
+### Features
+
+* add consistent spacing and layout system ([#121](https://github.com/DevNiola/Prism/issues/121)) ([5519a8a](https://github.com/DevNiola/Prism/commit/5519a8a51ba9f0c202e3f5f97d15a04c1a86b200))
+* add focus-visible styles for keyboard navigation accessibility ([23e93a9](https://github.com/DevNiola/Prism/commit/23e93a956e499025eb54c61ce32e7c65ede0b56f)), closes [#122](https://github.com/DevNiola/Prism/issues/122)
+* add GitHub Actions CI for TypeScript packages ([b60bdf7](https://github.com/DevNiola/Prism/commit/b60bdf77e339af1d5e0eec3e47a367da2ec47b77)), closes [#131](https://github.com/DevNiola/Prism/issues/131)
+* add guided onboarding tour for first-time users ([7ff484c](https://github.com/DevNiola/Prism/commit/7ff484c2b99dd32849c7279660f6629ef17746fd)), closes [#120](https://github.com/DevNiola/Prism/issues/120)
+* add multi-step loading progress indicator for long-running replays ([fd8c0ee](https://github.com/DevNiola/Prism/commit/fd8c0eeddf073e281cf4ff5bd0a5a637b4823248)), closes [#123](https://github.com/DevNiola/Prism/issues/123)
+* add reusable Button component with variants ([39d0475](https://github.com/DevNiola/Prism/commit/39d04751c1f971d2d4a6fef482558098d07f2909)), closes [#127](https://github.com/DevNiola/Prism/issues/127)
+* **ci:** add VS Code extension publish workflow for Marketplace (closes [#139](https://github.com/DevNiola/Prism/issues/139)) ([2d9dd65](https://github.com/DevNiola/Prism/commit/2d9dd654b5c8e89204bd9cf339e06b52561c67ae))
+* **ci:** add WASM build, test, and npm publish workflow (closes [#132](https://github.com/DevNiola/Prism/issues/132)) ([eaa6c42](https://github.com/DevNiola/Prism/commit/eaa6c4279e30433a3b65ca1edff656fed5fd93cf))
+* **config:** add environment-specific configuration management and validation (closes [#149](https://github.com/DevNiola/Prism/issues/149)) ([f631a10](https://github.com/DevNiola/Prism/commit/f631a1039a23b9d497c98ce78b2d70fe3a04305c))
+* **devops:** add automated release workflow with semantic versioning (closes [#136](https://github.com/DevNiola/Prism/issues/136)) ([dffa6aa](https://github.com/DevNiola/Prism/commit/dffa6aaa26a40ad83bf42213b21d3ff872f1d7ed))
+* **devops:** add benchmark workflow for performance regression detection (closes [#148](https://github.com/DevNiola/Prism/issues/148)) ([2242bb8](https://github.com/DevNiola/Prism/commit/2242bb8954bfa3bdc451764879359961704f3cb0))
+* **devops:** add Cargo publish workflow for crates.io (closes [#137](https://github.com/DevNiola/Prism/issues/137)) ([cdf08e6](https://github.com/DevNiola/Prism/commit/cdf08e6bc051cadf3e430a063ee8ff59baa40d55))
+* **devops:** add docker-compose and Makefile for local development (closes [#135](https://github.com/DevNiola/Prism/issues/135)) ([51dfc6a](https://github.com/DevNiola/Prism/commit/51dfc6a1b2aedd616ad134875f63e04e15da5961))
+* **devops:** add GitHub Actions workflow for security scanning (closes [#146](https://github.com/DevNiola/Prism/issues/146)) ([9bb7caa](https://github.com/DevNiola/Prism/commit/9bb7caa8cc62ba1e0966cd6d66fbefa51dbeefa9))
+* **devops:** add npm publish workflow for web app and server (closes [#138](https://github.com/DevNiola/Prism/issues/138)) ([812b2ae](https://github.com/DevNiola/Prism/commit/812b2ae51ffc4c0ebc2a1994f10c15f28901719f))
+* **devops:** add Terraform configuration for AWS deployment (closes [#147](https://github.com/DevNiola/Prism/issues/147)) ([4d8bf21](https://github.com/DevNiola/Prism/commit/4d8bf21130a0b70034e00ebc3c0ffe4b03255c7a))
+* **docker:** add multi-stage production Dockerfile for server (closes [#133](https://github.com/DevNiola/Prism/issues/133)) ([561b159](https://github.com/DevNiola/Prism/commit/561b159a0a81a6b86d9ca7bdb7dbb9cd7e487b41))
+* **docker:** add multi-stage production Dockerfile for web app (closes [#134](https://github.com/DevNiola/Prism/issues/134)) ([841b8f7](https://github.com/DevNiola/Prism/commit/841b8f7b549652409b6f0004a09278bdb29dfa17))
+* enhance Footer with docs, GitHub, social links, and version info ([3ba8eb2](https://github.com/DevNiola/Prism/commit/3ba8eb2a34101e6036398446daf83b53a9ee700c)), closes [#124](https://github.com/DevNiola/Prism/issues/124)
+* implement XDR tx diff, call graph, auth V2, and type resolver generics ([8405f48](https://github.com/DevNiola/Prism/commit/8405f4877411a4af5adf79d0c89d241ad896712c)), closes [#66](https://github.com/DevNiola/Prism/issues/66) [#62](https://github.com/DevNiola/Prism/issues/62) [#63](https://github.com/DevNiola/Prism/issues/63) [#61](https://github.com/DevNiola/Prism/issues/61) [#66](https://github.com/DevNiola/Prism/issues/66) [#62](https://github.com/DevNiola/Prism/issues/62) [#63](https://github.com/DevNiola/Prism/issues/63) [#61](https://github.com/DevNiola/Prism/issues/61)
+* **k8s:** add production Kubernetes manifests and Kustomize overlays (closes [#145](https://github.com/DevNiola/Prism/issues/145)) ([19b2ad2](https://github.com/DevNiola/Prism/commit/19b2ad21b13c8075aec05c28de0185bf4edbbe3a))
+* **network:** implement optimistic network switching with validation ([27e083b](https://github.com/DevNiola/Prism/commit/27e083bae1eca31f1c4e73b76e947cdd04774da3)), closes [#31](https://github.com/DevNiola/Prism/issues/31)
+* **terraform:** add AWS Fargate deployment ([4ece463](https://github.com/DevNiola/Prism/commit/4ece463565768e6cabc65043f2c7768179bdb644))
+* **web:** add loading skeletons for async data components ([7dc423d](https://github.com/DevNiola/Prism/commit/7dc423d69308679c613cea32b15d34351ddda081)), closes [#33](https://github.com/DevNiola/Prism/issues/33)
+
 # 1.0.0 (2026-10-23)
 
 
