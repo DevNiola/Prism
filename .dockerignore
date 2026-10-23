@@ -1,0 +1,14 @@
+.git
+.next
+**/.next
+node_modules
+**/node_modules
+target
+**/target
+dist
+**/dist
+.env
+.env.*
+!.env.example
+package-lock.json
+*.log

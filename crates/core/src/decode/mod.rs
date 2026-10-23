@@ -1,3 +1,25 @@
+//! # Decode Module
+//!
+//! Provides comprehensive decoding functionality for Soroban contract invocations,
+//! function arguments, error reports, call-chains, and resource diagnostics.
+//!
+//! ## Submodules
+//! - [`argument_decoder`]: Typed decoding of contract function arguments.
+//! - [`enum_decoder`]: Decoder for Soroban enums, Options, and Results.
+//! - [`multi_op_decoder`]: Multi-operation transaction batch decoder.
+//! - [`chain_analyzer`]: Reconstructs contract call chains and detects failure patterns.
+//! - [`resource_analyzer`]: Analyzes CPU, memory, and storage resource limits.
+//!
+//! ## Example
+//! ```rust,no_run
+//! use grat_core::decode::ArgumentDecoder;
+//!
+//! let decoder = ArgumentDecoder::new();
+//! let args = vec![];
+//! let decoded = decoder.decode_dynamic(&args);
+//! println!("Decoded {} arguments", decoded.len());
+//! ```
+
 pub mod argument_decoder;
 pub mod auth;
 pub mod auth_address_nonce;
@@ -55,3 +77,22 @@ pub use walker::{
     walk_diagnostic_events, DiagnosticEventKind, DiagnosticEventWalker, StructuredDiagnosticEvent,
 };
 pub use cross_contract::build_call_graph;
+
+/// Decodes a transaction using the async cache with a cache-aside pattern, preventing blocking on cache I/O.
+pub async fn decode_with_cache(
+    cache: &crate::cache::async_cache::AsyncCache,
+    tx_data: &serde_json::Value,
+) -> crate::error::GratResult<Vec<crate::types::report::DiagnosticReport>> {
+    let hash = tx_data
+        .get("hash")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+    let cache_key = format!("decode_tx:{hash}");
+
+    cache
+        .get_or_compute(&cache_key, || async {
+            let decoder = MultiOpDecoder::new();
+            decoder.decode_transaction(tx_data)
+        })
+        .await
+}

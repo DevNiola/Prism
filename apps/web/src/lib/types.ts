@@ -10,6 +10,9 @@ export interface DiagnosticReport {
   contract_error?: ContractErrorInfo;
   transaction_context?: TransactionContext;
   failing_contract_id?: string;
+  operation_index?: number;
+  operation_count?: number;
+  is_first_failure?: boolean;
 }
 
 export interface RootCause {

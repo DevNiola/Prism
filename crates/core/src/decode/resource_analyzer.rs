@@ -63,12 +63,24 @@ impl MetricDiagnostic {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostFunctionCost {
+    pub function_name: String,
+    pub call_count: usize,
+    pub cpu_instructions: u64,
+    pub cpu_percentage: f64,
+    pub memory_bytes: u64,
+    pub memory_percentage: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResourceDiagnostics {
     pub cpu: MetricDiagnostic,
     pub memory: MetricDiagnostic,
     pub reads: MetricDiagnostic,
     pub writes: MetricDiagnostic,
     pub breached_metrics: Vec<MetricKind>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub host_function_breakdown: Vec<HostFunctionCost>,
 }
 
 impl ResourceDiagnostics {
@@ -300,6 +312,7 @@ impl ResourceUsageAnalyzer {
             reads,
             writes,
             breached_metrics,
+            host_function_breakdown: Vec::new(),
         }
     }
 }
@@ -367,17 +380,73 @@ fn format_percentage(val: f64) -> String {
     }
 }
 
+pub fn extract_host_function_breakdown(tx_data: &serde_json::Value, total_cpu: u64, total_mem: u64) -> Vec<HostFunctionCost> {
+    let mut costs: std::collections::HashMap<String, (usize, u64, u64)> = std::collections::HashMap::new();
+
+    if let Some(events) = tx_data.get("events").or_else(|| tx_data.get("trace")).and_then(|v| v.as_array()) {
+        let mut call_stack: Vec<(String, u64, u64)> = Vec::new();
+        for ev in events {
+            let ev_type = ev.get("type").or_else(|| ev.get("event_type")).and_then(|v| v.as_str()).unwrap_or("");
+            let data = ev.get("data").unwrap_or(ev);
+            let cpu = data.get("cpu_insns").and_then(|v| v.as_u64()).unwrap_or(0);
+            let mem = data.get("mem_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+
+            if ev_type == "HostFunctionCall" || ev_type == "host_function_call" {
+                let func = data.get("function").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
+                call_stack.push((func, cpu, mem));
+            } else if (ev_type == "HostFunctionReturn" || ev_type == "host_function_return") && !call_stack.is_empty() {
+                if let Some((func, start_cpu, start_mem)) = call_stack.pop() {
+                    let cpu_diff = cpu.saturating_sub(start_cpu);
+                    let mem_diff = mem.saturating_sub(start_mem);
+                    let entry = costs.entry(func).or_insert((0, 0, 0));
+                    entry.0 += 1;
+                    entry.1 += cpu_diff;
+                    entry.2 += mem_diff;
+                }
+            }
+        }
+    }
+
+    let mut result: Vec<HostFunctionCost> = costs
+        .into_iter()
+        .map(|(function_name, (call_count, cpu, mem))| {
+            let cpu_percentage = if total_cpu > 0 { (cpu as f64 / total_cpu as f64) * 100.0 } else { 0.0 };
+            let memory_percentage = if total_mem > 0 { (mem as f64 / total_mem as f64) * 100.0 } else { 0.0 };
+            HostFunctionCost {
+                function_name,
+                call_count,
+                cpu_instructions: cpu,
+                cpu_percentage,
+                memory_bytes: mem,
+                memory_percentage,
+            }
+        })
+        .collect();
+
+    result.sort_by(|a, b| b.cpu_instructions.cmp(&a.cpu_instructions).then_with(|| b.memory_bytes.cmp(&a.memory_bytes)));
+    result
+}
+
 pub fn enrich_report(
     report: &mut crate::types::report::DiagnosticReport,
     tx_data: &serde_json::Value,
 ) {
     let meta = TransactionResultMeta::from_tx_data(tx_data);
-    let diag = ResourceUsageAnalyzer::analyze_meta(&meta);
+    let mut diag = ResourceUsageAnalyzer::analyze_meta(&meta);
+    let host_fns = extract_host_function_breakdown(
+        tx_data,
+        meta.resources_consumed.cpu_instructions,
+        meta.resources_consumed.memory_bytes,
+    );
+    if !host_fns.is_empty() {
+        diag.host_function_breakdown = host_fns;
+    }
     if diag.has_breach()
         || meta.resources_consumed.cpu_instructions > 0
         || meta.resources_consumed.memory_bytes > 0
         || meta.resources_consumed.read_bytes > 0
         || meta.resources_consumed.write_bytes > 0
+        || !diag.host_function_breakdown.is_empty()
     {
         report.resource_diagnostics = Some(diag);
     }
