@@ -1,0 +1,60 @@
+name: Rust CI
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+    branches: ["main", "master"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust_ci:
+    name: Rust CI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo registry and target directory
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-ci-${{ matrix.os }}"
+          cache-targets: true
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Build all crates
+        run: cargo build --workspace --all-targets --all-features
+
+      - name: Set up Chrome for WASM browser tests
+        if: matrix.os == 'ubuntu-latest'
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Install wasm-pack
+        if: matrix.os == 'ubuntu-latest'
+        uses: taiki-e/install-action@wasm-pack
+
+      - name: Run WASM browser tests
+        if: matrix.os == 'ubuntu-latest'
+        run: wasm-pack test --headless --chrome crates/wasm
+
+      - name: Run tests with all features
+        run: cargo test --workspace --all-features

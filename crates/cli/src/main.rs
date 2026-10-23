@@ -107,6 +107,9 @@ enum Commands {
     Serve(commands::serve::ServeArgs),
 
     SearchError(commands::search_error::SearchErrorArgs),
+
+    #[command(name = "config:validate", about = "Validate the Grat configuration file")]
+    ConfigValidate,
 }
 
 #[tokio::main]
@@ -119,9 +122,7 @@ async fn main() -> anyhow::Result<()> {
 
     let _taxonomy_update_handle =
         tokio::spawn(grat_core::taxonomy::updater::check_and_update(cli.offline));
-    let loaded_config = config::ConfigManager::new(cli.config_path.clone())
-        .and_then(|manager| manager.load())
-        .ok();
+    config::ConfigManager::new(cli.config_path.clone())?.load()?;
 
     tracing_subscriber::fmt()
         .with_env_filter(build_log_filter(cli.verbose))
@@ -136,7 +137,7 @@ async fn main() -> anyhow::Result<()> {
         network_arg = %cli.network,
         verbose = cli.verbose,
         no_color = cli.no_color,
-        config_loaded = loaded_config.is_some(),
+        config_loaded = true,
         "CLI arguments parsed"
     );
 
@@ -182,6 +183,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::History => commands::history::run(&cli.output).await?,
         Commands::Serve(args) => commands::serve::run(args, &network).await?,
         Commands::SearchError(args) => commands::search_error::run(args).await?,
+        Commands::ConfigValidate => println!("Configuration is valid."),
         Commands::Completions { shell } => {
             let mut cmd = Cli::command();
             let name = cmd.get_name().to_string();
@@ -291,11 +293,34 @@ mod tests {
     }
 
     #[test]
-    fn parses_diff_tx_hash_argument() {
-        let cli = Cli::try_parse_from(["grat", "diff", "deadbeef"]).expect("cli should parse");
+    fn parses_diff_state_subcommand() {
+        let cli =
+            Cli::try_parse_from(["grat", "diff", "state", "deadbeef"]).expect("cli should parse");
 
         match cli.command {
-            Commands::Diff(args) => assert_eq!(args.tx_hash, "deadbeef"),
+            Commands::Diff(args) => match args.mode {
+                commands::diff::DiffMode::State { tx_hash } => {
+                    assert_eq!(tx_hash, "deadbeef")
+                }
+                _ => panic!("expected State mode"),
+            },
+            _ => panic!("expected diff command"),
+        }
+    }
+
+    #[test]
+    fn parses_diff_tx_subcommand() {
+        let cli = Cli::try_parse_from(["grat", "diff", "tx", "aaa", "bbb"]).expect("cli should parse");
+
+        match cli.command {
+            Commands::Diff(args) => match args.mode {
+                commands::diff::DiffMode::Tx { tx_a, tx_b, json } => {
+                    assert_eq!(tx_a, "aaa");
+                    assert_eq!(tx_b, "bbb");
+                    assert!(!json);
+                }
+                _ => panic!("expected Tx mode"),
+            },
             _ => panic!("expected diff command"),
         }
     }

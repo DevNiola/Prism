@@ -55,10 +55,14 @@ vi.mock("../ai/prompts", () => ({
 const {
   setCache,
   getCache,
+  invalidateKey,
+  invalidateByKey,
   invalidateByTxHash,
   invalidateEntry,
   clearByType,
   clearAll,
+  getCacheStats,
+  resetCacheStats,
 } = await import("../cache");
 
 describe("Cache — basic operations", () => {
@@ -174,5 +178,130 @@ describe("Cache — version-based invalidation", () => {
     // We verify by directly checking the key contains the version hash.
     const keys = Array.from(store.keys());
     expect(keys[0]).toContain("test12345678");
+  });
+});
+
+describe("Cache — TTL expiry", () => {
+  beforeEach(() => {
+    store.clear();
+    resetCacheStats();
+  });
+
+  it("entries expire after TTL and return null on get", async () => {
+    const key = "grat:cache:explain:test12345678:fp-ttl";
+    // Store an entry that expired in the past
+    store.set(key, {
+      value: "expired-data",
+      expiry: Date.now() - 1000,
+    });
+
+    const result = await getCache("explain", "fp-ttl");
+    expect(result).toBeNull();
+    // Cache entry should be deleted upon detecting expiration
+    expect(store.has(key)).toBe(false);
+  });
+
+  it("entries before TTL expiry return the valid cached value", async () => {
+    const key = "grat:cache:explain:test12345678:fp-valid";
+    store.set(key, {
+      value: "valid-data",
+      expiry: Date.now() + 50_000,
+    });
+
+    const result = await getCache("explain", "fp-valid");
+    expect(result).toBe("valid-data");
+  });
+});
+
+describe("Cache — manual invalidation by key", () => {
+  beforeEach(() => {
+    store.clear();
+    resetCacheStats();
+  });
+
+  it("manual invalidation by exact key deletes the entry", async () => {
+    await setCache("decode", "fp-manual-1", '"decoded-data"');
+    const key = "grat:cache:decode:test12345678:fp-manual-1";
+    expect(store.has(key)).toBe(true);
+
+    const deleted = await invalidateByKey(key);
+    expect(deleted).toBe(true);
+    expect(store.has(key)).toBe(false);
+
+    const miss = await getCache("decode", "fp-manual-1");
+    expect(miss).toBeNull();
+  });
+
+  it("manual invalidation by type and fingerprint deletes the entry", async () => {
+    await setCache("profile", "fp-manual-2", '"profile-data"');
+    expect(await getCache("profile", "fp-manual-2")).toBe('"profile-data"');
+
+    const deleted = await invalidateKey("profile", "fp-manual-2");
+    expect(deleted).toBe(true);
+    expect(await getCache("profile", "fp-manual-2")).toBeNull();
+  });
+
+  it("invalidation returns false for non-existent key", async () => {
+    const deleted = await invalidateByKey("nonexistent-key");
+    expect(deleted).toBe(false);
+  });
+});
+
+describe("Cache — hit and miss tracking", () => {
+  beforeEach(() => {
+    store.clear();
+    resetCacheStats();
+  });
+
+  it("tracks hits, misses, sets, and invalidations accurately", async () => {
+    const stats0 = getCacheStats();
+    expect(stats0).toEqual({ hits: 0, misses: 0, sets: 0, invalidations: 0 });
+
+    // 1 miss
+    await getCache("explain", "fp-stat-1");
+    expect(getCacheStats().misses).toBe(1);
+    expect(getCacheStats().hits).toBe(0);
+
+    // 1 set
+    await setCache("explain", "fp-stat-1", '"val1"');
+    expect(getCacheStats().sets).toBe(1);
+
+    // 1 hit
+    await getCache("explain", "fp-stat-1");
+    expect(getCacheStats().hits).toBe(1);
+
+    // 1 manual invalidation
+    await invalidateKey("explain", "fp-stat-1");
+    expect(getCacheStats().invalidations).toBe(1);
+
+    // After invalidation, get is another miss
+    await getCache("explain", "fp-stat-1");
+    expect(getCacheStats().misses).toBe(2);
+  });
+});
+
+describe("Cache — concurrent access", () => {
+  beforeEach(() => {
+    store.clear();
+    resetCacheStats();
+  });
+
+  it("handles concurrent sets and gets consistently without data corruption", async () => {
+    const tasks = Array.from({ length: 25 }, (_, i) => async () => {
+      const fp = `concurrent-fp-${i}`;
+      const payload = JSON.stringify({ index: i, timestamp: Date.now() });
+
+      await setCache("decode", fp, payload);
+      const readBack = await getCache("decode", fp);
+      expect(readBack).toBe(payload);
+    });
+
+    await Promise.all(tasks.map((t) => t()));
+
+    const stats = getCacheStats();
+    expect(stats.sets).toBe(25);
+    expect(stats.hits).toBe(25);
+    expect(stats.misses).toBe(0);
+    expect(store.size).toBe(25);
   });
 });
