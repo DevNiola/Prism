@@ -1,12 +1,18 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
-namespace: prism-prod
-
 resources:
   - ../../base
-
 patches:
-  - path: patches/replicas.yaml
-  - path: patches/resources.yaml
-  - path: patches/ingress-host.yaml
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: prism
+    path: ingress-patch.yaml
+images:
+  - name: ghcr.io/devniola/prism-web
+    newName: ghcr.io/devniola/prism-web
+    newTag: "0.1.0"
+  - name: ghcr.io/devniola/prism-server
+    newName: ghcr.io/devniola/prism-server
+    newTag: "0.1.0"
