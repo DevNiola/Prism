@@ -48,17 +48,21 @@ export default function ContractErrorView() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
-          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          <label
+            htmlFor="standard-code-select"
+            className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2"
+          >
             Select Standard Code
           </label>
           <select
+            id="standard-code-select"
             value={selectedCode}
             onChange={(e) => {
               setSelectedCode(Number(e.target.value));
               setIsCustomMode(false);
               setCustomCode("");
             }}
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-violet-500 transition-colors"
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors"
           >
             {Object.values(standardContractErrors).map((err) => (
               <option key={err.code} value={err.code}>
@@ -69,15 +73,19 @@ export default function ContractErrorView() {
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+          <label
+            htmlFor="custom-code-input"
+            className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2"
+          >
             Or Type Any Code
           </label>
           <input
+            id="custom-code-input"
             type="number"
             value={customCode}
             onChange={(e) => handleCustomCodeChange(e.target.value)}
             placeholder="e.g. 42"
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-colors"
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors"
           />
         </div>
       </div>
