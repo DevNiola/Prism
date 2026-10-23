@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { acquireLock, cacheGet, cacheSet } from "../redis";
+import { acquireLock, cacheGet, cacheSet, incrBy, cacheDel } from "../redis";
 import { config } from "../config";
 
 // ---------------------------------------------------------------------------
@@ -7,6 +7,18 @@ import { config } from "../config";
 // ---------------------------------------------------------------------------
 const DEDUP_PREFIX = "grat:dedup:";
 const RESULT_PREFIX = "grat:result:";
+const FAILURE_PREFIX = "grat:dedup:failures:";
+const BLACKLIST_PREFIX = "grat:dedup:blacklist:";
+
+// ---------------------------------------------------------------------------
+// Blacklist configuration
+// ---------------------------------------------------------------------------
+
+/** Number of consecutive failures before a fingerprint is blacklisted. */
+export const BLACKLIST_FAILURE_THRESHOLD = 3;
+
+/** How long (ms) a blacklisted fingerprint is blocked before it can be retried. */
+export const BLACKLIST_COOLDOWN_MS = 60_000; // 1 minute
 
 // ---------------------------------------------------------------------------
 // Request fingerprinting
@@ -91,6 +103,62 @@ export async function waitForResult(
   }
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Blacklist helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Check whether a fingerprint is currently blacklisted.
+ * Returns true if it is blocked and false if it may proceed.
+ */
+export async function isBlacklisted(fp: string): Promise<boolean> {
+  const key = `${BLACKLIST_PREFIX}${fp}`;
+  const value = await cacheGet(key);
+  return value !== null;
+}
+
+/**
+ * Record a processing failure for a fingerprint.
+ *
+ * - Increments the failure counter (with a TTL matching the blacklist cooldown
+ *   so stale counts do not accumulate).
+ * - Automatically blacklists the fingerprint once
+ *   `BLACKLIST_FAILURE_THRESHOLD` consecutive failures are reached.
+ *
+ * Returns the updated failure count.
+ */
+export async function recordFailure(fp: string): Promise<number> {
+  const failKey = `${FAILURE_PREFIX}${fp}`;
+  const cooldownSeconds = Math.ceil(BLACKLIST_COOLDOWN_MS / 1000);
+
+  const count = await incrBy(failKey, 1);
+
+  // Set the TTL only on the first increment so it functions as a rolling
+  // window; the key expires automatically if no additional failures arrive.
+  if (count === 1) {
+    await cacheSet(failKey, String(count), cooldownSeconds);
+  }
+
+  if (count >= BLACKLIST_FAILURE_THRESHOLD) {
+    const blacklistKey = `${BLACKLIST_PREFIX}${fp}`;
+    await cacheSet(blacklistKey, "1", cooldownSeconds);
+    // Clear the failure counter — the blacklist entry now governs the block.
+    await cacheDel(failKey);
+  }
+
+  return count;
+}
+
+/**
+ * Reset the failure counter for a fingerprint (e.g. after successful
+ * processing).  Also removes any active blacklist entry.
+ */
+export async function resetFailures(fp: string): Promise<void> {
+  const failKey = `${FAILURE_PREFIX}${fp}`;
+  const blacklistKey = `${BLACKLIST_PREFIX}${fp}`;
+  await cacheDel(failKey, blacklistKey);
 }
 
 // ---------------------------------------------------------------------------
