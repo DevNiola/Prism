@@ -109,4 +109,4 @@ pulldown-cmark = "0.13"
 unicode-width = "0.2"
 
 # Shared internal crates
-grat-core = { path = "crates/core" }
+grat-core = { path = "crates/core", version = "0.1.0" }
