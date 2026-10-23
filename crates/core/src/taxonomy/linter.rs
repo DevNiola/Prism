@@ -42,6 +42,56 @@ fn get_line_number(toml_content: &str, entry_id: &str, field_name: Option<&str>)
     Some(entry_idx + 1)
 }
 
+pub fn lint_entry(entry: &TaxonomyEntry) -> GratResult<()> {
+    if entry.id.trim().is_empty() {
+        return Err(GratError::TaxonomyError("entry id cannot be empty".to_string()));
+    }
+    if entry.name.trim().is_empty() {
+        return Err(GratError::TaxonomyError(format!("entry '{}' name cannot be empty", entry.id)));
+    }
+    if entry.summary.trim().len() < MIN_DESCRIPTION_LEN {
+        return Err(GratError::TaxonomyError(format!("entry '{}' summary is too short (must be at least {} characters)", entry.id, MIN_DESCRIPTION_LEN)));
+    }
+    if entry.detailed_explanation.trim().len() < MIN_DESCRIPTION_LEN {
+        return Err(GratError::TaxonomyError(format!("entry '{}' detailed_explanation is too short (must be at least {} characters)", entry.id, MIN_DESCRIPTION_LEN)));
+    }
+    const VALID_SEVERITIES: &[&str] = &["Error", "Warning", "Info", "Fatal"];
+    if !VALID_SEVERITIES.contains(&entry.severity.as_str()) {
+        return Err(GratError::TaxonomyError(format!("entry '{}' invalid severity '{}': must be one of {}", entry.id, entry.severity, VALID_SEVERITIES.join(", "))));
+    }
+    if let (Some(dp), Some(sp)) = (entry.deprecated_protocol, entry.since_protocol) {
+        if dp < sp {
+            return Err(GratError::TaxonomyError(format!("entry '{}' deprecated_protocol ({dp}) must be >= since_protocol ({sp})", entry.id)));
+        }
+    }
+    for cause in &entry.common_causes {
+        if cause.description.trim().len() < MIN_DESCRIPTION_LEN {
+            return Err(GratError::TaxonomyError(format!("entry '{}' common cause description is too short", entry.id)));
+        }
+    }
+    for fix in &entry.suggested_fixes {
+        if fix.description.trim().len() < MIN_DESCRIPTION_LEN {
+            return Err(GratError::TaxonomyError(format!("entry '{}' fix description is too short", entry.id)));
+        }
+    }
+    Ok(())
+}
+
+pub fn lint_entries(entries: &[TaxonomyEntry]) -> GratResult<()> {
+    let mut seen_ids = HashSet::new();
+    let mut seen_codes = HashSet::new();
+    for entry in entries {
+        if !seen_ids.insert(&entry.id) {
+            return Err(GratError::TaxonomyError(format!("duplicate entry id: {}", entry.id)));
+        }
+        if !seen_codes.insert((&entry.category, entry.code)) {
+            return Err(GratError::TaxonomyError(format!("duplicate error code {} in category {}", entry.code, entry.category)));
+        }
+        lint_entry(entry)?;
+    }
+    Ok(())
+}
+
 /// Lint all `*.toml` taxonomy files in `dir`.
 ///
 /// Under the strict build-time validation rules, this function will panic

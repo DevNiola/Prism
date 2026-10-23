@@ -1,16 +1,23 @@
 interface LoadingSpinnerProps {
-  /** Accessible label for screen readers. Defaults to "Loading…" */
+  /** Accessible label announced while the indeterminate load is in flight. */
   label?: string;
+  className?: string;
   /** Size of the spinner in pixels. Defaults to 24. */
   size?: number;
 }
 
+/**
+ * Indeterminate progress indicator. Prefer a skeleton variant when the shape of
+ * the incoming content is known — use this only as the fallback for loads whose
+ * layout cannot be predicted ahead of time.
+ */
 export default function LoadingSpinner({
-  label = "Loading…",
+  label = "Loading",
+  className = "",
   size = 24,
 }: LoadingSpinnerProps) {
   return (
-    <span role="status" aria-label={label} className="inline-flex">
+    <span role="status" aria-label={label} className={`inline-flex ${className}`}>
       <svg
         aria-hidden="true"
         className="animate-spin text-violet-400"
