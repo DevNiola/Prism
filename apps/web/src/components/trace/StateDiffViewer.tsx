@@ -1,3 +1,5 @@
+import Skeleton from "@/components/shared/Skeleton";
+
 interface StateDiffViewerProps {
   entries: Array<{
     key: string;
@@ -5,9 +7,48 @@ interface StateDiffViewerProps {
     after?: string;
     change_type: string;
   }>;
+  loading?: boolean;
 }
 
-export function StateDiffViewer({ entries }: StateDiffViewerProps) {
+const DIFF_ROWS = 2;
+
+/**
+ * Placeholder mirroring the two-column before/after layout of the diff entries
+ * so the card keeps its height while state changes are still streaming in.
+ */
+export function StateDiffViewerSkeleton() {
+  return (
+    <div className="bg-white rounded-lg shadow p-6" aria-busy="true">
+      <h2 className="text-xl font-semibold mb-4">State Diff</h2>
+      <div className="space-y-3">
+        {Array.from({ length: DIFF_ROWS }, (_, index) => (
+          <div key={index} className="p-4 border border-gray-200 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-6 w-20" />
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <Skeleton className="mb-1 h-3 w-12" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+              <div>
+                <Skeleton className="mb-1 h-3 w-12" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function StateDiffViewer({ entries, loading }: StateDiffViewerProps) {
+  if (loading && entries.length === 0) {
+    return <StateDiffViewerSkeleton />;
+  }
+
   const getChangeColor = (changeType: string) => {
     switch (changeType.toLowerCase()) {
       case "created":

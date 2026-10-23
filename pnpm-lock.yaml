@@ -19,6 +19,9 @@ importers:
       bullmq:
         specifier: ^5.0.0
         version: 5.71.0
+      dotenv:
+        specifier: ^18.0.8
+        version: 18.0.8
       fastify:
         specifier: ^5.0.0
         version: 5.8.2
@@ -70,7 +73,7 @@ importers:
         version: 7.0.0
       next:
         specifier: ^15.0.0
-        version: 15.5.13(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 15.5.13(@playwright/test@1.64.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react:
         specifier: ^19.0.0
         version: 19.2.4
@@ -90,6 +93,9 @@ importers:
       "@iarna/toml":
         specifier: ^2.2.5
         version: 2.2.5
+      "@playwright/test":
+        specifier: ^1.64.1
+        version: 1.64.1
       "@tailwindcss/postcss":
         specifier: ^4.0.0
         version: 4.2.1
@@ -1348,6 +1354,14 @@ packages:
       {
         integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==,
       }
+
+  "@playwright/test@1.64.1":
+    resolution:
+      {
+        integrity: sha512-IaYGml/nSOiZWROfPtuIL7neuu9qDOZ3TNvNljUIrhDMxiGTgPjzj/g9p9RxpS2tSepPDRY+UwAaEeiKtUvIAg==,
+      }
+    engines: { node: ">=20" }
+    hasBin: true
 
   "@rolldown/binding-android-arm-eabi@1.2.5":
     resolution:
@@ -3230,6 +3244,14 @@ packages:
       {
         integrity: sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==,
       }
+
+  dotenv@18.0.8:
+    resolution:
+      {
+        integrity: sha512-2KDeoFoK/zRtcnbunCDlLG5VWVMcyqeQc6iK65o231nfNAcuGrKoqUQfJFUtBI+QlShk5HKIHxwebBtUl3rEfA==,
+      }
+    engines: { node: ">=12" }
+    hasBin: true
 
   dunder-proto@1.0.1:
     resolution:
@@ -5299,6 +5321,22 @@ packages:
       {
         integrity: sha512-r34yH/GlQpKZbU1BvFFqOjhISRo1MNx1tWYsYvmj6KIRHSPMT2+yHOEb1SG6NMvRoHRF0a07kCOox/9yakl1vg==,
       }
+    hasBin: true
+
+  playwright-core@1.64.1:
+    resolution:
+      {
+        integrity: sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==,
+      }
+    engines: { node: ">=20" }
+    hasBin: true
+
+  playwright@1.64.1:
+    resolution:
+      {
+        integrity: sha512-HCrVhHr5QQuwYoswEUGTb7gGp522yflbv/ST8nF4sFWGuLjQCt17Q/EubpGGSNKYn1tsTCPZxqHhHCfVURu7UA==,
+      }
+    engines: { node: ">=20" }
     hasBin: true
 
   pluralize@2.0.0:
@@ -8431,6 +8469,8 @@ snapshots:
       domelementtype: 2.3.0
       domhandler: 5.0.3
 
+  dotenv@18.0.8: {}
+
   dunder-proto@1.0.1:
     dependencies:
       call-bind-apply-helpers: 1.0.2
@@ -9651,7 +9691,7 @@ snapshots:
 
   natural-compare@1.4.0: {}
 
-  next@15.5.13(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  next@15.5.13(@playwright/test@1.64.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       "@next/env": 15.5.13
       "@swc/helpers": 0.5.15
@@ -9867,6 +9907,12 @@ snapshots:
       safe-stable-stringify: 2.5.0
       sonic-boom: 4.2.1
       thread-stream: 4.0.0
+
+  playwright-core@1.64.1: {}
+
+  playwright@1.64.1:
+    dependencies:
+      playwright-core: 1.64.1
 
   pluralize@2.0.0: {}
 

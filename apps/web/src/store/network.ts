@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { Network } from "@/lib/types";
 
 interface NetworkState {
@@ -10,11 +11,22 @@ interface NetworkState {
   setIsValidating: (isValidating: boolean) => void;
 }
 
-export const useNetworkStore = create<NetworkState>((set) => ({
-  network: "testnet",
-  customRpcUrl: "",
-  isValidating: false,
-  setNetwork: (network) => set({ network }),
-  setCustomRpcUrl: (url) => set({ customRpcUrl: url }),
-  setIsValidating: (isValidating) => set({ isValidating }),
-}));
+export const useNetworkStore = create<NetworkState>()(
+  persist(
+    (set) => ({
+      network: "testnet",
+      customRpcUrl: "",
+      isValidating: false,
+      setNetwork: (network) => set({ network }),
+      setCustomRpcUrl: (url) => set({ customRpcUrl: url }),
+      setIsValidating: (isValidating) => set({ isValidating }),
+    }),
+    {
+      name: "prism-network",
+      partialize: (state) => ({
+        network: state.network,
+        customRpcUrl: state.customRpcUrl,
+      }),
+    }
+  )
+);
