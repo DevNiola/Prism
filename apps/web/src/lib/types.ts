@@ -10,6 +10,9 @@ export interface DiagnosticReport {
   contract_error?: ContractErrorInfo;
   transaction_context?: TransactionContext;
   failing_contract_id?: string;
+  operation_index?: number;
+  operation_count?: number;
+  is_first_failure?: boolean;
 }
 
 export interface RootCause {
@@ -60,6 +63,13 @@ export interface TransactionContext {
   return_value?: string;
   fee: FeeBreakdown;
   resources: ResourceSummary;
+}
+
+export interface DiagnosticEventEntry {
+  event_type: string;
+  topics: string[];
+  data: Record<string, string>;
+  timeline_position: number;
 }
 
 export type Network = "mainnet" | "testnet" | "futurenet" | "custom";

@@ -1,44 +1,37 @@
-# Stage 1: Dependencies
-FROM node:20-slim AS deps
+# =============================================================================
+# apps/web — Multi-stage Dockerfile (Next.js standalone output)
+# =============================================================================
+
+# Stage 1: install dependencies
+FROM node:20-alpine AS deps
+RUN npm install -g pnpm@9
 WORKDIR /app
-
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
-
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
-COPY apps/web/package.json ./apps/web/
-
+COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile --filter grat-web...
 
-# Stage 2: Build
-FROM node:20-slim AS builder
+# Stage 2: build
+FROM node:20-alpine AS builder
+RUN npm install -g pnpm@9
 WORKDIR /app
-
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
-
-COPY --from=deps /app ./
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY apps/web ./apps/web
-COPY scripts ./scripts
-COPY crates/core/src/taxonomy ./crates/core/src/taxonomy
+COPY package.json pnpm-workspace.yaml ./
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN pnpm --filter grat-web run build
 
-RUN pnpm run build:taxonomy && pnpm --filter grat-web build
-
-# Stage 3: Runtime
+# Stage 3: runtime (Next.js standalone)
 FROM node:20-alpine AS runner
 WORKDIR /app
-
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV NEXT_TELEMETRY_DISABLED=1
 
-# Run as non-root user
-USER node
-
-COPY --chown=node:node --from=builder /app/apps/web/package.json ./package.json
-COPY --chown=node:node --from=builder /app/apps/web/.next ./.next
-COPY --chown=node:node --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
 
 EXPOSE 3000
-
-HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1
-
-CMD ["node_modules/.bin/next", "start", "apps/web"]
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+CMD ["node", "apps/web/server.js"]

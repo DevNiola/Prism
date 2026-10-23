@@ -1,35 +1,99 @@
-# Prism - Soroban Transaction Debugger
-# Local Development & Orchestration Makefile
+# =============================================================================
+# Prism — Makefile
+# =============================================================================
+# Provides convenient shortcuts for common development tasks.
+#
+# Usage:
+#   make up        — build images and start all services in the background
+#   make down      — stop and remove containers
+#   make logs      — stream logs from all services
+#   make restart   — restart all services
+#   make clean     — stop containers and remove volumes (DESTRUCTIVE)
+#   make ps        — show running containers
+#   make build     — build all Docker images without starting
+#
+# Rust shortcuts:
+#   make rust-build  — cargo build --workspace
+#   make rust-test   — cargo test --workspace
+#   make rust-fmt    — cargo fmt --all
+#   make rust-lint   — cargo clippy --workspace
+#
+# Node shortcuts:
+#   make install   — pnpm install
+#   make web-dev   — start Next.js dev server
+#   make server-dev — start Fastify dev server
+# =============================================================================
 
-.PHONY: help up down restart logs ps clean build
+.PHONY: up down logs restart clean ps build \
+        rust-build rust-test rust-fmt rust-lint \
+        install web-dev server-dev
 
-help:
-	@echo "Prism Local Development Commands:"
-	@echo "  make up       - Start all services (web, server, redis) in background"
-	@echo "  make down     - Stop all running services"
-	@echo "  make restart  - Restart all services"
-	@echo "  make logs     - Follow logs from all services"
-	@echo "  make ps       - List container statuses and health"
-	@echo "  make build    - Rebuild all container images"
-	@echo "  make clean    - Remove containers, networks, and Redis volumes"
+COMPOSE := docker compose
 
+# ---------------------------------------------------------------------------
+# Docker Compose targets
+# ---------------------------------------------------------------------------
+
+## up: build images and start all services in detached mode
 up:
-	docker compose up -d --build
+	$(COMPOSE) up --build -d
 
+## down: stop and remove containers (volumes are preserved)
 down:
-	docker compose down
+	$(COMPOSE) down
 
-restart:
-	docker compose restart
-
+## logs: follow logs from all running services
 logs:
-	docker compose logs -f
+	$(COMPOSE) logs -f
 
-ps:
-	docker compose ps
+## restart: restart all services
+restart:
+	$(COMPOSE) restart
 
-build:
-	docker compose build
-
+## clean: stop containers and destroy all volumes (data will be lost)
 clean:
-	docker compose down -v --remove-orphans
+	$(COMPOSE) down -v --remove-orphans
+
+## ps: list running containers for this project
+ps:
+	$(COMPOSE) ps
+
+## build: build all Docker images without starting
+build:
+	$(COMPOSE) build
+
+# ---------------------------------------------------------------------------
+# Rust targets
+# ---------------------------------------------------------------------------
+
+## rust-build: build the entire Cargo workspace
+rust-build:
+	cargo build --workspace --all-targets
+
+## rust-test: run all Rust tests
+rust-test:
+	cargo test --workspace --all-targets
+
+## rust-fmt: auto-format all Rust code
+rust-fmt:
+	cargo fmt --all
+
+## rust-lint: run Clippy lints across the workspace
+rust-lint:
+	cargo clippy --workspace --all-targets -- -D warnings
+
+# ---------------------------------------------------------------------------
+# Node / pnpm targets
+# ---------------------------------------------------------------------------
+
+## install: install all Node dependencies via pnpm
+install:
+	pnpm install
+
+## web-dev: start the Next.js web app in development mode
+web-dev:
+	pnpm --filter grat-web run dev
+
+## server-dev: start the Fastify server in development mode
+server-dev:
+	pnpm --filter grat-server run dev

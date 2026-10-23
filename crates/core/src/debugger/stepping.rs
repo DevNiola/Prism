@@ -58,6 +58,32 @@ impl ExecutionStepper {
     pub fn is_paused(&self) -> bool {
         self.is_paused
     }
+
+    pub fn set_paused(&mut self, paused: bool) {
+        self.is_paused = paused;
+    }
+
+    pub fn set_current_state(&mut self, state: PauseState) {
+        self.current_state = Some(state);
+    }
+
+    pub fn check_and_apply_breakpoint(
+        &mut self,
+        controller: &mut super::breakpoint::BreakpointController,
+        contract: Option<&str>,
+        function: &str,
+        is_entry: bool,
+        args: Option<&serde_json::Value>,
+        state: PauseState,
+    ) -> Option<u32> {
+        if let Some(id) = controller.check_function_event(contract, function, is_entry, args) {
+            self.current_state = Some(state);
+            self.is_paused = true;
+            Some(id)
+        } else {
+            None
+        }
+    }
 }
 
 impl Default for ExecutionStepper {

@@ -1,42 +1,32 @@
-# Stage 1: Dependencies
-FROM node:20-slim AS deps
+# =============================================================================
+# apps/server — Multi-stage Dockerfile
+# =============================================================================
+
+# Stage 1: install dependencies
+FROM node:20-alpine AS deps
+RUN npm install -g pnpm@9
 WORKDIR /app
-
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
-
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
-COPY apps/server/package.json ./apps/server/
-
+COPY apps/server/package.json apps/server/
 RUN pnpm install --frozen-lockfile --filter grat-server...
 
-# Stage 2: Build
-FROM node:20-slim AS builder
+# Stage 2: build
+FROM node:20-alpine AS builder
+RUN npm install -g pnpm@9
 WORKDIR /app
-
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
-
-COPY --from=deps /app ./
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
 COPY apps/server ./apps/server
+COPY package.json pnpm-workspace.yaml ./
+RUN pnpm --filter grat-server run build
 
-RUN pnpm --filter grat-server build
-
-# Stage 3: Runtime
-FROM node:20-slim AS runner
+# Stage 3: runtime
+FROM node:20-alpine AS runner
 WORKDIR /app
-
 ENV NODE_ENV=production
-ENV PORT=3001
-
-# Run as non-root user
-USER node
-
-COPY --chown=node:node --from=builder /app/apps/server/package.json ./package.json
-COPY --chown=node:node --from=builder /app/node_modules ./node_modules
-COPY --chown=node:node --from=builder /app/apps/server/dist ./dist
+COPY --from=builder /app/apps/server/dist ./dist
+COPY --from=deps /app/apps/server/node_modules ./node_modules
+COPY --from=builder /app/apps/server/package.json ./package.json
 
 EXPOSE 3001
-
-HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/health || exit 1
-
 CMD ["node", "dist/index.js"]
