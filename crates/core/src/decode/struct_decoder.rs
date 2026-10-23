@@ -643,6 +643,51 @@ mod tests {
     }
 
     #[test]
+    fn decode_handles_optional_fields() {
+        let decoder = StructDecoder::new();
+        let optional_u32 = ScSpecTypeDef::Option(Box::new(
+            stellar_xdr::curr::ScSpecTypeOption {
+                value_type: Box::new(ScSpecTypeDef::U32),
+            },
+        ));
+        let spec = spec_with(vec![struct_def(
+            "Profile",
+            vec![field("score", optional_u32)],
+        )]);
+        let profile = spec.structs[0].clone();
+        let some_score = map(vec![(
+            "score",
+            ScVal::Vec(Some(vec![ScVal::U32(12)].try_into().unwrap())),
+        )]);
+        let no_score = map(vec![("score", ScVal::Void)]);
+
+        assert_eq!(
+            decoder.decode(&some_score, &profile, &spec),
+            serde_json::json!({ "score": 12 })
+        );
+        assert_eq!(
+            decoder.decode(&no_score, &profile, &spec),
+            serde_json::json!({ "score": null })
+        );
+    }
+
+    #[test]
+    fn decode_preserves_a_mismatched_field_value() {
+        let decoder = StructDecoder::new();
+        let spec = spec_with(vec![struct_def(
+            "Profile",
+            vec![field("score", ScSpecTypeDef::U32)],
+        )]);
+        let profile = spec.structs[0].clone();
+        let val = map(vec![("score", str_val("unknown"))]);
+
+        let (decoded, report) = decoder.decode_checked(&val, &profile, &spec);
+
+        assert_eq!(decoded, serde_json::json!({ "score": "unknown" }));
+        assert!(report.is_exact());
+    }
+
+    #[test]
     fn decode_resolves_nested_struct_fields() {
         let decoder = StructDecoder::new();
         let spec = spec_with(vec![
