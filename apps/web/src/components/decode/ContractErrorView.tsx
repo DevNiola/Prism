@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import contractTaxonomy from "../../lib/contract-taxonomy.json";
+import { initWasm } from "@/lib/wasm";
+import ErrorBoundary from "../shared/ErrorBoundary";
 
 interface TaxonomyEntry {
   code: number;
@@ -12,10 +14,27 @@ interface TaxonomyEntry {
   suggested_fixes: Array<{ description: string }>;
 }
 
-export default function ContractErrorView() {
+export function ContractErrorViewContent() {
   const [selectedCode, setSelectedCode] = useState<number>(0);
   const [customCode, setCustomCode] = useState<string>("");
   const [isCustomMode, setIsCustomMode] = useState<boolean>(false);
+  const [wasmError, setWasmError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    initWasm().catch((err) => {
+      if (active) {
+        setWasmError(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (wasmError) {
+    throw wasmError;
+  }
 
   const standardContractErrors = contractTaxonomy as Record<
     string,
@@ -242,5 +261,13 @@ export default function ContractErrorView() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+export default function ContractErrorView() {
+  return (
+    <ErrorBoundary isWasm>
+      <ContractErrorViewContent />
+    </ErrorBoundary>
   );
 }

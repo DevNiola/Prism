@@ -1,5 +1,6 @@
 # Prism
 
+
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-1.77+-orange?style=for-the-badge&logo=rust" alt="Rust 1.77" />
   <img src="https://img.shields.io/badge/Next.js-16.x-black?style=for-the-badge&logo=next.js" alt="Next.js 16" />
