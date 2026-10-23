@@ -12,6 +12,92 @@ export class WasmLoadError extends Error {
   }
 }
 
+export type SorobanValueType =
+  | "bool"
+  | "u32"
+  | "i32"
+  | "u64"
+  | "i64"
+  | "u128"
+  | "i128"
+  | "u256"
+  | "i256"
+  | "address"
+  | "bytes"
+  | "string"
+  | "symbol"
+  | "vec"
+  | "map"
+  | "void";
+
+const INTEGER_BOUNDS: Partial<Record<SorobanValueType, [bigint, bigint]>> = {
+  u32: [0n, 2n ** 32n - 1n],
+  i32: [-(2n ** 31n), 2n ** 31n - 1n],
+  u64: [0n, 2n ** 64n - 1n],
+  i64: [-(2n ** 63n), 2n ** 63n - 1n],
+  u128: [0n, 2n ** 128n - 1n],
+  i128: [-(2n ** 127n), 2n ** 127n - 1n],
+  u256: [0n, 2n ** 256n - 1n],
+  i256: [-(2n ** 255n), 2n ** 255n - 1n],
+};
+
+export function validateScVal(
+  value: string,
+  type: SorobanValueType,
+): string | null {
+  const trimmed = value.trim();
+  const integerBounds = INTEGER_BOUNDS[type];
+
+  if (integerBounds) {
+    if (!/^-?\d+$/.test(trimmed)) {
+      return `Expected a ${type} integer.`;
+    }
+
+    const parsed = BigInt(trimmed);
+    if (parsed < integerBounds[0] || parsed > integerBounds[1]) {
+      return `Value is outside the ${type} range (${integerBounds[0]} to ${integerBounds[1]}).`;
+    }
+    return null;
+  }
+
+  switch (type) {
+    case "bool":
+      return trimmed === "true" || trimmed === "false"
+        ? null
+        : 'Expected "true" or "false".';
+    case "address":
+      return /^[GC][A-Z2-7]{55}$/.test(trimmed)
+        ? null
+        : "Expected a Stellar account (G...) or contract (C...) address.";
+    case "bytes":
+      return /^(0x)?([\da-fA-F]{2})*$/.test(trimmed)
+        ? null
+        : "Expected an even-length hexadecimal byte string.";
+    case "string":
+      return null;
+    case "symbol":
+      return /^[A-Za-z0-9_]{1,32}$/.test(trimmed)
+        ? null
+        : "Expected a Soroban symbol (1-32 letters, digits, or underscores).";
+    case "vec":
+    case "map": {
+      try {
+        const parsed: unknown = JSON.parse(trimmed);
+        const valid = type === "vec" ? Array.isArray(parsed) : isRecord(parsed);
+        return valid ? null : `Expected a JSON ${type === "vec" ? "array" : "object"}.`;
+      } catch {
+        return `Expected a valid JSON ${type === "vec" ? "array" : "object"}.`;
+      }
+    }
+    case "void":
+      return trimmed === "" ? null : "Expected an empty value for void.";
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 let wasmInstance: unknown = null;
 let wasmInitPromise: Promise<unknown> | null = null;
 let wasmInitError: Error | null = null;
