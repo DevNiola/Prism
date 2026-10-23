@@ -16,7 +16,29 @@ By participating, you agree to follow our [Code of Conduct](./CODE_OF_CONDUCT.md
 
 ## Development Setup
 
-Refer to the [Requirements section in the README](../README.md#requirements) for environment setup.
+Please refer to the comprehensive [Getting Started Guide](./docs/getting-started.md) for full instructions on setting up:
+- The Rust toolchain (stable, wasm32-unknown-unknown, rustfmt, clippy)
+- Node.js and pnpm monorepo dependencies
+- Environment variables for `apps/server` and `apps/web`
+- Running all crates, API server, and web frontend locally
+- Troubleshooting common setup hurdles
+
+### Install Git Hooks
+
+Install `pre-commit` with pipx (install pipx with your OS package manager if needed), then install project dependencies and Rust lint components and enable the repository hooks:
+
+```sh
+pipx install pre-commit
+pnpm install
+rustup component add rustfmt clippy
+pre-commit install
+```
+
+Hooks run Rust formatting and Clippy for staged Rust changes, and Prettier and the workspace ESLint scripts for staged TypeScript changes. To run them manually against all supported files:
+
+```sh
+pre-commit run --all-files
+```
 
 ## License
 
