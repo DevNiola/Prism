@@ -10,6 +10,7 @@ import {
   ContractErrorView,
   ContextSummary,
 } from "@/components";
+import Button from "@/components/shared/Button";
 import type { DiagnosticReport } from "@/lib/types";
 import { useSessionStore } from "@/store/session";
 import { useNetworkStore } from "@/store/network";
@@ -70,7 +71,9 @@ function DecodePageContent() {
         <div className="flex justify-center border-b border-slate-800 mb-8 max-w-md mx-auto">
           <button
             onClick={() => setActiveTab("diagnose")}
-            className={`flex-1 pb-3 text-sm font-semibold transition-all focus:outline-none border-b-2 ${
+            aria-selected={activeTab === "diagnose"}
+            role="tab"
+            className={`flex-1 pb-3 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 border-b-2 ${
               activeTab === "diagnose"
                 ? "text-violet-400 border-violet-500"
                 : "text-slate-500 border-transparent hover:text-slate-300"
@@ -80,7 +83,9 @@ function DecodePageContent() {
           </button>
           <button
             onClick={() => setActiveTab("lookup")}
-            className={`flex-1 pb-3 text-sm font-semibold transition-all focus:outline-none border-b-2 ${
+            aria-selected={activeTab === "lookup"}
+            role="tab"
+            className={`flex-1 pb-3 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 border-b-2 ${
               activeTab === "lookup"
                 ? "text-violet-400 border-violet-500"
                 : "text-slate-500 border-transparent hover:text-slate-300"

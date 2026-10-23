@@ -110,3 +110,33 @@ input,
   transition-duration: 150ms;
   transition-timing-function: ease;
 }
+
+/* ── Debugger Step Transitions ─────────────────────────────────────────── */
+:root {
+  --debug-transition-duration: 200ms;
+}
+
+.debug-step-transition {
+  transition: all var(--debug-transition-duration) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.debug-step-active {
+  transition: all var(--debug-transition-duration) ease-in-out;
+  transform: translateX(4px);
+  border-left-width: 4px;
+}
+
+@keyframes debugFadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.debug-fade-slide-enter {
+  animation: debugFadeSlideIn var(--debug-transition-duration) ease-out forwards;
+}
