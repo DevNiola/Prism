@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "development" ? "http://localhost:3001" : "");
 
 export async function requestReplay(txHash: string, network: string) {
   const res = await fetch(`${API_BASE}/api/replay`, {
