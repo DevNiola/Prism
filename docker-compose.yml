@@ -1,53 +1,112 @@
+version: "3.9"
+
+# =============================================================================
+# Prism — Local Development Stack
+# =============================================================================
+#
+# Services:
+#   redis  — Redis 7 with AOF persistence for session storage / BullMQ queues.
+#   server — Fastify async task processor and WebSocket server (apps/server).
+#   web    — Next.js 15 interactive dashboard (apps/web).
+#
+# Usage:
+#   docker compose up          # start all services
+#   docker compose up --build  # rebuild images before starting
+#   docker compose down -v     # stop and remove volumes
+#   make up                    # alias for docker compose up --build -d
+#
+# =============================================================================
+
 services:
+  # ---------------------------------------------------------------------------
+  # Redis — message broker, session store, and BullMQ queue backend
+  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    container_name: prism-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
     volumes:
-      - redis-data:/data
+      - redis_data:/data
+    command: redis-server --appendonly yes --appendfsync everysec
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    restart: unless-stopped
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
+  # ---------------------------------------------------------------------------
+  # Server — Fastify API + WebSocket server
+  # ---------------------------------------------------------------------------
   server:
     build:
       context: .
       dockerfile: apps/server/Dockerfile
+    container_name: prism-server
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
     environment:
-      PORT: 3001
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      AI_API_KEY: ${AI_API_KEY:-}
-      AI_API_BASE_URL: ${AI_API_BASE_URL:-https://api.openai.com/v1}
-      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
-      AI_MAX_TOKENS_PER_REQUEST: ${AI_MAX_TOKENS_PER_REQUEST:-2048}
-      AI_TEMPERATURE: ${AI_TEMPERATURE:-0.2}
-      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-30000}
-      AI_HOURLY_TOKEN_LIMIT: ${AI_HOURLY_TOKEN_LIMIT:-100000}
-      AI_DAILY_TOKEN_LIMIT: ${AI_DAILY_TOKEN_LIMIT:-1000000}
-      AI_MAX_CONCURRENT: ${AI_MAX_CONCURRENT:-5}
-      CACHE_DECODE_TTL: ${CACHE_DECODE_TTL:-86400}
-      CACHE_PROFILE_TTL: ${CACHE_PROFILE_TTL:-3600}
-      DEDUP_WINDOW_MS: ${DEDUP_WINDOW_MS:-10000}
+      PORT: "3001"
+      REDIS_URL: "redis://redis:6379"
+      GRAT_BINARY: "grat"
+      # AI provider — override with real values in .env or environment
+      AI_API_KEY: "${AI_API_KEY:-}"
+      AI_API_BASE_URL: "${AI_API_BASE_URL:-https://api.openai.com/v1}"
+      AI_MODEL: "${AI_MODEL:-gpt-4o-mini}"
+      AI_MAX_TOKENS_PER_REQUEST: "${AI_MAX_TOKENS_PER_REQUEST:-2048}"
+      AI_TEMPERATURE: "${AI_TEMPERATURE:-0.2}"
+      AI_TIMEOUT_MS: "${AI_TIMEOUT_MS:-30000}"
+      # Rate limiting / budget
+      AI_HOURLY_TOKEN_LIMIT: "${AI_HOURLY_TOKEN_LIMIT:-100000}"
+      AI_DAILY_TOKEN_LIMIT: "${AI_DAILY_TOKEN_LIMIT:-1000000}"
+      AI_MAX_CONCURRENT: "${AI_MAX_CONCURRENT:-5}"
+      # Cache TTLs
+      CACHE_DECODE_TTL: "${CACHE_DECODE_TTL:-86400}"
+      CACHE_PROFILE_TTL: "${CACHE_PROFILE_TTL:-3600}"
+      DEDUP_WINDOW_MS: "${DEDUP_WINDOW_MS:-10000}"
+      NODE_ENV: "${NODE_ENV:-development}"
     depends_on:
       redis:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:3001:3001"
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
+  # ---------------------------------------------------------------------------
+  # Web — Next.js 15 frontend
+  # ---------------------------------------------------------------------------
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
-    ports:
-      - "127.0.0.1:3000:3000"
-    depends_on:
-      - server
+    container_name: prism-web
     restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-http://localhost:3001}"
+      NODE_ENV: "${NODE_ENV:-development}"
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
+# =============================================================================
+# Volumes
+# =============================================================================
 volumes:
-  redis-data:
+  redis_data:
+    driver: local
+    # Persists Redis data across container restarts.  Remove with:
+    #   docker compose down -v

@@ -1,0 +1,72 @@
+{
+  "status": "FAILED",
+  "hash": "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+  "ledger": 51002,
+  "resultXdr": "AAAAAAAAAGT/////AAAAAQAAAAAAAAAB////9AAAAAA=",
+  "diagnosticEvents": [
+    {
+      "type": "auth",
+      "data": {
+        "type": "Ed25519",
+        "address": "GABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC",
+        "required": true,
+        "provided": true
+      }
+    },
+    {
+      "type": "auth",
+      "data": {
+        "type": "Smart Wallet",
+        "address": "CABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC",
+        "required": true,
+        "provided": false
+      }
+    }
+  ],
+  "auth_entries": [
+    {
+      "auth_type": "Ed25519",
+      "address": "GABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC"
+    },
+    {
+      "auth_type": "Smart Wallet",
+      "address": "CABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC",
+      "contract_id": "CABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC"
+    }
+  ],
+  "soroban_meta": {
+    "v": 1,
+    "auth": [
+      {
+        "root_invocation": {
+          "contract_id": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+          "function_name": "multi_party_transfer"
+        },
+        "credentials": {
+          "type": "SorobanCredentialsTypeEnum.SOROBAN_CREDENTIALS_ADDRESS",
+          "address": {
+            "type": "ScAddress.Account",
+            "account_id": "GABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC"
+          },
+          "nonce": 3,
+          "signature_expiration_ledger": 51102
+        }
+      },
+      {
+        "root_invocation": {
+          "contract_id": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+          "function_name": "multi_party_transfer"
+        },
+        "credentials": {
+          "type": "SorobanCredentialsTypeEnum.SOROBAN_CREDENTIALS_ADDRESS",
+          "address": {
+            "type": "ScAddress.Contract",
+            "contract_id": "CABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC"
+          },
+          "nonce": 4,
+          "signature_expiration_ledger": 51102
+        }
+      }
+    ]
+  }
+}
