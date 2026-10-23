@@ -1,57 +1,37 @@
-# ==========================================
-# Stage 1: Install dependencies
-# ==========================================
-FROM node:20-slim AS deps
+# =============================================================================
+# apps/web — Multi-stage Dockerfile (Next.js standalone output)
+# =============================================================================
+
+# Stage 1: install dependencies
+FROM node:20-alpine AS deps
+RUN npm install -g pnpm@9
 WORKDIR /app
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY apps/web/package.json apps/web/
+RUN pnpm install --frozen-lockfile --filter grat-web...
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY package*.json ./
-
-RUN npm ci
-
-# ==========================================
-# Stage 2: Build Next.js application
-# ==========================================
-FROM node:20-slim AS builder
+# Stage 2: build
+FROM node:20-alpine AS builder
+RUN npm install -g pnpm@9
 WORKDIR /app
-
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY apps/web ./apps/web
+COPY package.json pnpm-workspace.yaml ./
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN pnpm --filter grat-web run build
 
-ENV NEXT_TELEMETRY_DISABLED=1 \
-    NODE_ENV=production
-
-RUN npm run build
-
-# ==========================================
-# Stage 3: Production Runtime (Ultra-lean Alpine)
-# ==========================================
+# Stage 3: runtime (Next.js standalone)
 FROM node:20-alpine AS runner
 WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
-ENV NODE_ENV=production \
-    PORT=3000 \
-    HOSTNAME="0.0.0.0" \
-    NEXT_TELEMETRY_DISABLED=1
-
-RUN apk add --no-cache curl
-
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
-
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
 
 EXPOSE 3000
-
-HEALTHCHECK --interval=20s --timeout=5s --start-period=15s --retries=3 \
-  CMD curl -f http://localhost:3000/ || exit 1
-
-CMD ["sh", "-c", "if [ -f server.js ]; then node server.js; elif [ -f apps/web/server.js ]; then node apps/web/server.js; else node .next/standalone/server.js; fi"]
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+CMD ["node", "apps/web/server.js"]
