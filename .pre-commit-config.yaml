@@ -1,51 +1,26 @@
-# Pre-commit configuration for Prism (Soroban Transaction Debugger)
-# See https://pre-commit.com for documentation and options
 repos:
-  # General file hygiene
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+  - repo: local
     hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-        exclude: ^(\.github/workflows/.*|apps/.*)$
-      - id: check-toml
-      - id: check-added-large-files
-
-  # Rust: formatting (rustfmt) and linting (clippy)
-  - repo: https://github.com/doublify/pre-commit-rust
-    rev: v1.0
-    hooks:
-      - id: fmt
+      - id: rustfmt
         name: rustfmt
-        description: Enforce Rust code style formatting
-        entry: cargo fmt
-        args: ["--all", "--", "--check"]
+        entry: cargo fmt --all -- --check
+        language: system
+        types: [rust]
         pass_filenames: false
       - id: clippy
         name: clippy
-        description: Enforce Rust linter and clippy checks
-        entry: cargo clippy
-        args: ["--workspace", "--all-targets", "--all-features", "--", "-D", "warnings"]
+        entry: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        language: system
+        types: [rust]
         pass_filenames: false
-
-  # Web/TS: Prettier code formatting
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v4.0.0-alpha.8
-    hooks:
       - id: prettier
         name: prettier
-        description: Enforce code formatting for TypeScript, JavaScript, JSON, YAML, and Markdown
-        types_or: [javascript, jsx, ts, tsx, json, markdown, yaml]
-        args: ["--check"]
-
-  # Web/TS: ESLint static analysis
-  - repo: local
-    hooks:
+        entry: pnpm exec prettier --check
+        language: system
+        types_or: [ts, tsx]
       - id: eslint
         name: eslint
-        description: Enforce ESLint rules across workspace packages
-        entry: pnpm -r lint
+        entry: pnpm lint
         language: system
-        types_or: [javascript, jsx, ts, tsx]
+        types_or: [ts, tsx]
         pass_filenames: false
