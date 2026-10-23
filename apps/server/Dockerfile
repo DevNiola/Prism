@@ -1,29 +1,32 @@
-FROM node:20-slim AS dependencies
+# =============================================================================
+# apps/server — Multi-stage Dockerfile
+# =============================================================================
 
-WORKDIR /workspace
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
-COPY . .
-RUN pnpm install --frozen-lockfile
+# Stage 1: install dependencies
+FROM node:20-alpine AS deps
+RUN npm install -g pnpm@9
+WORKDIR /app
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY apps/server/package.json apps/server/
+RUN pnpm install --frozen-lockfile --filter grat-server...
 
-FROM dependencies AS builder
-RUN pnpm build:server
+# Stage 2: build
+FROM node:20-alpine AS builder
+RUN npm install -g pnpm@9
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
+COPY apps/server ./apps/server
+COPY package.json pnpm-workspace.yaml ./
+RUN pnpm --filter grat-server run build
 
-FROM node:20-slim AS production-dependencies
-WORKDIR /workspace
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/server/package.json apps/server/package.json
-RUN pnpm install --filter grat-server --prod --frozen-lockfile
+# Stage 3: runtime
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/apps/server/dist ./dist
+COPY --from=deps /app/apps/server/node_modules ./node_modules
+COPY --from=builder /app/apps/server/package.json ./package.json
 
-FROM node:20-slim AS runner
-ENV NODE_ENV=production \
-    PORT=3001
-WORKDIR /workspace
-COPY --from=production-dependencies --chown=node:node /workspace/node_modules ./node_modules
-COPY --from=production-dependencies --chown=node:node /workspace/apps/server/node_modules ./apps/server/node_modules
-COPY --from=builder --chown=node:node /workspace/apps/server/dist ./apps/server/dist
-USER node
 EXPOSE 3001
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3001/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
-CMD ["node", "apps/server/dist/index.js"]
+CMD ["node", "dist/index.js"]
