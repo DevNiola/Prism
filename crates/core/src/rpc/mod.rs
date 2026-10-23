@@ -8,5 +8,5 @@ pub use client::{
 };
 pub use metrics::{
     gather as gather_rpc_metrics, record_rpc_duration, record_rpc_duration_simple,
-    record_rpc_http_error,
+    record_rpc_http_error, record_rpc_retry,
 };
