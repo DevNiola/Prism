@@ -3,8 +3,11 @@ import { replayRoutes } from "./routes/replay";
 import { healthRoutes } from "./routes/health";
 import { sessionRoutes } from "./routes/session";
 import { aiRoutes } from "./routes/ai";
-import { config } from "./config";
+import { config, assertValidConfig } from "./config";
 import { SessionStore } from "./session-store";
+
+// Validate configuration on startup
+assertValidConfig(config);
 
 const server = Fastify({ logger: true });
 
