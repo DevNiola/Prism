@@ -1,3 +1,22 @@
+//! Authorization chain decoding for Soroban transactions.
+//!
+//! Every Soroban transaction carries one or more [`SorobanAuthorizationEntry`]
+//! values that describe *who* authorised *what*.  This module parses those
+//! entries into a structured [`AuthChain`] that Prism can include in its
+//! diagnostic reports.
+//!
+//! ## Key concepts
+//!
+//! - **Credential**: proves *who* is authorizing.  Either the transaction's own
+//!   source account (`SourceAccount`) or an explicit address with a nonce and
+//!   expiry ledger (`Address`).
+//! - **Invocation tree**: describes *what* is being authorized — a tree of
+//!   contract calls rooted at [`SorobanAuthorizedInvocation`].  The tree is
+//!   flattened depth-first into a `Vec<AuthInvocation>` for easy display.
+//! - **Auth type**: distinguishes classic Ed25519 accounts (`G…` strkeys) from
+//!   smart-wallet contracts (`C…` strkeys) that implement custom signing logic
+//!   (e.g., multi-sig, passkeys).
+
 use crate::error::GratResult;
 use crate::xdr::codec::XdrCodec;
 use serde::{Deserialize, Serialize};
@@ -7,6 +26,11 @@ use stellar_xdr::curr::{
     SorobanCredentials, Uint256,
 };
 
+/// Discriminates between the two supported authorization types.
+///
+/// The distinction matters because Ed25519 accounts use a simple key-pair
+/// signature, while Smart Wallets are contracts that define their own arbitrary
+/// verification logic (passkeys, multi-sig, etc.).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthorizationType {
@@ -28,54 +52,89 @@ impl std::fmt::Display for AuthorizationType {
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum AuthCredential {
     /// Authorized implicitly by the transaction's source account — no nonce or
+    /// expiry ledger is present because the account's sequence number already
+    /// serves as replay protection at the transaction level.
     SourceAccount,
+    /// Authorized by an explicit address credential with its own nonce.
     Address(AddressCredential),
 }
 
+/// Decoded credential for an explicit address authorization.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AddressCredential {
+    /// Strkey-encoded address (G… for Ed25519, C… for Smart Wallet).
     pub address: String,
+    /// Whether the authorizer is an Ed25519 account or a smart-wallet contract.
     pub auth_type: AuthorizationType,
+    /// For Smart Wallet credentials only: the deploying contract's strkey.
+    /// Absent for Ed25519 accounts.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub contract_id: Option<String>,
+    /// Replay-protection nonce.  Must be unique and monotonically increasing
+    /// per authorizing address.
     pub nonce: i64,
+    /// The last ledger at which this authorization is valid.  After this ledger
+    /// the entry is considered expired and any transaction carrying it will fail.
     pub signature_expiration_ledger: u32,
+    /// Whether a non-Void signature payload is present.
+    /// `false` means the entry has not been signed yet (e.g., a pre-auth stub).
     pub signed: bool,
 }
 
+/// Classifies the kind of authorized function call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthFunctionKind {
+    /// A call to an existing contract function.
     ContractFn,
+    /// A host-level `create_contract` call.
     CreateContract,
 }
 
+/// A single node in the flattened authorization invocation tree.
+///
+/// The original invocation data is a recursive tree; this struct represents
+/// one node after the tree has been flattened depth-first so it can be
+/// serialised into a plain JSON array.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthInvocation {
+    /// How deep in the original tree this node appeared (0 = root).
     pub depth: usize,
+    /// Whether this is a contract function call or a host `create_contract`.
     pub kind: AuthFunctionKind,
+    /// Strkey of the contract being called (None for `CreateContract`).
     pub contract: Option<String>,
+    /// Name of the function being called (None for `CreateContract`).
     pub function: Option<String>,
+    /// Number of arguments passed to the function.
     pub arg_count: usize,
+    /// Human-readable string representation of each argument.
     pub args: Vec<String>,
+    /// Fully-qualified target string: `"<contract>.<function>(<args…>)"`.
     pub target: String,
 }
 
+/// The complete decoded authorization entry: credential + flattened invocation tree.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthChain {
     pub credential: AuthCredential,
+    /// Flattened depth-first traversal of the invocation tree.
+    /// Index 0 is always the root invocation.
     pub invocations: Vec<AuthInvocation>,
 }
 
 impl AuthChain {
+    /// Parse from a Base64-encoded XDR `SorobanAuthorizationEntry`.
     pub fn from_xdr_base64(b64: &str) -> GratResult<Self> {
         let entry = SorobanAuthorizationEntry::from_xdr_base64(b64)?;
         Ok(Self::from_entry(&entry))
     }
 
+    /// Build an [`AuthChain`] from an already-decoded [`SorobanAuthorizationEntry`].
     pub fn from_entry(entry: &SorobanAuthorizationEntry) -> Self {
         let credential = parse_credential(&entry.credentials);
         let mut invocations = Vec::new();
+        // Walk the invocation tree depth-first and collect each node.
         walk_invocation(&entry.root_invocation, 0, &mut invocations);
         Self {
             credential,
@@ -84,19 +143,30 @@ impl AuthChain {
     }
 }
 
+/// Map `SorobanCredentials` to the higher-level [`AuthCredential`] enum.
 fn parse_credential(credentials: &SorobanCredentials) -> AuthCredential {
     match credentials {
+        // SourceAccount: the transaction's own source account is implicitly
+        // authorizing this entry — no address or nonce is present in the XDR.
         SorobanCredentials::SourceAccount => AuthCredential::SourceAccount,
+        // Address: an explicit address credential with its own nonce and expiry.
         SorobanCredentials::Address(addr) => {
             AuthCredential::Address(parse_address_credential(addr))
         }
     }
 }
 
+/// Extract all relevant fields from a `SorobanAddressCredentials` entry.
+///
+/// The `auth_type` and `contract_id` are derived from the `ScAddress` variant:
+/// - `ScAddress::Account(…)` → Ed25519 account (no contract_id).
+/// - `ScAddress::Contract(…)` → Smart Wallet contract (contract_id = address).
 fn parse_address_credential(creds: &SorobanAddressCredentials) -> AddressCredential {
     let address = scaddress_to_strkey(&creds.address);
     let (auth_type, contract_id) = match &creds.address {
+        // Classic Stellar account identified by its ed25519 public key.
         ScAddress::Account(_) => (AuthorizationType::Ed25519, None),
+        // Contract acting as an authorizer; its strkey also serves as the contract ID.
         ScAddress::Contract(_) => (AuthorizationType::SmartWallet, Some(address.clone())),
     };
     AddressCredential {
@@ -105,28 +175,42 @@ fn parse_address_credential(creds: &SorobanAddressCredentials) -> AddressCredent
         contract_id,
         nonce: creds.nonce,
         signature_expiration_ledger: creds.signature_expiration_ledger,
+        // A Void signature means the entry has not been signed.
+        // Any other value (Bool, Bytes, Map, etc.) indicates a real signature.
         signed: creds.signature != ScVal::Void,
     }
 }
 
+/// Recursively walk the invocation tree depth-first, appending each node to `out`.
+///
+/// Depth-first order matches the execution order on-chain, making it the most
+/// intuitive for developers reading the diagnostic report.
 fn walk_invocation(
     invocation: &SorobanAuthorizedInvocation,
     depth: usize,
     out: &mut Vec<AuthInvocation>,
 ) {
+    // Emit the current node before recursing into children (pre-order DFS).
     out.push(parse_function(&invocation.function, depth));
     for sub in invocation.sub_invocations.iter() {
         walk_invocation(sub, depth + 1, out);
     }
 }
 
+/// Convert a single `SorobanAuthorizedFunction` into an [`AuthInvocation`].
+///
+/// For contract calls the function name and all arguments are decoded into
+/// human-readable strings so they can be displayed without further parsing.
+/// For `create_contract` host calls there are no arguments to decode.
 fn parse_function(function: &SorobanAuthorizedFunction, depth: usize) -> AuthInvocation {
     match function {
         SorobanAuthorizedFunction::ContractFn(args) => {
             let contract = scaddress_to_strkey(&args.contract_address);
             let function = args.function_name.to_string();
+            // Convert each ScVal argument to a compact readable string.
             let readable_args: Vec<String> =
                 args.args.iter().map(scval_to_readable_string).collect();
+            // Build a fully-qualified target string for quick scanning.
             let target = format!("{}.{}({})", contract, function, readable_args.join(", "));
 
             AuthInvocation {
@@ -140,6 +224,8 @@ fn parse_function(function: &SorobanAuthorizedFunction, depth: usize) -> AuthInv
             }
         }
 
+        // `create_contract` is a host-level operation with no contract address
+        // or function name to decode.
         SorobanAuthorizedFunction::CreateContractHostFn(_) => AuthInvocation {
             depth,
             kind: AuthFunctionKind::CreateContract,
@@ -152,6 +238,11 @@ fn parse_function(function: &SorobanAuthorizedFunction, depth: usize) -> AuthInv
     }
 }
 
+/// Convert an [`ScVal`] to a compact, human-readable string for display.
+///
+/// This is intentionally lossy — precision is sacrificed for readability.
+/// Large integers are shown as decimal strings; byte arrays as `0x…` hex;
+/// nested containers are rendered inline.
 pub fn scval_to_readable_string(val: &ScVal) -> String {
     match val {
         ScVal::Void => "void".to_string(),
@@ -164,13 +255,16 @@ pub fn scval_to_readable_string(val: &ScVal) -> String {
         ScVal::I64(i) => i.to_string(),
         ScVal::Timepoint(t) => t.0.to_string(),
         ScVal::Duration(d) => d.0.to_string(),
+        // 128-bit integers are split into hi/lo halves in XDR; reconstruct them.
         ScVal::U128(u) => ((u128::from(u.hi) << 64) | u128::from(u.lo)).to_string(),
         ScVal::I128(i) => {
             #[allow(clippy::cast_possible_wrap)]
             let lo = u128::from(i.lo) as i128;
             ((i128::from(i.hi) << 64) | lo).to_string()
         }
+        // Addresses are rendered as their canonical strkey (G… or C…).
         ScVal::Address(address) => scaddress_to_strkey(address),
+        // Byte arrays as lowercase hex with a 0x prefix.
         ScVal::Bytes(bytes) => format!(
             "0x{}",
             bytes.iter().fold(String::new(), |mut output, b| {
@@ -179,11 +273,13 @@ pub fn scval_to_readable_string(val: &ScVal) -> String {
                 output
             })
         ),
+        // Vectors rendered inline as `[a, b, c]`.
         ScVal::Vec(Some(vec)) => {
             let items: Vec<String> = vec.iter().map(scval_to_readable_string).collect();
             format!("[{}]", items.join(", "))
         }
         ScVal::Vec(None) => "[]".to_string(),
+        // Maps rendered inline as `{k: v, …}`.
         ScVal::Map(Some(map)) => {
             let items: Vec<String> = map
                 .iter()
@@ -203,6 +299,12 @@ pub fn scval_to_readable_string(val: &ScVal) -> String {
     }
 }
 
+/// Convert an [`ScAddress`] to its canonical strkey string.
+///
+/// - `ScAddress::Account(…)` → `"G…"` (ed25519 public key strkey)
+/// - `ScAddress::Contract(…)` → `"C…"` (contract strkey)
+///
+/// These are the same formats used by the Stellar CLI and Horizon API.
 pub(crate) fn scaddress_to_strkey(address: &ScAddress) -> String {
     match address {
         ScAddress::Account(AccountId(PublicKey::PublicKeyTypeEd25519(Uint256(bytes)))) => {
