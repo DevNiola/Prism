@@ -212,6 +212,70 @@ mod tests {
     }
 
     #[test]
+    fn decodes_three_element_mixed_tuple_in_signature_order() {
+        let value = scvec(vec![ScVal::U32(7), ScVal::I32(-3), ScVal::Bool(true)]);
+        let signature = [
+            ScSpecTypeDef::U32,
+            ScSpecTypeDef::I32,
+            ScSpecTypeDef::Bool,
+        ];
+
+        let decoded = TupleDecoder
+            .decode(&value, &signature, |element, type_def| {
+                json!({ "type": format!("{type_def:?}"), "value": format!("{element:?}") })
+            })
+            .unwrap();
+
+        assert_eq!(decoded[0], json!({ "type": "U32", "value": "U32(7)" }));
+        assert_eq!(decoded[1], json!({ "type": "I32", "value": "I32(-3)" }));
+        assert_eq!(decoded[2], json!({ "type": "Bool", "value": "Bool(true)" }));
+    }
+
+    #[test]
+    fn decodes_large_mixed_tuple_in_signature_order() {
+        let value = scvec(vec![
+            ScVal::Bool(true),
+            ScVal::U32(7),
+            ScVal::I32(-3),
+            ScVal::U64(11),
+            ScVal::I64(-5),
+            ScVal::U32(13),
+            ScVal::Bool(false),
+            ScVal::I32(17),
+        ]);
+        let signature = [
+            ScSpecTypeDef::Bool,
+            ScSpecTypeDef::U32,
+            ScSpecTypeDef::I32,
+            ScSpecTypeDef::U64,
+            ScSpecTypeDef::I64,
+            ScSpecTypeDef::U32,
+            ScSpecTypeDef::Bool,
+            ScSpecTypeDef::I32,
+        ];
+
+        let decoded = TupleDecoder
+            .decode(&value, &signature, |element, _| {
+                json!(format!("{element:?}"))
+            })
+            .unwrap();
+
+        assert_eq!(
+            decoded,
+            vec![
+                json!("Bool(true)"),
+                json!("U32(7)"),
+                json!("I32(-3)"),
+                json!("U64(11)"),
+                json!("I64(-5)"),
+                json!("U32(13)"),
+                json!("Bool(false)"),
+                json!("I32(17)"),
+            ]
+        );
+    }
+
+    #[test]
     fn rejects_vectors_with_a_different_length() {
         let decoder = TupleDecoder;
         let value = scvec(vec![ScVal::U32(7)]);
