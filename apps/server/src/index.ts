@@ -32,12 +32,61 @@ server.addHook("onClose", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Routes
+// CORS Middleware
 // ---------------------------------------------------------------------------
-server.register(healthRoutes);
-server.register(replayRoutes, { prefix: "/api" });
-server.register(sessionRoutes, { prefix: "/api" });
-server.register(aiRoutes, { prefix: "/api" });
+server.addHook("onRequest", async (request, reply) => {
+  const origin = request.headers.origin;
+  if (!origin) {
+    return;
+  }
+
+  const isAllowed =
+    config.allowedOrigins.includes("*") || config.allowedOrigins.includes(origin);
+
+  if (!isAllowed) {
+    reply.status(403).send({ error: "Forbidden: Origin not allowed by CORS policy" });
+    return;
+  }
+
+  reply.header("Access-Control-Allow-Origin", origin);
+  reply.header(
+    "Access-Control-Allow-Methods",
+    "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS",
+  );
+  reply.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Request-ID, X-Session-Token",
+  );
+  reply.header("Access-Control-Allow-Credentials", "true");
+
+  if (request.method === "OPTIONS") {
+    reply.status(204).send();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Routes: v1 Versioned Routes (Primary)
+// ---------------------------------------------------------------------------
+server.register(healthRoutes, { prefix: "/v1" });
+server.register(replayRoutes, { prefix: "/v1/api" });
+server.register(sessionRoutes, { prefix: "/v1/api" });
+server.register(aiRoutes, { prefix: "/v1/api" });
+
+// ---------------------------------------------------------------------------
+// Routes: Legacy Root Routes with Deprecation Notice
+// ---------------------------------------------------------------------------
+server.register(async (legacy) => {
+  legacy.addHook("onSend", async (_request, reply) => {
+    reply.header("Deprecation", "true");
+    reply.header("Sunset", "Wed, 01 Jan 2028 00:00:00 GMT");
+    reply.header("Link", '</v1>; rel="successor-version"');
+  });
+
+  legacy.register(healthRoutes);
+  legacy.register(replayRoutes, { prefix: "/api" });
+  legacy.register(sessionRoutes, { prefix: "/api" });
+  legacy.register(aiRoutes, { prefix: "/api" });
+});
 
 // ---------------------------------------------------------------------------
 // Start

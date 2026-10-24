@@ -29,6 +29,7 @@ type ServerConfig = {
     profileTtl: number;
     dedupWindowMs: number;
   };
+  allowedOrigins: string[];
 };
 
 function loadEnvironment(): Environment {
@@ -168,4 +169,18 @@ export const config: ServerConfig = {
     profileTtl: numberValue("CACHE_PROFILE_TTL", 3_600, { integer: true, min: 1 }),
     dedupWindowMs: numberValue("DEDUP_WINDOW_MS", 10_000, { integer: true, min: 1 }),
   },
+  allowedOrigins: environment.ALLOWED_ORIGINS
+    ? environment.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)
+    : isProduction
+    ? []
+    : ["http://localhost:3000", "http://127.0.0.1:3000"],
 };
+
+export function assertValidConfig(cfg: ServerConfig): void {
+  if (!cfg.port || cfg.port < 1 || cfg.port > 65535) {
+    throw new Error(`Invalid port: ${cfg.port}`);
+  }
+  if (!cfg.redisUrl) {
+    throw new Error("Missing redisUrl");
+  }
+}
