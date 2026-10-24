@@ -1,3 +1,10 @@
+## [1.3.2](https://github.com/DevNiola/Prism/compare/v1.3.1...v1.3.2) (2026-10-24)
+
+
+### Bug Fixes
+
+* resolve replay validation, structured logging, cache invalidation and request tracing ([ceeeb2b](https://github.com/DevNiola/Prism/commit/ceeeb2b22b4ddb3413dc570f85f67f5cedcea474)), closes [#48](https://github.com/DevNiola/Prism/issues/48) [#47](https://github.com/DevNiola/Prism/issues/47) [#46](https://github.com/DevNiola/Prism/issues/46) [#45](https://github.com/DevNiola/Prism/issues/45) [#48](https://github.com/DevNiola/Prism/issues/48) [#47](https://github.com/DevNiola/Prism/issues/47) [#46](https://github.com/DevNiola/Prism/issues/46) [#45](https://github.com/DevNiola/Prism/issues/45)
+
 ## [1.3.1](https://github.com/DevNiola/Prism/compare/v1.3.0...v1.3.1) (2026-10-24)
 
 
