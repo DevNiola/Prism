@@ -1,8 +1,33 @@
+"use client";
+
+import { useSearchParams } from "next/navigation";
 import EmptyState from "@/components/shared/EmptyState";
+import { Breadcrumbs } from "@/components/shared/Breadcrumbs";
 
 export default function DebugPage() {
+  const searchParams = useSearchParams();
+  const network = searchParams.get("network") || "testnet";
+  const txHash = searchParams.get("txHash") || "No Transaction";
+  const fnName = searchParams.get("function") || "invocation";
+  const currentStep = searchParams.get("step") || "Step 0";
+
+  const breadcrumbs = [
+    { label: "Home", href: "/" },
+    { label: network.toUpperCase(), href: `/trace?network=${network}` },
+    {
+      label: txHash.length > 12 ? `${txHash.slice(0, 6)}...${txHash.slice(-4)}` : txHash,
+      href: `/trace?txHash=${txHash}&network=${network}`,
+    },
+    { label: fnName, href: `/debug?txHash=${txHash}&network=${network}&function=${fnName}` },
+    { label: currentStep, current: true },
+  ];
+
   return (
     <main className="container mx-auto p-6">
+      <div className="mb-4">
+        <Breadcrumbs items={breadcrumbs} />
+      </div>
+
       <h1 className="mb-2 text-3xl font-bold">Interactive Debugger</h1>
       <EmptyState
         title="Start with an execution trace"

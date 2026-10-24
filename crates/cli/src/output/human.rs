@@ -6,6 +6,19 @@ use crate::output::renderers::{
 };
 use crate::ui::markdown::MarkdownRenderer;
 
+pub fn format_report(report: &DiagnosticReport) -> String {
+    let mut out = Vec::new();
+    out.push(render_error_card(report));
+    out.push(String::new());
+    out.push(render_section_header("Transaction Summary"));
+    out.push(format!(
+        "Error: {} ({}:{})",
+        report.error_name, report.error_category, report.error_code
+    ));
+    out.push(format!("Summary: {}", report.summary));
+    out.join("\n")
+}
+
 pub fn print_report(report: &DiagnosticReport) -> anyhow::Result<()> {
     println!("{}", render_error_card(report));
     println!();

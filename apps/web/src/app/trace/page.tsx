@@ -8,6 +8,7 @@ import { ResourceProfile } from "@/components/trace/ResourceProfile";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import Skeleton from "@/components/shared/Skeleton";
 import EmptyState from "@/components/shared/EmptyState";
+import Breadcrumbs from "@/components/shared/Breadcrumbs";
 import { useToast } from "@/hooks/useToast";
 
 /** Mirrors the Transaction Info card so the page keeps its height while the
@@ -67,6 +68,23 @@ export default function TracePage() {
 
   return (
     <main className="container mx-auto p-6">
+      <div className="mb-4">
+        <Breadcrumbs
+          items={[
+            { label: "Home", href: "/" },
+            { label: network.toUpperCase(), href: `/trace?network=${network}` },
+            {
+              label: txHash
+                ? txHash.length > 12
+                  ? `${txHash.slice(0, 6)}...${txHash.slice(-4)}`
+                  : txHash
+                : "New Trace",
+              current: true,
+            },
+          ]}
+        />
+      </div>
+
       <h1 className="text-3xl font-bold mb-6">Execution Trace</h1>
 
       <form onSubmit={handleSubmit} className="mb-8 space-y-4">
