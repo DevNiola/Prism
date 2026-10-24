@@ -13,6 +13,12 @@ export interface TraceStreamMessage {
   [key: string]: any;
 }
 
+interface AuthenticatedWebSocket extends WebSocket {
+  isAlive: boolean;
+  missedPings: number;
+  sessionId?: string;
+}
+
 export function createTraceStream(port: number) {
   const wss = new WebSocketServer({ port });
 

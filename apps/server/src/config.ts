@@ -124,6 +124,9 @@ export const config: ServerConfig = {
     ["http:", "https:"],
   ),
   gratBinaryPath: stringValue("GRAT_BINARY", "grat"),
+  jwtSecret: stringValue("JWT_SECRET", "prism-default-jwt-secret-session-auth"),
+  disableSessionAuth: environment.DISABLE_SESSION_AUTH === "true",
+  gracefulShutdownTimeoutMs: numberValue("SHUTDOWN_TIMEOUT_MS", 30_000, { integer: true, min: 1000 }),
 
   ai: {
     apiKey: environment.AI_API_KEY?.trim() || "",
