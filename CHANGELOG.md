@@ -1,3 +1,10 @@
+## [1.3.3](https://github.com/DevNiola/Prism/compare/v1.3.2...v1.3.3) (2026-10-24)
+
+
+### Bug Fixes
+
+* resolve WASM metadata, recursive decoder, CORS and API versioning ([59390d0](https://github.com/DevNiola/Prism/commit/59390d0554a4a850d33a02eabafe1fc1daf605ac)), closes [#60](https://github.com/DevNiola/Prism/issues/60) [#59](https://github.com/DevNiola/Prism/issues/59) [#54](https://github.com/DevNiola/Prism/issues/54) [#53](https://github.com/DevNiola/Prism/issues/53) [#60](https://github.com/DevNiola/Prism/issues/60) [#59](https://github.com/DevNiola/Prism/issues/59) [#54](https://github.com/DevNiola/Prism/issues/54) [#53](https://github.com/DevNiola/Prism/issues/53)
+
 ## [1.3.2](https://github.com/DevNiola/Prism/compare/v1.3.1...v1.3.2) (2026-10-24)
 
 
