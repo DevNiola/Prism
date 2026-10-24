@@ -9,6 +9,10 @@ license.workspace = true
 description = "Grat CLI — Soroban Transaction Debugger"
 build = "build.rs"
 
+[lib]
+name = "grat_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "grat"
 path = "src/main.rs"
@@ -72,3 +76,4 @@ assert_cmd = "2"
 predicates = "3"
 tempfile = "3"
 stellar-xdr = { workspace = true }
+insta = { version = "1.34", features = ["json"] }

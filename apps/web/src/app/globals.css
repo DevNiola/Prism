@@ -1,5 +1,37 @@
 @import "tailwindcss";
 
+/* ── Severity Color Palette ─────────────────────────────────────────────────── */
+:root {
+  --severity-info: #3b82f6;
+  --severity-info-bg: #eff6ff;
+  --severity-warning: #f59e0b;
+  --severity-warning-bg: #fffbeb;
+  --severity-error: #ef4444;
+  --severity-error-bg: #fef2f2;
+  --severity-fatal: #7f1d1d;
+  --severity-fatal-bg: #450a0a;
+}
+
+.severity-info {
+  color: var(--severity-info);
+  background-color: var(--severity-info-bg);
+}
+
+.severity-warning {
+  color: var(--severity-warning);
+  background-color: var(--severity-warning-bg);
+}
+
+.severity-error {
+  color: var(--severity-error);
+  background-color: var(--severity-error-bg);
+}
+
+.severity-fatal {
+  color: #fecaca;
+  background-color: var(--severity-fatal-bg);
+}
+
 html[data-theme="light"] {
   color-scheme: light;
 }
