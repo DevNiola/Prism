@@ -1,3 +1,10 @@
+## [1.3.4](https://github.com/DevNiola/Prism/compare/v1.3.3...v1.3.4) (2026-10-24)
+
+
+### Bug Fixes
+
+* resolve return decoder tests, ws heartbeat, worker shutdown and session JWT ([c3e2fd6](https://github.com/DevNiola/Prism/commit/c3e2fd673bd4dd6ba2ed2cedd47387bd89409671)), closes [#109](https://github.com/DevNiola/Prism/issues/109) [#43](https://github.com/DevNiola/Prism/issues/43) [#42](https://github.com/DevNiola/Prism/issues/42) [#41](https://github.com/DevNiola/Prism/issues/41) [#109](https://github.com/DevNiola/Prism/issues/109) [#43](https://github.com/DevNiola/Prism/issues/43) [#42](https://github.com/DevNiola/Prism/issues/42) [#41](https://github.com/DevNiola/Prism/issues/41)
+
 ## [1.3.3](https://github.com/DevNiola/Prism/compare/v1.3.2...v1.3.3) (2026-10-24)
 
 
