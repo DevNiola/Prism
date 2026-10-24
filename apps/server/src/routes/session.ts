@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { SessionStore, TraceSnapshot } from "../session-store";
 import { checkReplayBudget } from "../budget";
-import { sessionAuthMiddleware, signSessionToken } from "../middleware";
+import { defaultRateLimiter } from "../middleware/rate-limiter";
 
 // ---------------------------------------------------------------------------
 // Request / response schemas
@@ -90,7 +90,7 @@ export async function sessionRoutes(app: FastifyInstance) {
   // ------------------------------------------------------------------
   app.post<{
     Body: { txHash: string; network: string; wsUrl: string };
-  }>("/session", { schema: createSessionSchema }, async (request, reply) => {
+  }>("/session", { schema: createSessionSchema, preHandler: [defaultRateLimiter] }, async (request, reply) => {
     const { txHash, network, wsUrl } = request.body;
 
     const meta = await store.create({ txHash, network, wsUrl });

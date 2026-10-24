@@ -161,6 +161,12 @@ pub struct DiagnosticReport {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub is_first_failure: Option<bool>,
 
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub call_depth: Option<usize>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub nested_reports: Vec<DiagnosticReport>,
+
     pub learn_more: String,
 }
 
@@ -188,6 +194,8 @@ impl DiagnosticReport {
             operation_index: None,
             operation_count: None,
             is_first_failure: None,
+            call_depth: None,
+            nested_reports: Vec::new(),
             learn_more: "https://developers.stellar.org/docs/learn/smart-contracts/errors"
                 .to_string(),
         }

@@ -8,9 +8,7 @@ type ServerConfig = {
   redisUrl: string;
   sorobanRpcUrl: string;
   gratBinaryPath: string;
-  jwtSecret: string;
-  disableSessionAuth: boolean;
-  gracefulShutdownTimeoutMs: number;
+  logLevel: string;
   ai: {
     apiKey: string;
     apiBaseUrl: string;
@@ -31,6 +29,11 @@ type ServerConfig = {
     decodeTtl: number;
     profileTtl: number;
     dedupWindowMs: number;
+  };
+  rateLimit: {
+    replayLimit: number;
+    defaultLimit: number;
+    windowSec: number;
   };
 };
 
@@ -169,10 +172,16 @@ export const config: ServerConfig = {
       : "",
   },
 
+  logLevel: stringValue("LOG_LEVEL", "info"),
   cache: {
-    decodeTtl: numberValue("CACHE_DECODE_TTL", 86_400, { integer: true, min: 1 }),
+    decodeTtl: numberValue("CACHE_DECODE_TTL", 300, { integer: true, min: 1 }),
     profileTtl: numberValue("CACHE_PROFILE_TTL", 3_600, { integer: true, min: 1 }),
     dedupWindowMs: numberValue("DEDUP_WINDOW_MS", 10_000, { integer: true, min: 1 }),
+  },
+  rateLimit: {
+    replayLimit: numberValue("RATE_LIMIT_REPLAY", 5, { integer: true, min: 1 }),
+    defaultLimit: numberValue("RATE_LIMIT_DEFAULT", 30, { integer: true, min: 1 }),
+    windowSec: numberValue("RATE_LIMIT_WINDOW_SEC", 60, { integer: true, min: 1 }),
   },
 };
 
