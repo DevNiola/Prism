@@ -7,6 +7,25 @@ export async function replayRoutes(app: FastifyInstance) {
   });
 
   app.get("/replay/:jobId", async (request, reply) => {
-    return { status: "pending" };
+    const { jobId } = request.params as { jobId: string };
+    const job = await replayQueue.getJob(jobId);
+
+    if (!job) {
+      return reply.status(404).send({
+        error: `Replay job '${jobId}' not found`,
+        statusCode: 404,
+      });
+    }
+
+    const state = await job.getState();
+    const progress = job.progress;
+
+    return {
+      jobId: job.id,
+      state,
+      progress,
+      result: job.returnvalue || null,
+      failedReason: job.failedReason || null,
+    };
   });
 }

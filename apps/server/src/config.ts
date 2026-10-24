@@ -8,6 +8,7 @@ type ServerConfig = {
   redisUrl: string;
   sorobanRpcUrl: string;
   gratBinaryPath: string;
+  logLevel: string;
   ai: {
     apiKey: string;
     apiBaseUrl: string;
@@ -168,8 +169,9 @@ export const config: ServerConfig = {
       : "",
   },
 
+  logLevel: stringValue("LOG_LEVEL", "info"),
   cache: {
-    decodeTtl: numberValue("CACHE_DECODE_TTL", 86_400, { integer: true, min: 1 }),
+    decodeTtl: numberValue("CACHE_DECODE_TTL", 300, { integer: true, min: 1 }),
     profileTtl: numberValue("CACHE_PROFILE_TTL", 3_600, { integer: true, min: 1 }),
     dedupWindowMs: numberValue("DEDUP_WINDOW_MS", 10_000, { integer: true, min: 1 }),
   },
