@@ -71,7 +71,14 @@ impl ContractErrorResolver {
 
         // Resolve error code
         if let Some(entry) = resolve_error_code(&spec, error_code) {
-            Ok((entry.name.clone(), entry.doc.clone()))
+            let doc = entry.doc.clone().or_else(|| {
+                spec.metadata.get_error_doc(&entry.name)
+            }).or_else(|| {
+                spec.metadata.get_error_doc(&error_code.to_string())
+            });
+            Ok((entry.name.clone(), doc))
+        } else if let Some(doc) = spec.metadata.get_error_doc(&error_code.to_string()) {
+            Ok((error_code.to_string(), Some(doc)))
         } else {
             Err(GratError::SpecError(format!(
                 "Error code {error_code} not found in contract {contract_id} spec"

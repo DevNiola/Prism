@@ -79,7 +79,7 @@ server.addHook("onClose", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Routes
+// CORS Middleware
 // ---------------------------------------------------------------------------
 server.register(healthRoutes);
 server.register(replayRoutes, { prefix: "/api" });
