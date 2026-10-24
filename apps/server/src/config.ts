@@ -8,6 +8,7 @@ type ServerConfig = {
   redisUrl: string;
   sorobanRpcUrl: string;
   gratBinaryPath: string;
+  logLevel: string;
   ai: {
     apiKey: string;
     apiBaseUrl: string;
@@ -29,7 +30,11 @@ type ServerConfig = {
     profileTtl: number;
     dedupWindowMs: number;
   };
-  allowedOrigins: string[];
+  rateLimit: {
+    replayLimit: number;
+    defaultLimit: number;
+    windowSec: number;
+  };
 };
 
 function loadEnvironment(): Environment {
@@ -164,16 +169,17 @@ export const config: ServerConfig = {
       : "",
   },
 
+  logLevel: stringValue("LOG_LEVEL", "info"),
   cache: {
-    decodeTtl: numberValue("CACHE_DECODE_TTL", 86_400, { integer: true, min: 1 }),
+    decodeTtl: numberValue("CACHE_DECODE_TTL", 300, { integer: true, min: 1 }),
     profileTtl: numberValue("CACHE_PROFILE_TTL", 3_600, { integer: true, min: 1 }),
     dedupWindowMs: numberValue("DEDUP_WINDOW_MS", 10_000, { integer: true, min: 1 }),
   },
-  allowedOrigins: environment.ALLOWED_ORIGINS
-    ? environment.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)
-    : isProduction
-    ? []
-    : ["http://localhost:3000", "http://127.0.0.1:3000"],
+  rateLimit: {
+    replayLimit: numberValue("RATE_LIMIT_REPLAY", 5, { integer: true, min: 1 }),
+    defaultLimit: numberValue("RATE_LIMIT_DEFAULT", 30, { integer: true, min: 1 }),
+    windowSec: numberValue("RATE_LIMIT_WINDOW_SEC", 60, { integer: true, min: 1 }),
+  },
 };
 
 export function assertValidConfig(cfg: ServerConfig): void {
