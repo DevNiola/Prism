@@ -49,6 +49,62 @@ export default function ErrorCard({ report }: ErrorCardProps) {
   };
   const severity = getSeverityStyles(report.severity);
 
+  const handleExportJson = () => {
+    const txHash = report.transaction_context?.tx_hash || "diagnostic";
+    const filename = `${txHash}-report.json`;
+    const jsonStr = JSON.stringify(report, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportMarkdown = () => {
+    const txHash = report.transaction_context?.tx_hash || "diagnostic";
+    const filename = `${txHash}-report.md`;
+    let md = `# Diagnostic Report: ${report.error_name}\n\n`;
+    md += `- **Category**: ${report.error_category}\n`;
+    md += `- **Code**: ${report.error_code}\n`;
+    md += `- **Severity**: ${report.severity}\n`;
+    if (report.transaction_context?.tx_hash) {
+      md += `- **Transaction Hash**: \`${report.transaction_context.tx_hash}\`\n`;
+    }
+    md += `\n## Summary\n\n${report.summary}\n\n`;
+    if (report.detailed_explanation) {
+      md += `## Detailed Explanation\n\n${report.detailed_explanation}\n\n`;
+    }
+    if (report.root_causes && report.root_causes.length > 0) {
+      md += `## Root Causes\n\n`;
+      report.root_causes.forEach((rc, i) => {
+        md += `${i + 1}. **${rc.likelihood}**: ${rc.description}\n`;
+      });
+      md += `\n`;
+    }
+    if (report.suggested_fixes && report.suggested_fixes.length > 0) {
+      md += `## Suggested Fixes\n\n`;
+      report.suggested_fixes.forEach((fix, i) => {
+        md += `### ${i + 1}. ${fix.description} (${fix.difficulty})\n\n`;
+        if (fix.example) {
+          md += `\`\`\`rust\n${fix.example}\n\`\`\`\n\n`;
+        }
+      });
+    }
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <article className="mx-auto my-6 max-w-3xl overflow-hidden rounded-lg border border-slate-800 bg-slate-900 text-slate-100 shadow-xl">
       <header className={`relative border-b p-5 sm:p-6 ${severity.panel}`}>
@@ -69,9 +125,27 @@ export default function ErrorCard({ report }: ErrorCardProps) {
               Error code {report.error_code}
             </p>
           </div>
-          <span className={`rounded border px-2.5 py-1 text-xs font-semibold uppercase ${severity.text} ${severity.panel}`}>
-            {report.severity}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded border px-2.5 py-1 text-xs font-semibold uppercase ${severity.text} ${severity.panel}`}>
+              {report.severity}
+            </span>
+            <button
+              type="button"
+              onClick={handleExportJson}
+              className="inline-flex items-center gap-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 px-2.5 py-1 text-xs font-medium transition-colors"
+              title="Download diagnostic report as JSON"
+            >
+              Export JSON
+            </button>
+            <button
+              type="button"
+              onClick={handleExportMarkdown}
+              className="inline-flex items-center gap-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 px-2.5 py-1 text-xs font-medium transition-colors"
+              title="Download diagnostic report as Markdown"
+            >
+              Export MD
+            </button>
+          </div>
         </div>
         <p className="mt-5 pl-2 text-base leading-relaxed text-slate-100">
           {report.summary}

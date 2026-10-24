@@ -27,6 +27,7 @@ export default function StateInspector({
 }: StateInspectorProps) {
   const [animating, setAnimating] = useState(false);
   const [displayedStep, setDisplayedStep] = useState(currentStep);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
   useEffect(() => {
     setAnimating(true);
@@ -39,7 +40,7 @@ export default function StateInspector({
   }, [currentStep, transitionDurationMs]);
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
+    <div className="bg-white rounded-lg shadow p-4 md:p-6 border border-gray-200">
       <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">State Inspector</h2>
@@ -47,18 +48,28 @@ export default function StateInspector({
         </div>
         <div className="flex items-center space-x-2">
           <span className="text-xs text-gray-500 font-mono">Step #{displayedStep}</span>
-          <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 font-medium rounded-full">
+          <span className="hidden sm:inline-block px-2 py-0.5 text-xs bg-purple-100 text-purple-700 font-medium rounded-full">
             {transitionDurationMs}ms transition
           </span>
+          {/* Mobile drawer toggle */}
+          <button
+            type="button"
+            onClick={() => setIsMobileDrawerOpen(!isMobileDrawerOpen)}
+            className="md:hidden px-2.5 py-1 text-xs font-semibold rounded bg-purple-50 text-purple-700 border border-purple-200"
+          >
+            {isMobileDrawerOpen ? "Close Drawer" : "Open Drawer"}
+          </button>
         </div>
       </div>
 
-      {/* Step details container with smooth fade & slide */}
+      {/* Step details container - collapsible drawer on mobile, static on desktop */}
       <div
         style={{
           transitionDuration: `${transitionDurationMs}ms`,
         }}
-        className={`space-y-4 transition-all transform ${
+        className={`${
+          isMobileDrawerOpen ? "block" : "hidden md:block"
+        } space-y-4 transition-all transform ${
           animating
             ? "opacity-50 translate-y-1 scale-[0.99]"
             : "opacity-100 translate-y-0 scale-100"
