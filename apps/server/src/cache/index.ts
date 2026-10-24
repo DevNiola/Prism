@@ -8,5 +8,6 @@ export {
   clearByType,
   clearAll,
   getCacheStats,
+  getHitMissRatio,
   resetCacheStats,
 } from "./manager";

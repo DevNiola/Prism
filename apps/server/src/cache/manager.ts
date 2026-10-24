@@ -55,6 +55,19 @@ export function getCacheStats(): CacheStats {
   return { ...stats };
 }
 
+export function getHitMissRatio(): { ratio: number; hits: number; misses: number } {
+  const total = stats.hits + stats.misses;
+  const ratio = total === 0 ? 0 : Number((stats.hits / total).toFixed(4));
+  return { ratio, hits: stats.hits, misses: stats.misses };
+}
+
+function logCacheRatio() {
+  const { ratio, hits, misses } = getHitMissRatio();
+  import("../logger").then(({ logger }) => {
+    logger.debug("Cache hit/miss stats", { ratio, hits, misses });
+  }).catch(() => {});
+}
+
 export function resetCacheStats(): void {
   stats = {
     hits: 0,
@@ -95,6 +108,7 @@ export async function getCache(
   } else {
     stats.misses++;
   }
+  logCacheRatio();
   return result;
 }
 

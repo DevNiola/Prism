@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { config } from "../config";
+import { logger } from "../logger";
 import { incrBy, decrBy, getNumber, setExpiry } from "../redis";
 import {
   BudgetExceededError,
@@ -230,10 +231,14 @@ export async function checkReplayBudget(
           signal: AbortSignal.timeout(5_000),
         });
         if (!response.ok) {
-          console.warn(`Budget alert webhook returned HTTP ${response.status}`);
+          logger.warn(`Budget alert webhook returned HTTP ${response.status}`, {
+            status: response.status,
+          });
         }
       } catch (error) {
-        console.warn("Budget alert webhook delivery failed:", error);
+        logger.warn("Budget alert webhook delivery failed", {
+          error: String(error),
+        });
       }
     }
   }

@@ -1,4 +1,5 @@
 import { WebSocketServer, WebSocket } from "ws";
+import { logger } from "../logger";
 
 export interface TraceStreamMessage {
   type:
@@ -16,14 +17,16 @@ export function createTraceStream(port: number) {
   const wss = new WebSocketServer({ port });
 
   wss.on("connection", (ws: WebSocket) => {
-    console.log("New trace stream client connected");
+    logger.info("New trace stream client connected");
 
     ws.on("message", (data: Buffer) => {
       try {
         const message = JSON.parse(data.toString());
 
         if (message.type === "subscribe" && message.tx_hash) {
-          console.log(`Client subscribed to trace: ${message.tx_hash}`);
+          logger.info(`Client subscribed to trace: ${message.tx_hash}`, {
+            tx_hash: message.tx_hash,
+          });
 
           ws.send(
             JSON.stringify({
@@ -33,19 +36,19 @@ export function createTraceStream(port: number) {
           );
         }
       } catch (err) {
-        console.error("Failed to parse WebSocket message:", err);
+        logger.error("Failed to parse WebSocket message", { error: String(err) });
       }
     });
 
     ws.on("close", () => {
-      console.log("Trace stream client disconnected");
+      logger.info("Trace stream client disconnected");
     });
 
     ws.on("error", (err) => {
-      console.error("WebSocket error:", err);
+      logger.error("WebSocket error", { error: String(err) });
     });
   });
 
-  console.log(`Trace stream WebSocket server listening on port ${port}`);
+  logger.info(`Trace stream WebSocket server listening on port ${port}`, { port });
   return wss;
 }
