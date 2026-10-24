@@ -29,6 +29,11 @@ type ServerConfig = {
     profileTtl: number;
     dedupWindowMs: number;
   };
+  rateLimit: {
+    replayLimit: number;
+    defaultLimit: number;
+    windowSec: number;
+  };
 };
 
 function loadEnvironment(): Environment {
@@ -168,4 +173,18 @@ export const config: ServerConfig = {
     profileTtl: numberValue("CACHE_PROFILE_TTL", 3_600, { integer: true, min: 1 }),
     dedupWindowMs: numberValue("DEDUP_WINDOW_MS", 10_000, { integer: true, min: 1 }),
   },
+  rateLimit: {
+    replayLimit: numberValue("RATE_LIMIT_REPLAY", 5, { integer: true, min: 1 }),
+    defaultLimit: numberValue("RATE_LIMIT_DEFAULT", 30, { integer: true, min: 1 }),
+    windowSec: numberValue("RATE_LIMIT_WINDOW_SEC", 60, { integer: true, min: 1 }),
+  },
 };
+
+export function assertValidConfig(cfg: ServerConfig): void {
+  if (!cfg.port || cfg.port < 1 || cfg.port > 65535) {
+    throw new Error(`Invalid port: ${cfg.port}`);
+  }
+  if (!cfg.redisUrl) {
+    throw new Error("Missing redisUrl");
+  }
+}

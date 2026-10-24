@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
+import { replayRateLimiter } from "../middleware/rate-limiter";
 
 export async function replayRoutes(app: FastifyInstance) {
-  app.post("/replay", async (request, reply) => {
+  app.post("/replay", { preHandler: [replayRateLimiter] }, async (request, reply) => {
     return { status: "queued" };
   });
 

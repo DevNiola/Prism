@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { config } from "../config";
 import { getRedis } from "../redis";
 import { replayQueue } from "../workers/queue";
+import { defaultRateLimiter } from "../middleware/rate-limiter";
 
 type DependencyStatus<T extends object = object> =
   | ({ status: "up"; latency_ms: number } & T)
@@ -27,7 +28,7 @@ async function checkDependency<T extends object>(
 }
 
 export async function healthRoutes(app: FastifyInstance) {
-  app.get("/health", async (_request, reply) => {
+  app.get("/health", { preHandler: [defaultRateLimiter] }, async (_request, reply) => {
     const [redis, sorobanRpc, workerQueue] = await Promise.all([
       checkDependency(async () => {
         await getRedis().ping();
