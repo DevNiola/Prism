@@ -511,4 +511,64 @@ mod tests {
         let val = ScVal::Symbol(ScSymbol("hello".try_into().unwrap()));
         assert_eq!(ReturnValueDecoder::decode_dynamic(&val), json!("hello"));
     }
+
+    #[test]
+    fn test_decode_void_return() {
+        let decoder = ReturnValueDecoder::new();
+        let val = ScVal::Void;
+        let decoded = decoder.decode(&val, Some(&ScSpecTypeDef::Void), None);
+        assert_eq!(decoded, Value::Null);
+    }
+
+    #[test]
+    fn test_decode_u32_return() {
+        let decoder = ReturnValueDecoder::new();
+        let val = ScVal::U32(42);
+        let decoded = decoder.decode(&val, Some(&ScSpecTypeDef::U32), None);
+        assert_eq!(decoded, json!(42));
+    }
+
+    #[test]
+    fn test_decode_string_return() {
+        let decoder = ReturnValueDecoder::new();
+        let val = ScVal::String(stellar_xdr::curr::ScString(
+            stellar_xdr::curr::StringM::try_from("hello soroban".as_bytes().to_vec()).unwrap(),
+        ));
+        let decoded = decoder.decode(&val, Some(&ScSpecTypeDef::String), None);
+        assert_eq!(decoded, json!("hello soroban"));
+    }
+
+    #[test]
+    fn test_decode_vec_return() {
+        let decoder = ReturnValueDecoder::new();
+        let val = ScVal::Vec(Some(
+            vec![ScVal::U32(10), ScVal::U32(20), ScVal::U32(30)]
+                .try_into()
+                .unwrap(),
+        ));
+        let vec_spec = ScSpecTypeDef::Vec(Box::new(stellar_xdr::curr::ScSpecTypeVec {
+            element_type: Box::new(ScSpecTypeDef::U32),
+        }));
+        let decoded = decoder.decode(&val, Some(&vec_spec), None);
+        assert_eq!(decoded, json!([10, 20, 30]));
+    }
+
+    #[test]
+    fn test_decode_error_return_result_err() {
+        let decoder = ReturnValueDecoder::new();
+        let err_val = ScVal::Vec(Some(
+            vec![
+                ScVal::Symbol(ScSymbol("Err".try_into().unwrap())),
+                ScVal::U32(404),
+            ]
+            .try_into()
+            .unwrap(),
+        ));
+        let res_spec = ScSpecTypeDef::Result(Box::new(stellar_xdr::curr::ScSpecTypeResult {
+            ok_type: Box::new(ScSpecTypeDef::U32),
+            error_type: Box::new(ScSpecTypeDef::U32),
+        }));
+        let decoded = decoder.decode(&err_val, Some(&res_spec), None);
+        assert_eq!(decoded, json!({ "Err": 404 }));
+    }
 }

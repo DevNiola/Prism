@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { SessionStore, TraceSnapshot } from "../session-store";
 import { checkReplayBudget } from "../budget";
+import { sessionAuthMiddleware, signSessionToken } from "../middleware";
 
 // ---------------------------------------------------------------------------
 // Request / response schemas
@@ -93,11 +94,17 @@ export async function sessionRoutes(app: FastifyInstance) {
     const { txHash, network, wsUrl } = request.body;
 
     const meta = await store.create({ txHash, network, wsUrl });
+    const jwtToken = signSessionToken({
+      sessionId: meta.sessionId,
+      txHash,
+      network,
+    });
 
-    // Return the full meta to the CLI (token is only revealed on creation).
+    // Return the full meta and signed JWT to the client.
     return reply.status(201).send({
       sessionId: meta.sessionId,
-      token: meta.token,
+      token: jwtToken,
+      rawToken: meta.token,
       wsUrl: meta.wsUrl,
       createdAt: meta.createdAt,
     });
@@ -105,14 +112,17 @@ export async function sessionRoutes(app: FastifyInstance) {
 
   // ------------------------------------------------------------------
   // GET /api/session/:sessionId
-  // Frontend polls / bootstraps from this endpoint.  Token is NOT
-  // returned here – it is only issued to the CLI at creation time.
+  // Frontend polls / bootstraps from this endpoint.
+  // Protected with JWT authentication.
   // ------------------------------------------------------------------
   app.get<{
     Params: { sessionId: string };
   }>(
     "/session/:sessionId",
-    { schema: sessionIdParamSchema },
+    {
+      schema: sessionIdParamSchema,
+      preHandler: [sessionAuthMiddleware as any],
+    },
     async (request, reply) => {
       const { sessionId } = request.params;
 

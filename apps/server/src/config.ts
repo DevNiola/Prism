@@ -8,6 +8,9 @@ type ServerConfig = {
   redisUrl: string;
   sorobanRpcUrl: string;
   gratBinaryPath: string;
+  jwtSecret: string;
+  disableSessionAuth: boolean;
+  gracefulShutdownTimeoutMs: number;
   ai: {
     apiKey: string;
     apiBaseUrl: string;
@@ -118,6 +121,9 @@ export const config: ServerConfig = {
     ["http:", "https:"],
   ),
   gratBinaryPath: stringValue("GRAT_BINARY", "grat"),
+  jwtSecret: stringValue("JWT_SECRET", "prism-default-jwt-secret-session-auth"),
+  disableSessionAuth: environment.DISABLE_SESSION_AUTH === "true",
+  gracefulShutdownTimeoutMs: numberValue("SHUTDOWN_TIMEOUT_MS", 30_000, { integer: true, min: 1000 }),
 
   ai: {
     apiKey: environment.AI_API_KEY?.trim() || "",
@@ -169,3 +175,12 @@ export const config: ServerConfig = {
     dedupWindowMs: numberValue("DEDUP_WINDOW_MS", 10_000, { integer: true, min: 1 }),
   },
 };
+
+export function assertValidConfig(cfg: ServerConfig): void {
+  if (!cfg.port || cfg.port < 1 || cfg.port > 65535) {
+    throw new Error(`Invalid port: ${cfg.port}`);
+  }
+  if (!cfg.redisUrl) {
+    throw new Error("Missing redisUrl");
+  }
+}
