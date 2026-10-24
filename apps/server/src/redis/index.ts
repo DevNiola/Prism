@@ -1,6 +1,7 @@
 export {
   getRedis,
   closeRedis,
+  getCircuitBreakerState,
   cacheSet,
   cacheGet,
   cacheDel,

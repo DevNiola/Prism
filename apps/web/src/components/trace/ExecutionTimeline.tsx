@@ -79,18 +79,18 @@ export function ExecutionTimeline({
     resourceProfile.write_bytes / resourceProfile.write_limit > 0.9;
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-white rounded-lg shadow p-4 md:p-6 w-full overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <h2 className="text-xl font-semibold">Execution Timeline</h2>
         {(isApproachingReadLimit || isApproachingWriteLimit) && (
-          <span className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full flex items-center">
+          <span className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full flex items-center self-start sm:self-auto">
             <span className="mr-1">⚠️</span>
             Storage IO Warning (Approaching limit)
           </span>
         )}
       </div>
       <div
-        className="space-y-2 max-h-[600px] overflow-y-auto pr-1"
+        className="space-y-2 max-h-[600px] overflow-y-auto overflow-x-auto pr-1 -mx-2 px-2 sm:mx-0 sm:px-0"
         style={{
           scrollBehavior: "smooth",
         }}
@@ -105,7 +105,7 @@ export function ExecutionTimeline({
               style={{
                 transitionDuration: `${transitionDurationMs}ms`,
               }}
-              className={`p-3 border rounded cursor-pointer transition-all ${
+              className={`min-w-[280px] p-3 border rounded cursor-pointer transition-all ${
                 isActive
                   ? "bg-purple-50 border-purple-500 shadow-sm translate-x-1 border-l-4 border-l-purple-600"
                   : "border-gray-200 hover:bg-gray-50"

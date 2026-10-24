@@ -66,8 +66,8 @@ export default function TracePage() {
   };
 
   return (
-    <main className="container mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Execution Trace</h1>
+    <main className="container mx-auto px-4 sm:px-6 py-6 max-w-full overflow-x-hidden">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-6">Execution Trace</h1>
 
       <form onSubmit={handleSubmit} className="mb-8 space-y-4">
         <div>
