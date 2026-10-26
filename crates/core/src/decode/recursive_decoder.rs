@@ -8,8 +8,9 @@
 
 use crate::decode::scval_to_json;
 use crate::spec::decoder::{ContractSpec, ContractStructDef};
+use crate::types::report::DiagnosticReport;
 use serde_json::{json, Map, Value};
-use stellar_xdr::curr::{ScSpecTypeDef, ScVal};
+use stellar_xdr::curr::{ContractEventBody, DiagnosticEvent, ScSpecTypeDef, ScVal};
 
 /// Carries the type specification for one value being decoded, together with
 /// the full contract spec needed to resolve any user-defined types (`Udt`)
@@ -504,4 +505,147 @@ mod tests {
             json!({"inner": {"status": "Active", "pair": [2, 3]}})
         );
     }
+
+    #[test]
+    fn test_deeply_nested_contract_calls_3_plus_levels() {
+        use stellar_xdr::curr::{ContractEvent, ContractEventBody, ContractEventType, ExtensionPoint, Hash, ScVec, StringM};
+
+        fn make_event(contract: [u8; 32], topic_strings: &[&str]) -> DiagnosticEvent {
+            let topics: Vec<ScVal> = topic_strings
+                .iter()
+                .map(|t| symbol(t))
+                .collect();
+            DiagnosticEvent {
+                in_successful_contract_call: true,
+                event: ContractEvent {
+                    ext: ExtensionPoint::V0,
+                    contract_id: Some(Hash(contract)),
+                    type_: ContractEventType::Diagnostic,
+                    body: ContractEventBody::V0(stellar_xdr::curr::ContractEventV0 {
+                        topics: ScVec::try_from(topics).unwrap(),
+                        data: ScVal::Void,
+                    }),
+                },
+            }
+        }
+
+        let addr_a = [1u8; 32];
+        let addr_b = [2u8; 32];
+        let addr_c = [3u8; 32];
+        let addr_d = [4u8; 32];
+
+        // Call sequence: A -> B -> C -> D (depth 1 -> 2 -> 3 -> 4)
+        let events = vec![
+            make_event(addr_a, &["fn_call", "deposit"]),
+            make_event(addr_b, &["fn_call", "transfer"]),
+            make_event(addr_c, &["fn_call", "validate"]),
+            make_event(addr_d, &["fn_call", "check_balance"]),
+            make_event(addr_d, &["error", "InsufficientFunds"]),
+            make_event(addr_d, &["fn_return"]),
+            make_event(addr_c, &["fn_return"]),
+            make_event(addr_b, &["fn_return"]),
+            make_event(addr_a, &["fn_return"]),
+        ];
+
+        let report = decode_nested_contract_calls(&events, None);
+
+        assert_eq!(report.call_depth, Some(0));
+        assert_eq!(report.nested_reports.len(), 1);
+
+        let level_1 = &report.nested_reports[0];
+        assert_eq!(level_1.call_depth, Some(1));
+        assert_eq!(level_1.error_name, "deposit");
+        assert_eq!(level_1.nested_reports.len(), 1);
+
+        let level_2 = &level_1.nested_reports[0];
+        assert_eq!(level_2.call_depth, Some(2));
+        assert_eq!(level_2.error_name, "transfer");
+        assert_eq!(level_2.nested_reports.len(), 1);
+
+        let level_3 = &level_2.nested_reports[0];
+        assert_eq!(level_3.call_depth, Some(3));
+        assert_eq!(level_3.error_name, "validate");
+        assert_eq!(level_3.nested_reports.len(), 1);
+
+        let level_4 = &level_3.nested_reports[0];
+        assert_eq!(level_4.call_depth, Some(4));
+        assert_eq!(level_4.error_name, "check_balance");
+        assert!(level_4.summary.contains("InsufficientFunds"));
+    }
+}
+
+/// Helper to convert ScVal topic to string
+fn topic_to_string(val: &ScVal) -> Option<String> {
+    match val {
+        ScVal::Symbol(sym) => Some(sym.to_string()),
+        ScVal::String(s) => Some(String::from_utf8_lossy(s.as_ref()).into_owned()),
+        ScVal::Address(addr) => Some(format!("{addr:?}")),
+        _ => None,
+    }
+}
+
+/// Recursively decode diagnostic events for nested contract calls (A -> B -> C -> D),
+/// building a hierarchical tree of DiagnosticReports with `call_depth` indicators.
+pub fn decode_nested_contract_calls(
+    events: &[DiagnosticEvent],
+    base_report: Option<DiagnosticReport>,
+) -> DiagnosticReport {
+    let mut root = base_report.unwrap_or_else(|| {
+        DiagnosticReport::new("Contract", 0, "RootInvocation", "Root transaction invocation")
+    });
+    root.call_depth = Some(0);
+
+    let mut stack: Vec<DiagnosticReport> = vec![root];
+
+    for event in events {
+        let ContractEventBody::V0(v0) = &event.event.body;
+        let contract_id = event
+            .event
+            .contract_id
+            .as_ref()
+            .map(|h| hex::encode(h.0))
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let topics: Vec<String> = v0.topics.iter().filter_map(topic_to_string).collect();
+        let topic_str = topics.first().map_or("", String::as_str);
+
+        match topic_str {
+            "fn_call" => {
+                let func_name = topics.get(1).cloned().unwrap_or_else(|| "unknown_fn".to_string());
+                let current_depth = stack.len();
+                let mut child_report = DiagnosticReport::new(
+                    "Contract",
+                    0,
+                    &func_name,
+                    &format!("Nested call to {}::{} at depth {}", contract_id, func_name, current_depth),
+                );
+                child_report.failing_contract_id = Some(contract_id);
+                child_report.call_depth = Some(current_depth);
+                stack.push(child_report);
+            }
+            "fn_return" => {
+                if stack.len() > 1 {
+                    let completed = stack.pop().unwrap();
+                    let parent = stack.last_mut().unwrap();
+                    parent.nested_reports.push(completed);
+                }
+            }
+            "error" | "panic" => {
+                let error_desc = topics.get(1).cloned().unwrap_or_else(|| topic_str.to_string());
+                if let Some(current) = stack.last_mut() {
+                    current.summary = format!("{}: {}", current.summary, error_desc);
+                    current.failing_contract_id = Some(contract_id);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Collapse any unclosed frames back into their parents
+    while stack.len() > 1 {
+        let child = stack.pop().unwrap();
+        stack.last_mut().unwrap().nested_reports.push(child);
+    }
+
+    stack.pop().unwrap()
 }

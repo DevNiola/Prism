@@ -1,3 +1,31 @@
+## [1.3.4](https://github.com/DevNiola/Prism/compare/v1.3.3...v1.3.4) (2026-10-24)
+
+
+### Bug Fixes
+
+* resolve return decoder tests, ws heartbeat, worker shutdown and session JWT ([c3e2fd6](https://github.com/DevNiola/Prism/commit/c3e2fd673bd4dd6ba2ed2cedd47387bd89409671)), closes [#109](https://github.com/DevNiola/Prism/issues/109) [#43](https://github.com/DevNiola/Prism/issues/43) [#42](https://github.com/DevNiola/Prism/issues/42) [#41](https://github.com/DevNiola/Prism/issues/41) [#109](https://github.com/DevNiola/Prism/issues/109) [#43](https://github.com/DevNiola/Prism/issues/43) [#42](https://github.com/DevNiola/Prism/issues/42) [#41](https://github.com/DevNiola/Prism/issues/41)
+
+## [1.3.3](https://github.com/DevNiola/Prism/compare/v1.3.2...v1.3.3) (2026-10-24)
+
+
+### Bug Fixes
+
+* resolve WASM metadata, recursive decoder, CORS and API versioning ([59390d0](https://github.com/DevNiola/Prism/commit/59390d0554a4a850d33a02eabafe1fc1daf605ac)), closes [#60](https://github.com/DevNiola/Prism/issues/60) [#59](https://github.com/DevNiola/Prism/issues/59) [#54](https://github.com/DevNiola/Prism/issues/54) [#53](https://github.com/DevNiola/Prism/issues/53) [#60](https://github.com/DevNiola/Prism/issues/60) [#59](https://github.com/DevNiola/Prism/issues/59) [#54](https://github.com/DevNiola/Prism/issues/54) [#53](https://github.com/DevNiola/Prism/issues/53)
+
+## [1.3.2](https://github.com/DevNiola/Prism/compare/v1.3.1...v1.3.2) (2026-10-24)
+
+
+### Bug Fixes
+
+* resolve replay validation, structured logging, cache invalidation and request tracing ([ceeeb2b](https://github.com/DevNiola/Prism/commit/ceeeb2b22b4ddb3413dc570f85f67f5cedcea474)), closes [#48](https://github.com/DevNiola/Prism/issues/48) [#47](https://github.com/DevNiola/Prism/issues/47) [#46](https://github.com/DevNiola/Prism/issues/46) [#45](https://github.com/DevNiola/Prism/issues/45) [#48](https://github.com/DevNiola/Prism/issues/48) [#47](https://github.com/DevNiola/Prism/issues/47) [#46](https://github.com/DevNiola/Prism/issues/46) [#45](https://github.com/DevNiola/Prism/issues/45)
+
+## [1.3.1](https://github.com/DevNiola/Prism/compare/v1.3.0...v1.3.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* resolve redis circuit breaker, rate limiting, report export and mobile responsive layout ([8976f9c](https://github.com/DevNiola/Prism/commit/8976f9c03de5b266bf8fdd46744f246c711d343c)), closes [#44](https://github.com/DevNiola/Prism/issues/44) [#40](https://github.com/DevNiola/Prism/issues/40) [#39](https://github.com/DevNiola/Prism/issues/39) [#38](https://github.com/DevNiola/Prism/issues/38) [#44](https://github.com/DevNiola/Prism/issues/44) [#40](https://github.com/DevNiola/Prism/issues/40) [#39](https://github.com/DevNiola/Prism/issues/39) [#38](https://github.com/DevNiola/Prism/issues/38)
+
 # [1.3.0](https://github.com/DevNiola/Prism/compare/v1.2.0...v1.3.0) (2026-10-23)
 
 

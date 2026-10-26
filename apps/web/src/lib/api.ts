@@ -3,7 +3,7 @@ const API_BASE =
   (process.env.NODE_ENV === "development" ? "http://localhost:3001" : "");
 
 export async function requestReplay(txHash: string, network: string) {
-  const res = await fetch(`${API_BASE}/api/replay`, {
+  const res = await fetch(`${API_BASE}/v1/api/replay`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ txHash, network }),
@@ -12,7 +12,7 @@ export async function requestReplay(txHash: string, network: string) {
 }
 
 export async function getHealth() {
-  const res = await fetch(`${API_BASE}/health`);
+  const res = await fetch(`${API_BASE}/v1/health`);
   return res.json();
 }
 
@@ -26,7 +26,7 @@ export async function getSession(
   sessionId: string,
 ): Promise<SessionResponse | null> {
   const res = await fetch(
-    `${API_BASE}/api/session/${encodeURIComponent(sessionId)}`,
+    `${API_BASE}/v1/api/session/${encodeURIComponent(sessionId)}`,
   );
 
   if (res.status === 404) return null;

@@ -23,12 +23,8 @@ export default function DebugPage() {
   ];
 
   return (
-    <main className="container mx-auto p-6">
-      <div className="mb-4">
-        <Breadcrumbs items={breadcrumbs} />
-      </div>
-
-      <h1 className="mb-2 text-3xl font-bold">Interactive Debugger</h1>
+    <main className="container mx-auto px-4 sm:px-6 py-6 max-w-full overflow-x-hidden">
+      <h1 className="mb-2 text-2xl sm:text-3xl font-bold">Interactive Debugger</h1>
       <EmptyState
         title="Start with an execution trace"
         description="Load a transaction in Trace to inspect its execution steps and state changes."
