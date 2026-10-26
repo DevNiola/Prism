@@ -22,7 +22,7 @@ jobs:
       CARGO_TARGET_DIR: ${{ runner.temp }}/cargo-target
     steps:
       - name: Check out pull request
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
