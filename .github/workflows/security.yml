@@ -81,7 +81,7 @@ jobs:
             "${{ matrix.context }}"
       - name: Scan image with Trivy
         if: hashFiles(matrix.dockerfile) != ''
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: prism-${{ matrix.app }}:security-scan
           format: table
