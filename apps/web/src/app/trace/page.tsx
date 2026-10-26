@@ -8,6 +8,7 @@ import { ResourceProfile } from "@/components/trace/ResourceProfile";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import Skeleton from "@/components/shared/Skeleton";
 import EmptyState from "@/components/shared/EmptyState";
+import Breadcrumbs from "@/components/shared/Breadcrumbs";
 import { useToast } from "@/hooks/useToast";
 
 /** Mirrors the Transaction Info card so the page keeps its height while the

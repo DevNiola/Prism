@@ -1,5 +1,6 @@
 import Skeleton from "@/components/shared/Skeleton";
 import type { DiagnosticEventEntry } from "@/lib/types";
+import { SeverityBadge, getSeverityMeta } from "@/components/shared/SeverityBadge";
 
 interface DiagnosticEventsProps {
   events?: DiagnosticEventEntry[];
@@ -9,15 +10,20 @@ interface DiagnosticEventsProps {
 const EVENT_ROWS = 3;
 
 function eventTypeStyles(eventType: string): string {
-  switch (eventType.toLowerCase()) {
+  const norm = eventType.toLowerCase();
+  switch (norm) {
+    case "error":
+    case "panic":
+      return "bg-red-100 text-red-800 border-red-300";
+    case "fatal":
+      return "bg-red-950 text-red-200 border-red-900";
     case "contract":
-      return "bg-blue-100 text-blue-800";
+      return "bg-blue-100 text-blue-800 border-blue-200";
     case "system":
-      return "bg-purple-100 text-purple-800";
+      return "bg-amber-100 text-amber-800 border-amber-300";
     case "debug":
-      return "bg-gray-100 text-gray-800";
     default:
-      return "bg-amber-100 text-amber-800";
+      return "bg-gray-100 text-gray-800 border-gray-200";
   }
 }
 
