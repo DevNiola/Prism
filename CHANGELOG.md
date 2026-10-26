@@ -1,3 +1,10 @@
+## [1.3.5](https://github.com/DevNiola/Prism/compare/v1.3.4...v1.3.5) (2026-10-26)
+
+
+### Bug Fixes
+
+* resolve breadcrumbs, resource charts, severity styling and cli snapshot tests ([20c712a](https://github.com/DevNiola/Prism/commit/20c712ad6b599e788ef147dae34b00bcae88b8ef)), closes [#118](https://github.com/DevNiola/Prism/issues/118) [#115](https://github.com/DevNiola/Prism/issues/115) [#114](https://github.com/DevNiola/Prism/issues/114) [#110](https://github.com/DevNiola/Prism/issues/110) [#118](https://github.com/DevNiola/Prism/issues/118) [#115](https://github.com/DevNiola/Prism/issues/115) [#114](https://github.com/DevNiola/Prism/issues/114) [#110](https://github.com/DevNiola/Prism/issues/110)
+
 ## [1.3.4](https://github.com/DevNiola/Prism/compare/v1.3.3...v1.3.4) (2026-10-24)
 
 
