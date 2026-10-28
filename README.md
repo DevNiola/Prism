@@ -41,6 +41,14 @@ Prism is organized as a modular monorepo:
 
 ## Quick Start
 
+### Download Pre-built Binaries
+
+Pre-compiled, standalone CLI binaries for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel), and Windows are attached to every release:
+
+👉 **[Download from Releases](https://github.com/DevNiola/Prism/releases)**
+
+### Build from Source
+
 1. **Prerequisites**:
    - Rust 1.77 or higher.
    - Node.js 20 or higher.
