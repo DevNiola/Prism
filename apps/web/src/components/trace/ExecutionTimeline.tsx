@@ -57,7 +57,7 @@ export function ExecutionTimeline({
 
   // Smooth scroll to keep current step visible in timeline
   useEffect(() => {
-    if (activeItemRef.current) {
+    if (activeItemRef.current && typeof activeItemRef.current.scrollIntoView === "function") {
       activeItemRef.current.scrollIntoView({
         behavior: "smooth",
         block: "nearest",

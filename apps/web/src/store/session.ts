@@ -76,3 +76,41 @@ export const useSessionStore = create<SessionState>()(
     }
   )
 );
+
+/**
+ * Serializes transaction hash and network into URL search params for session sharing.
+ */
+export function serializeSessionToUrl(
+  txHash: string,
+  network: Network,
+  baseUrl?: string
+): string {
+  const base =
+    baseUrl ||
+    (typeof window !== "undefined"
+      ? window.location.href
+      : "https://prism.stellar.org/decode");
+  const url = new URL(base);
+  url.searchParams.set("tx", txHash);
+  url.searchParams.set("network", network);
+  return url.toString();
+}
+
+/**
+ * Parses shared session query params from a search string or URL.
+ */
+export function parseSessionFromUrl(searchOrUrl: string): {
+  tx: string | null;
+  network: Network | null;
+} {
+  try {
+    const searchParams = searchOrUrl.startsWith("http")
+      ? new URL(searchOrUrl).searchParams
+      : new URLSearchParams(searchOrUrl);
+    const tx = searchParams.get("tx") || searchParams.get("txHash");
+    const network = (searchParams.get("network") as Network) || null;
+    return { tx, network };
+  } catch {
+    return { tx: null, network: null };
+  }
+}

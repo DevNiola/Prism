@@ -7,11 +7,11 @@ import {
   Footer,
   DecodeForm,
   ErrorCard,
+  ErrorCardSkeleton,
   ContractErrorView,
   ContextSummary,
 } from "@/components";
-import Button from "@/components/shared/Button";
-import type { DiagnosticReport } from "@/lib/types";
+import type { DiagnosticReport, Network } from "@/lib/types";
 import { useSessionStore } from "@/store/session";
 import { useNetworkStore } from "@/store/network";
 import EmptyState from "@/components/shared/EmptyState";
@@ -19,35 +19,67 @@ import EmptyState from "@/components/shared/EmptyState";
 function DecodePageContent() {
   const [activeTab, setActiveTab] = useState<"diagnose" | "lookup">("diagnose");
   const [report, setReport] = useState<DiagnosticReport | null>(null);
+  const [optimisticReport, setOptimisticReport] = useState<DiagnosticReport | null>(null);
+  const [shareCopied, setShareCopied] = useState<boolean>(false);
 
   const { addToHistory, history } = useSessionStore();
-  const { network } = useNetworkStore();
+  const { network, setNetwork } = useNetworkStore();
 
   const searchParams = useSearchParams();
-  const txHashParam = searchParams.get("txHash");
+  const txHashParam = searchParams.get("tx") || searchParams.get("txHash");
+  const networkParam = searchParams.get("network");
 
-  // If the user navigated here from the history list, pre-load the last matching report
+  // On mount / URL param change: sync network & restore session if present (Issue #23)
   useEffect(() => {
+    if (networkParam && networkParam !== network) {
+      setNetwork(networkParam as Network);
+    }
+
     if (txHashParam) {
       const entry = history.find((h) => h.txHash === txHashParam);
       if (entry) {
         setReport(entry.report);
       }
     }
-    // Only run on initial mount / txHashParam change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [txHashParam]);
+  }, [txHashParam, networkParam, network, history, setNetwork]);
+
+  function handleOptimistic(placeholder: DiagnosticReport | null) {
+    setOptimisticReport(placeholder);
+  }
 
   function handleDecode(decoded: DiagnosticReport | null) {
+    setOptimisticReport(null);
     setReport(decoded);
     if (decoded) {
-      // Use the txHash from the URL param if present; otherwise generate a placeholder key
       const txHash =
         txHashParam ??
         `${decoded.error_category.toLowerCase()}-${decoded.error_code}-${Date.now()}`;
       addToHistory(txHash, network, decoded);
+
+      // Serialize tx and network into URL search params for session link sharing (Issue #23)
+      if (typeof window !== "undefined") {
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set("tx", txHash);
+        nextUrl.searchParams.set("network", network);
+        window.history.replaceState({}, "", nextUrl.toString());
+      }
     }
   }
+
+  const handleShare = () => {
+    if (typeof window !== "undefined") {
+      const nextUrl = new URL(window.location.href);
+      if (report) {
+        const currentTx =
+          report.transaction_context?.tx_hash || txHashParam || "session";
+        nextUrl.searchParams.set("tx", currentTx);
+        nextUrl.searchParams.set("network", network);
+      }
+      navigator.clipboard.writeText(nextUrl.toString());
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-violet-500/30 selection:text-violet-200">
@@ -99,8 +131,19 @@ function DecodePageContent() {
         <div className="transition-all duration-300">
           {activeTab === "diagnose" ? (
             <div className="space-y-6">
-              <DecodeForm onDecode={handleDecode} />
-              {!report && (
+              <DecodeForm onDecode={handleDecode} onOptimistic={handleOptimistic} />
+
+              {/* Optimistic UI skeleton rendered while request is in flight */}
+              {optimisticReport && !report && (
+                <div className="animate-in fade-in duration-200">
+                  <ErrorCardSkeleton
+                    txHash={optimisticReport.transaction_context?.tx_hash ?? txHashParam ?? undefined}
+                    indicatorText="Decoding in progress (<100ms feedback)..."
+                  />
+                </div>
+              )}
+
+              {!report && !optimisticReport && (
                 <EmptyState
                   title="Ready to decode an error"
                   description="Choose an error category and enter its code above to see a diagnosis and suggested fixes."
@@ -124,8 +167,20 @@ function DecodePageContent() {
                   }
                 />
               )}
+
               {report && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleShare}
+                      className="inline-flex items-center gap-2 rounded-lg border border-violet-500/40 bg-violet-950/40 px-3.5 py-1.5 text-xs font-semibold text-violet-300 hover:bg-violet-900/60 transition-colors shadow-sm"
+                      title="Share session with query-param state"
+                    >
+                      <span>🔗</span>
+                      <span>{shareCopied ? "Link Copied!" : "Share Session"}</span>
+                    </button>
+                  </div>
                   <ErrorCard report={report} />
                   {report.transaction_context && (
                     <ContextSummary context={report.transaction_context} />
