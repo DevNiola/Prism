@@ -25,8 +25,14 @@ impl EnumDecoder {
         if enum_def.name.eq_ignore_ascii_case("Option") {
             return true;
         }
-        let has_none = enum_def.cases.iter().any(|c| c.name.eq_ignore_ascii_case("None"));
-        let has_some = enum_def.cases.iter().any(|c| c.name.eq_ignore_ascii_case("Some"));
+        let has_none = enum_def
+            .cases
+            .iter()
+            .any(|c| c.name.eq_ignore_ascii_case("None"));
+        let has_some = enum_def
+            .cases
+            .iter()
+            .any(|c| c.name.eq_ignore_ascii_case("Some"));
         has_none && has_some && enum_def.cases.len() == 2
     }
 
@@ -35,8 +41,14 @@ impl EnumDecoder {
         if enum_def.name.eq_ignore_ascii_case("Result") {
             return true;
         }
-        let has_ok = enum_def.cases.iter().any(|c| c.name.eq_ignore_ascii_case("Ok"));
-        let has_err = enum_def.cases.iter().any(|c| c.name.eq_ignore_ascii_case("Err"));
+        let has_ok = enum_def
+            .cases
+            .iter()
+            .any(|c| c.name.eq_ignore_ascii_case("Ok"));
+        let has_err = enum_def
+            .cases
+            .iter()
+            .any(|c| c.name.eq_ignore_ascii_case("Err"));
         has_ok && has_err && enum_def.cases.len() == 2
     }
 
@@ -83,10 +95,8 @@ impl EnumDecoder {
                     return scval_to_json(val, None);
                 }
 
-                let payload: Vec<Value> = values[1..]
-                    .iter()
-                    .map(|v| scval_to_json(v, None))
-                    .collect();
+                let payload: Vec<Value> =
+                    values[1..].iter().map(|v| scval_to_json(v, None)).collect();
                 match payload.as_slice() {
                     [] => json!(variant_name),
                     [value] => json!({ variant_name: value }),
@@ -266,7 +276,6 @@ mod tests {
         let decoded_err = decoder.decode(&err_vec, &res_def);
         assert_eq!(decoded_err, json!({ "Err": "NotFound" }));
     }
-}
 
     fn symbol(value: &str) -> ScVal {
         ScVal::Symbol(ScSymbol(value.try_into().unwrap()))
