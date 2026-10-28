@@ -89,9 +89,7 @@ export default function ErrorCard({ report }: ErrorCardProps) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded border px-2.5 py-1 text-xs font-semibold uppercase ${severity.text} ${severity.panel}`}>
-              {report.severity}
-            </span>
+            <SeverityBadge severity={report.severity} />
             <button
               type="button"
               onClick={handleExportJson}
@@ -168,6 +166,55 @@ export default function ErrorCard({ report }: ErrorCardProps) {
         </section>
 
         <SuggestedFixes fixes={report.suggested_fixes ?? []} />
+      </div>
+    </article>
+  );
+}
+
+export function ErrorCardSkeleton({
+  txHash,
+  indicatorText = "Decoding transaction...",
+}: {
+  txHash?: string;
+  indicatorText?: string;
+}) {
+  return (
+    <article
+      aria-busy="true"
+      aria-label="Loading diagnostic report"
+      className="overflow-hidden rounded-xl border border-violet-800/40 bg-slate-900 shadow-xl transition-all animate-pulse"
+    >
+      <div className="border-b border-slate-800 bg-slate-950/40 p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-violet-400 animate-ping" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-violet-400">
+                {indicatorText}
+              </span>
+            </div>
+            <div className="h-7 w-64 rounded bg-slate-800" />
+            {txHash && (
+              <p className="font-mono text-xs text-slate-500">
+                Hash: {txHash}
+              </p>
+            )}
+          </div>
+          <div className="h-6 w-24 rounded bg-slate-800" />
+        </div>
+      </div>
+
+      <div className="space-y-6 p-6">
+        <div className="space-y-2">
+          <div className="h-4 w-3/4 rounded bg-slate-800" />
+          <div className="h-4 w-1/2 rounded bg-slate-800/70" />
+        </div>
+
+        <div className="rounded-lg border border-slate-800/80 bg-slate-950/30 p-4 space-y-3">
+          <div className="h-4 w-1/3 rounded bg-slate-800" />
+          <div className="h-3 w-5/6 rounded bg-slate-800/60" />
+          <div className="h-3 w-4/6 rounded bg-slate-800/60" />
+        </div>
       </div>
     </article>
   );

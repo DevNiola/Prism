@@ -5,12 +5,14 @@ import type { DiagnosticReport } from "@/lib/types";
 
 interface DecodeFormProps {
   onDecode: (report: DiagnosticReport | null) => void;
+  onOptimistic?: (placeholder: DiagnosticReport | null) => void;
 }
 
-export default function DecodeForm({ onDecode }: DecodeFormProps) {
+export default function DecodeForm({ onDecode, onOptimistic }: DecodeFormProps) {
   const [category, setCategory] = useState<string>("contract");
   const [code, setCode] = useState<string>("0");
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const mockDecode = (cat: string, codeVal: number): DiagnosticReport => {
     switch (cat.toLowerCase()) {
@@ -188,12 +190,42 @@ export default function DecodeForm({ onDecode }: DecodeFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
+
+    const parsedCode = Number(code);
+    if (isNaN(parsedCode) || parsedCode < 0) {
+      if (onOptimistic) onOptimistic(null);
+      setFormError("Please enter a valid non-negative numeric error code.");
+      return;
+    }
+
     setIsLoading(true);
+    // Instant feedback within 100ms
+    if (onOptimistic) {
+      onOptimistic({
+        error_category: category,
+        error_code: parsedCode,
+        error_name: "Diagnosing...",
+        summary: `Analyzing ${category} error code ${parsedCode}...`,
+        detailed_explanation: "Searching error definitions and remediation guides...",
+        severity: "info",
+        root_causes: [],
+        suggested_fixes: [],
+      });
+    }
+
     setTimeout(() => {
-      const decodedReport = mockDecode(category, Number(code));
-      onDecode(decodedReport);
-      setIsLoading(false);
-    }, 500);
+      try {
+        const decodedReport = mockDecode(category, parsedCode);
+        onDecode(decodedReport);
+      } catch (err) {
+        if (onOptimistic) onOptimistic(null);
+        setFormError(err instanceof Error ? err.message : "Failed to decode error code.");
+        onDecode(null);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 400);
   };
 
   return (
@@ -240,6 +272,16 @@ export default function DecodeForm({ onDecode }: DecodeFormProps) {
             />
           </div>
         </div>
+
+        {formError && (
+          <div
+            role="alert"
+            className="flex items-center gap-2 rounded-lg border border-red-500/50 bg-red-950/40 px-3 py-2 text-xs text-red-300 animate-in fade-in duration-200"
+          >
+            <span>⚠️</span>
+            <span>{formError}</span>
+          </div>
+        )}
 
         <div className="flex justify-end pt-2">
           <button
