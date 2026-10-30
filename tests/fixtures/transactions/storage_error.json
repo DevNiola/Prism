@@ -1,0 +1,38 @@
+{
+  "status": "FAILED",
+  "hash": "4444555566667777888899990000aaaabbbbccccddddeeeeffff111122223333",
+  "ledger": 52003,
+  "resultXdr": "AAAAAAAAAGT/////AAAAAQAAAAAAAAAB////9AAAAAA=",
+  "envelopeXdr": "AAAAAgAAAABlXg...",
+  "operation_count": 1,
+  "operations": [
+    {
+      "index": 0,
+      "type": "InvokeHostFunction",
+      "status": "FAILED",
+      "contract_id": "CA3D5KRYMCMCZVACADONC45J7U674U7QW4Q7N7R5V2W273FGBN7M44U7",
+      "function_name": "get_user_state"
+    }
+  ],
+  "diagnosticEvents": [
+    {
+      "type": "storage",
+      "data": {
+        "key_type": "Instance",
+        "key": "UserConfig",
+        "code": 1
+      }
+    }
+  ],
+  "expected_report": {
+    "error_category": "Storage",
+    "error_code": 1,
+    "error_name": "EntryNotFound",
+    "severity": "Error",
+    "summary": "Storage entry not found in the ledger.",
+    "suggested_fixes": [
+      "Verify storage entry TTL has not expired",
+      "Ensure instance data is initialized before accessing"
+    ]
+  }
+}
