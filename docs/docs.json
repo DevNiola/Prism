@@ -78,7 +78,8 @@
               "guides/debugging-transactions",
               "guides/resource-optimization",
               "guides/regression-testing",
-              "guides/contributing-taxonomy"
+              "guides/contributing-taxonomy",
+              "guides/contributing-taxonomy-detailed"
             ]
           }
         ]
