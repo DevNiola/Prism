@@ -1,0 +1,37 @@
+{
+  "status": "FAILED",
+  "hash": "555566667777888899990000aaaabbbbccccddddeeeeffff1111222233334444",
+  "ledger": 52004,
+  "resultXdr": "AAAAAAAAAGT/////AAAAAQAAAAAAAAAB////9AAAAAA=",
+  "envelopeXdr": "AAAAAgAAAABlXg...",
+  "operation_count": 1,
+  "operations": [
+    {
+      "index": 0,
+      "type": "InvokeHostFunction",
+      "status": "FAILED",
+      "contract_id": "CA3D5KRYMCMCZVACADONC45J7U674U7QW4Q7N7R5V2W273FGBN7M44U7",
+      "function_name": "divide"
+    }
+  ],
+  "diagnosticEvents": [
+    {
+      "type": "wasm",
+      "data": {
+        "code": 1,
+        "trap": "Unreachable"
+      }
+    }
+  ],
+  "expected_report": {
+    "error_category": "WASM",
+    "error_code": 1,
+    "error_name": "Unreachable",
+    "severity": "Error",
+    "summary": "WASM trap: the contract hit an `unreachable` instruction, usually from a Rust panic or a failed assertion.",
+    "suggested_fixes": [
+      "Review contract panic/assert! conditions and bounds checks in compiled WASM",
+      "Ensure divisors are non-zero before integer division"
+    ]
+  }
+}

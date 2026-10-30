@@ -1,0 +1,59 @@
+{
+  "status": "FAILED",
+  "hash": "33334444555566667777888899990000aaaabbbbccccddddeeeeffff11112222",
+  "ledger": 52002,
+  "resultXdr": "AAAAAAAAAGT/////AAAAAwAAAAAAAAABAAAAAAAAAAAAAAAB////9AAAAAQAAAAAAAAAAQAAAAAAAAAB",
+  "envelopeXdr": "AAAAAgAAAABlXg...",
+  "operation_count": 3,
+  "failing_operation_index": 1,
+  "operations": [
+    {
+      "index": 0,
+      "type": "Payment",
+      "status": "ROLLED_BACK",
+      "source_account": "GABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC",
+      "destination": "GDEST123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC",
+      "amount": "10000000"
+    },
+    {
+      "index": 1,
+      "type": "InvokeHostFunction",
+      "status": "FAILED",
+      "contract_id": "CA3D5KRYMCMCZVACADONC45J7U674U7QW4Q7N7R5V2W273FGBN7M44U7",
+      "function_name": "swap",
+      "error_code": 4,
+      "error_name": "InsufficientAllowance"
+    },
+    {
+      "index": 2,
+      "type": "SetOptions",
+      "status": "ABORTED",
+      "source_account": "GABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC"
+    }
+  ],
+  "cross_operation_link": {
+    "root_cause_op": 1,
+    "rolled_back_ops": [0],
+    "unexecuted_ops": [2],
+    "explanation": "Operation 1 failed with InsufficientAllowance, triggering atomic transaction rollback of Operation 0 and preventing Operation 2 from executing."
+  },
+  "diagnosticEvents": [
+    {
+      "type": "contract_error",
+      "data": {
+        "contract_id": "CA3D5KRYMCMCZVACADONC45J7U674U7QW4Q7N7R5V2W273FGBN7M44U7",
+        "code": 4
+      }
+    }
+  ],
+  "expected_report": {
+    "error_category": "Contract",
+    "error_code": 4,
+    "error_name": "InsufficientAllowance",
+    "severity": "Error",
+    "summary": "Operation 1 (InvokeHostFunction) failed causing atomic transaction rollback.",
+    "suggested_fixes": [
+      "Approve required token allowance before submitting the swap operation"
+    ]
+  }
+}

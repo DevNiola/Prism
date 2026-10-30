@@ -1,0 +1,43 @@
+{
+  "status": "SUCCESS",
+  "hash": "1111222233334444555566667777888899990000aaaabbbbccccddddeeeeffff",
+  "ledger": 52000,
+  "resultXdr": "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAABAAAAAAAAAAA=",
+  "envelopeXdr": "AAAAAgAAAABlXg...",
+  "operation_count": 1,
+  "operations": [
+    {
+      "index": 0,
+      "type": "InvokeHostFunction",
+      "status": "SUCCESS",
+      "contract_id": "CA3D5KRYMCMCZVACADONC45J7U674U7QW4Q7N7R5V2W273FGBN7M44U7",
+      "function_name": "initialize"
+    }
+  ],
+  "diagnosticEvents": [
+    {
+      "type": "contract_event",
+      "data": {
+        "contract_id": "CA3D5KRYMCMCZVACADONC45J7U674U7QW4Q7N7R5V2W273FGBN7M44U7",
+        "topics": ["INIT"],
+        "data": "1"
+      }
+    }
+  ],
+  "auth_entries": [
+    {
+      "auth_type": "Ed25519",
+      "address": "GABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC",
+      "required": true,
+      "provided": true
+    }
+  ],
+  "expected_report": {
+    "error_category": "Success",
+    "error_code": 0,
+    "error_name": "OK",
+    "severity": "Info",
+    "summary": "Transaction executed and completed successfully.",
+    "suggested_fixes": []
+  }
+}

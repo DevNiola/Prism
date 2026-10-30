@@ -1,0 +1,50 @@
+{
+  "status": "SUCCESS",
+  "hash": "66667777888899990000aaaabbbbccccddddeeeeffff11112222333344445555",
+  "ledger": 52005,
+  "resultXdr": "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAABAAAAAAAAAAA=",
+  "envelopeXdr": "AAAAAgAAAABlXg...",
+  "operation_count": 1,
+  "operations": [
+    {
+      "index": 0,
+      "type": "InvokeHostFunction",
+      "status": "SUCCESS",
+      "contract_id": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+      "function_name": "transfer"
+    }
+  ],
+  "diagnosticEvents": [
+    {
+      "type": "contract",
+      "in_successful_contract_call": true,
+      "contract_id": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+      "topics": [
+        "TRANSFER",
+        "GABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC",
+        "GDEST123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC"
+      ],
+      "data": {
+        "amount": "5000000",
+        "symbol": "USDC"
+      }
+    }
+  ],
+  "decoded_events": [
+    {
+      "event_index": 0,
+      "topic": "TRANSFER",
+      "from": "GABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC",
+      "to": "GDEST123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC",
+      "amount": "5000000",
+      "symbol": "USDC"
+    }
+  ],
+  "expected_report": {
+    "error_category": "Success",
+    "error_code": 0,
+    "error_name": "OK",
+    "severity": "Info",
+    "summary": "Transfer event decoded successfully with 3 topics."
+  }
+}
