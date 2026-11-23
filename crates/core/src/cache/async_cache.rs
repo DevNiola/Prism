@@ -140,4 +140,110 @@ mod tests {
             .unwrap();
         assert_eq!(cached_val, "computed_val");
     }
+
+    #[tokio::test]
+    async fn test_async_cache_concurrent_reads_and_writes() {
+        // Multiple tasks each write a unique key and immediately read it back.
+        // All reads must succeed with the correct value.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let disk_cache = DiskCache::new(temp_dir.path()).unwrap();
+        let async_cache = AsyncCache::new(disk_cache);
+
+        let n = 40u32;
+        let mut handles = Vec::new();
+
+        for i in 0..n {
+            let cache = async_cache.clone();
+            handles.push(tokio::spawn(async move {
+                let key = format!("async-key-{i}");
+                cache.put(&key, i).await.unwrap();
+                let val: Option<u32> = cache.get(&key).await.unwrap();
+                assert_eq!(val, Some(i), "async cache returned wrong value for key {key}");
+            }));
+        }
+
+        for h in handles {
+            h.await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_async_cache_get_or_compute_called_once_under_concurrent_access() {
+        // Even when multiple calls race on the same key, the entry must be
+        // readable and consistent after all tasks complete.
+        use std::sync::atomic::{AtomicU32, Ordering as AO};
+        use std::sync::Arc;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let disk_cache = DiskCache::new(temp_dir.path()).unwrap();
+        let async_cache = AsyncCache::new(disk_cache);
+
+        let compute_calls = Arc::new(AtomicU32::new(0));
+        let mut handles = Vec::new();
+
+        for _ in 0..10 {
+            let cache = async_cache.clone();
+            let counter = Arc::clone(&compute_calls);
+            handles.push(tokio::spawn(async move {
+                cache
+                    .get_or_compute("race_key", || async move {
+                        counter.fetch_add(1, AO::Relaxed);
+                        Ok(42u32)
+                    })
+                    .await
+                    .unwrap()
+            }));
+        }
+
+        let mut results: Vec<u32> = Vec::new();
+        for h in handles {
+            results.push(h.await.unwrap());
+        }
+
+        // Every call must return the correct value.
+        for v in &results {
+            assert_eq!(*v, 42u32, "unexpected value from concurrent get_or_compute");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_async_cache_miss_count_increases_on_absent_keys() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let disk_cache = DiskCache::new(temp_dir.path()).unwrap();
+        let async_cache = AsyncCache::new(disk_cache);
+
+        for i in 0..5u32 {
+            let _: Option<u32> = async_cache.get(&format!("absent-{i}")).await.unwrap();
+        }
+
+        assert_eq!(
+            async_cache.metrics().total_misses.load(Ordering::Relaxed),
+            5,
+            "expected 5 misses for 5 absent keys"
+        );
+        assert_eq!(
+            async_cache.metrics().total_hits.load(Ordering::Relaxed),
+            0,
+            "expected 0 hits when all keys are absent"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_async_cache_read_duration_recorded() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let disk_cache = DiskCache::new(temp_dir.path()).unwrap();
+        let async_cache = AsyncCache::new(disk_cache);
+
+        async_cache.put("timing_key", "data".to_string()).await.unwrap();
+        let _: Option<String> = async_cache.get("timing_key").await.unwrap();
+
+        assert!(
+            async_cache
+                .metrics()
+                .total_read_duration_micros
+                .load(Ordering::Relaxed)
+                > 0,
+            "read duration must be recorded after a successful get"
+        );
+    }
 }

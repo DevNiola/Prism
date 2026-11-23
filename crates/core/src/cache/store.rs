@@ -447,7 +447,179 @@ mod tests {
     }
 
     #[test]
-    fn test_ttl_entry_expires_on_get() {
+    fn test_cache_ttl_expired_entry_not_returned_via_past_timestamp() {
+        // Write a TtlEntry with an expiry in the past directly to the backing file,
+        // then verify get() returns None without sleeping.
+        let dir = std::env::temp_dir().join("grat_test_ttl_past");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
+
+        // Build a payload with an already-expired timestamp (Unix second 1).
+        let expired_secs: u64 = 1;
+        let payload_data = b"stale_value";
+        let mut payload = Vec::with_capacity(TTL_HEADER_LEN + payload_data.len());
+        payload.extend_from_slice(&expired_secs.to_be_bytes());
+        payload.extend_from_slice(payload_data);
+
+        let path = store.entry_path(CacheCategory::WasmBlob, "stale_key", None);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(&path, &payload).unwrap();
+
+        assert_eq!(
+            store.get(CacheCategory::WasmBlob, "stale_key", None).unwrap(),
+            None,
+            "entry with past expiry must not be returned"
+        );
+
+        store.clear().unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_cache_ttl_live_entry_returned_via_future_timestamp() {
+        let dir = std::env::temp_dir().join("grat_test_ttl_future");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
+
+        let future_ts = now_secs().saturating_add(100_000);
+        let payload_data = b"live_value";
+        let mut payload = Vec::with_capacity(TTL_HEADER_LEN + payload_data.len());
+        payload.extend_from_slice(&future_ts.to_be_bytes());
+        payload.extend_from_slice(payload_data);
+
+        let path = store.entry_path(CacheCategory::WasmBlob, "live_key", None);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(&path, &payload).unwrap();
+
+        assert_eq!(
+            store.get(CacheCategory::WasmBlob, "live_key", None).unwrap(),
+            Some(b"live_value".to_vec()),
+            "entry with future expiry must be returned"
+        );
+
+        store.clear().unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_concurrent_reads_no_corruption() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let dir = std::env::temp_dir().join("grat_test_concurrent_read");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let store = Arc::new(CacheStore::with_max_size_bytes(dir.clone(), 10 * 1024 * 1024).unwrap());
+
+        // Pre-seed 20 keys.
+        for i in 0u32..20 {
+            let key = format!("key-{i}");
+            store.put(CacheCategory::LedgerEntry, &key, format!("value-{i}").as_bytes(), None).unwrap();
+        }
+
+        // 10 threads each read all 20 keys.
+        let mut handles = Vec::new();
+        for _ in 0..10 {
+            let s = Arc::clone(&store);
+            handles.push(thread::spawn(move || {
+                for i in 0u32..20 {
+                    let key = format!("key-{i}");
+                    let val = s.get(CacheCategory::LedgerEntry, &key, None).unwrap();
+                    let expected = format!("value-{i}");
+                    assert_eq!(
+                        val,
+                        Some(expected.as_bytes().to_vec()),
+                        "concurrent read corruption on key {key}"
+                    );
+                }
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        store.clear().unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_concurrent_independent_writers_no_loss() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let dir = std::env::temp_dir().join("grat_test_concurrent_write");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let store = Arc::new(CacheStore::with_max_size_bytes(dir.clone(), 10 * 1024 * 1024).unwrap());
+        let n = 20usize;
+
+        let mut handles = Vec::new();
+        for i in 0..n {
+            let s = Arc::clone(&store);
+            handles.push(thread::spawn(move || {
+                let key = format!("writer-key-{i}");
+                let value = format!("writer-val-{i}");
+                s.put(CacheCategory::WasmBlob, &key, value.as_bytes(), None).unwrap();
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        // All keys must be readable after all writers finish.
+        for i in 0..n {
+            let key = format!("writer-key-{i}");
+            let expected = format!("writer-val-{i}");
+            let val = store.get(CacheCategory::WasmBlob, &key, None).unwrap();
+            assert_eq!(
+                val,
+                Some(expected.as_bytes().to_vec()),
+                "key {key} was lost under concurrent writes"
+            );
+        }
+
+        store.clear().unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_lru_eviction_bounded_cache_size() {
+        // Insert enough entries to trigger LRU eviction and verify the cache
+        // never exceeds the configured size limit.
+        let dir = std::env::temp_dir().join("grat_test_lru_bounded");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // 48 bytes: each entry (4 payload + 8 header = 12 bytes) × 4 = 48
+        let store = CacheStore::with_max_size_bytes(dir.clone(), 48).unwrap();
+
+        for i in 0u32..8 {
+            let key = format!("k{i:04}");
+            store
+                .put(CacheCategory::WasmBlob, &key, &i.to_be_bytes(), None)
+                .unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        // The store must never have more bytes on disk than the limit.
+        let total: u64 = walk_dir_files(&store.cache_dir)
+            .iter()
+            .filter_map(|e| e.metadata().ok().map(|m| m.len()))
+            .sum();
+        assert!(
+            total <= 48,
+            "cache size {total} bytes exceeds the 48-byte limit after LRU eviction"
+        );
+
+        store.clear().unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+
         let dir = std::env::temp_dir().join("grat_test_ttl");
         let _ = std::fs::remove_dir_all(&dir);
         let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
