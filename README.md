@@ -49,6 +49,8 @@ cd Prism
 cargo build --release -p grat-cli
 ```
 
+If the source build fails, see the [Quickstart build note](docs/quickstart.mdx#clone-and-build).
+
 Verify the CLI with the result XDR from the checked-in budget failure fixture:
 
 ```bash

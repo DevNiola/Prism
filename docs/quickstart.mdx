@@ -14,6 +14,10 @@ cd Prism
 cargo build --release -p grat-cli
 ```
 
+<Note>
+  A clean checkout can currently fail at dependency resolution because the workspace requests the `next` feature from `stellar-xdr` 30. If you already have `grat` installed, use `grat` in place of `./target/release/grat` below.
+</Note>
+
 ## Verify the CLI with a fixture
 
 From the repository root, decode the `resultXdr` value from `tests/fixtures/transactions/budget_exceeded.json`:
