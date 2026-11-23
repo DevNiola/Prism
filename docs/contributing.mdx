@@ -31,6 +31,48 @@ Follow the [Installation from Source](/installation) guide to set up your local 
 3. Update documentation if you add new features or CLI flags.
 4. Submit your PR and wait for a maintainer review.
 
+## Commit messages and changelog
+
+Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
+for commit subjects that land on `main`. Use `type(scope): summary` with an
+optional scope. For a squash merge, follow the same convention in the final
+squash commit subject and preserve any breaking-change footer in its body.
+
+| Commit example | Release impact |
+| --- | --- |
+| `fix(replay): handle an empty footprint` | Patch |
+| `feat(cli): export replay profiles` | Minor |
+| `docs(cli): explain RPC overrides` | No release on its own |
+
+For a breaking change, include a `BREAKING CHANGE: <description>` footer
+after a blank line in the commit body. Describe the behavior that changed and
+how users can migrate. The current release analyzer uses semantic-release's
+default Angular preset, so use the footer even if the subject contains `!`.
+
+The [Release workflow](../.github/workflows/release.yml) runs on pushes to
+`main`. [Semantic-release](../.releaserc.json) analyzes commits since the
+last release tag and generates release notes when a commit warrants a release.
+It prepends the generated notes to `CHANGELOG.md`, publishes the GitHub
+release, and commits the changelog back to `main` in a
+`chore(release): <version> [skip ci]` commit. Treat the file as generated.
+Manual corrections to generated notes can be overwritten during regeneration.
+
+### Backfilling hotfix entries
+
+1. Check the hotfix tag, its GitHub release notes, and the commits included
+   in the release. Record the shipped version and link to the original fix.
+2. If the fix is absent from `main`, bring it in through a PR with a
+   `fix(scope): summary` commit. Mention the hotfix version and original PR
+   in the body so the next eligible release can trace the change.
+3. If the fix is already tagged and only the notes are missing, a maintainer
+   can amend that release's GitHub notes in place. Future semantic-release
+   runs analyze commits after the latest release tag and prepend a new
+   changelog section. For a correction to the historical
+   `CHANGELOG.md` section, use a dedicated, maintainer-reviewed backfill
+   PR with the shipped version and original fix link. Keep the existing
+   release tag and avoid an empty `fix:` commit that would publish another
+   patch.
+
 ## License
 
 By contributing, you agree that your work will be licensed under the project's [MIT License](/license).
