@@ -1,0 +1,39 @@
+---
+title: "Health API"
+description: "Check Redis, Soroban RPC, and replay worker queue health."
+---
+
+Set up your shell using the [curl examples overview](/api/curl-examples).
+
+## GET /health
+
+If any dependency is down, the server responds with HTTP 503 and top-level status `degraded`.
+
+```bash GET /health
+curl -sS -i -X GET "$BASE_URL/health" \
+  -H 'X-Request-ID: health-check'
+```
+
+Response (`200`)
+
+```json
+{
+  "status": "ok",
+  "version": "0.1.0",
+  "dependencies": {
+    "redis": {
+      "status": "up",
+      "latency_ms": 2
+    },
+    "soroban_rpc": {
+      "status": "up",
+      "latency_ms": 50
+    },
+    "worker_queue": {
+      "status": "up",
+      "latency_ms": 3,
+      "depth": 0
+    }
+  }
+}
+```

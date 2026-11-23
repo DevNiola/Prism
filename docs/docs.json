@@ -65,6 +65,12 @@
           {
             "group": "API Reference",
             "pages": [
+              "api/curl-examples",
+              "api/replay",
+              "api/session",
+              "api/ai",
+              "api/cache",
+              "api/health",
               "api/decode-error",
               "api/resolve-contract-error",
               "api/replay-transaction",
