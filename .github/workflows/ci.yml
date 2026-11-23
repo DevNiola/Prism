@@ -7,6 +7,37 @@ on:
 env:
   CARGO_TERM_COLOR: always
 jobs:
+  docs_checks:
+    name: Docs Checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Mintlify CLI
+        run: npm install --global mint@4.3.88
+
+      - name: Validate Mintlify site
+        working-directory: docs
+        run: mint validate
+
+      - name: Check documentation links and anchors
+        working-directory: docs
+        run: mint broken-links --check-anchors --files '**/*.mdx'
+
+      - name: Check README links and anchors
+        uses: lycheeverse/lychee-action@v2.9.0
+        with:
+          args: --offline --include-fragments --no-progress README.md
+          fail: true
+
   rust_checks:
     name: Rust Checks
     runs-on: ubuntu-latest
