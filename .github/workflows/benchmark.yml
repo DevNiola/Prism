@@ -1,4 +1,4 @@
-name: Decode Benchmarks
+name: Decode and Profiler Benchmarks
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
       - "Cargo.lock"
       - ".github/workflows/benchmark.yml"
   workflow_run:
-    workflows: [Decode Benchmarks]
+    workflows: [Decode and Profiler Benchmarks]
     types: [completed]
 
 jobs:
@@ -44,12 +44,23 @@ jobs:
           cp crates/core/Cargo.toml "$RUNNER_TEMP/baseline/crates/core/Cargo.toml"
           mkdir -p "$RUNNER_TEMP/baseline/crates/core/benches"
           cp crates/core/benches/decode_pipeline.rs "$RUNNER_TEMP/baseline/crates/core/benches/decode_pipeline.rs"
+          # Copy profiler benchmark if it exists on the base; fall back to an
+          # empty stub so the baseline build still succeeds on older commits.
+          if [ -f crates/core/benches/profiler_benchmarks.rs ]; then
+            cp crates/core/benches/profiler_benchmarks.rs "$RUNNER_TEMP/baseline/crates/core/benches/profiler_benchmarks.rs"
+          fi
 
       - name: Benchmark base revision
-        run: cargo bench --manifest-path "$RUNNER_TEMP/baseline/crates/core/Cargo.toml" --bench decode_pipeline -- --save-baseline main
+        run: |
+          cargo bench --manifest-path "$RUNNER_TEMP/baseline/crates/core/Cargo.toml" --bench decode_pipeline -- --save-baseline main
+          if cargo bench --manifest-path "$RUNNER_TEMP/baseline/crates/core/Cargo.toml" --bench profiler_benchmarks -- --list 2>/dev/null | grep -q .; then
+            cargo bench --manifest-path "$RUNNER_TEMP/baseline/crates/core/Cargo.toml" --bench profiler_benchmarks -- --save-baseline main
+          fi
 
       - name: Benchmark pull request
-        run: cargo bench -p grat-core --bench decode_pipeline -- --baseline main
+        run: |
+          cargo bench -p grat-core --bench decode_pipeline -- --baseline main
+          cargo bench -p grat-core --bench profiler_benchmarks -- --baseline main
 
       - name: Compare results and enforce regression limit
         id: compare
@@ -61,7 +72,7 @@ jobs:
           from pathlib import Path
 
           root = Path(os.environ["CARGO_TARGET_DIR"]) / "criterion"
-          report = ["## Decode benchmark comparison", "", "Compared with the PR base revision; regressions above 10% fail this check.", "", "| Benchmark | Base (ns) | PR (ns) | Change |", "| --- | ---: | ---: | ---: |"]
+          report = ["## Decode and Profiler benchmark comparison", "", "Compared with the PR base revision; regressions above 10% fail this check.", "", "| Benchmark | Base (ns) | PR (ns) | Change |", "| --- | ---: | ---: | ---: |"]
           regressions = []
           compared = 0
 
