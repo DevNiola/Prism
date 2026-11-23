@@ -5,7 +5,17 @@ description: "Decode failed Soroban transactions from the VS Code Command Palett
 icon: "code"
 ---
 
-The Grat extension runs the `grat` CLI and opens the transaction report in VS Code. It requires VS Code 1.95 or later and a `grat` executable on the extension host's `PATH`. For Remote SSH, dev containers, or WSL, make the executable available in the remote environment. See the [CLI quickstart](/docs/quickstart).
+The Grat extension runs the `grat` CLI and opens the transaction report in VS Code. It requires VS Code 1.95 or later and a `grat` executable on the extension host's `PATH`. For Remote SSH, dev containers, or WSL, make the executable available in the remote environment. See the [CLI quickstart](../quickstart).
+
+## Run the extension from source
+
+From the repository root, use Node.js 20 or later and pnpm 9 to build the extension and open it in an Extension Development Host:
+
+```bash
+pnpm install
+pnpm --filter grat-vscode build
+code --extensionDevelopmentPath="$PWD/extensions/vscode"
+```
 
 ## Decode a transaction
 
