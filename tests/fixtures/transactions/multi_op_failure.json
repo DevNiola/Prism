@@ -1,0 +1,27 @@
+{
+  "status": "FAILED",
+  "hash": "aabbcc112233445566778899aabbcc112233445566778899aabbcc1122334455",
+  "ledger": 50400,
+  "envelopeXdr": "",
+  "resultXdr": "AAAAAAAAAGT/////AAAAAQAAAAAAAAAB////9AAAAAA=",
+  "resultMetaXdr": "",
+  "operationCount": 3,
+  "diagnosticEvents": [
+    {
+      "type": "invoke",
+      "data": {
+        "operation_index": 0,
+        "status": "success"
+      }
+    },
+    {
+      "type": "budget",
+      "data": {
+        "operation_index": 1,
+        "category": "cpu",
+        "used": 15000000,
+        "limit": 10000000
+      }
+    }
+  ]
+}
