@@ -439,6 +439,174 @@ fn test_mock_rpc_response_structure_for_contract_error() {
     assert!(!mock_rpc_response["result"]["contractId"].is_null());
 }
 
+// ── Issue #471: V2 signature format decoding / Smart Wallet auth coverage ────
+
+#[test]
+fn test_auth_smart_wallet_fixture_loads() {
+    let fixture = load_fixture("auth_smart_wallet.json");
+    assert_eq!(fixture["status"], "FAILED");
+    assert_eq!(fixture["ledger"], 51001);
+    assert!(!fixture["hash"].as_str().unwrap().is_empty());
+}
+
+#[test]
+fn test_auth_smart_wallet_has_contract_address() {
+    let fixture = load_fixture("auth_smart_wallet.json");
+    let entries = fixture["auth_entries"].as_array().expect("auth_entries array");
+    assert_eq!(entries.len(), 1);
+    let address = entries[0]["address"].as_str().expect("address field");
+    assert!(
+        address.starts_with('C'),
+        "Smart Wallet auth address must start with C, got: {address}"
+    );
+    assert_eq!(entries[0]["auth_type"], "Smart Wallet");
+}
+
+#[test]
+fn test_auth_smart_wallet_contract_id_equals_address() {
+    let fixture = load_fixture("auth_smart_wallet.json");
+    let entry = &fixture["auth_entries"][0];
+    let address = entry["address"].as_str().expect("address");
+    let contract_id = entry["contract_id"].as_str().expect("contract_id");
+    assert_eq!(
+        address, contract_id,
+        "Smart Wallet contract_id must equal its address"
+    );
+}
+
+#[test]
+fn test_decode_auth_entry_v2_rejects_invalid_base64() {
+    // decode_auth_entry_signatures_v2 must return Err (not panic) for bad base64.
+    let result = grat_core::decode::decode_auth_entry_signatures_v2("!!!invalid-base64!!!");
+    assert!(result.is_err(), "expected Err for invalid base64 input");
+    let err = result.unwrap_err();
+    assert!(
+        err.contains("base64"),
+        "error message must mention 'base64', got: {err}"
+    );
+}
+
+#[test]
+fn test_decode_auth_entry_v2_rejects_invalid_xdr() {
+    // Valid base64 that is not valid SorobanAuthorizationEntry XDR.
+    let not_xdr_b64 = BASE64_STANDARD.encode(b"this is not valid xdr at all");
+    let result = grat_core::decode::decode_auth_entry_signatures_v2(&not_xdr_b64);
+    assert!(result.is_err(), "expected Err for invalid XDR");
+    let err = result.unwrap_err();
+    assert!(
+        err.contains("xdr"),
+        "error message must mention 'xdr', got: {err}"
+    );
+}
+
+#[test]
+fn test_signature_format_absent_serializes_correctly() {
+    // SignatureFormat::Absent must round-trip through JSON with format = "absent".
+    let fmt = grat_core::decode::SignatureFormat::Absent;
+    let json = serde_json::to_string(&fmt).expect("serialize SignatureFormat::Absent");
+    assert!(
+        json.contains("absent"),
+        "SignatureFormat::Absent must serialize with 'absent', got: {json}"
+    );
+}
+
+#[test]
+fn test_v2_multisig_format_serializes_with_signers_key() {
+    let entry = grat_core::decode::V2SignerEntry {
+        address: "0xdeadbeef".to_string(),
+        public_key: Some("aabbcc".to_string()),
+        signature: "eeff0011".to_string(),
+    };
+    let fmt = grat_core::decode::SignatureFormat::MultiSigV2 {
+        signers: vec![entry],
+    };
+    let json = serde_json::to_string(&fmt).expect("serialize MultiSigV2");
+    assert!(json.contains("signers"), "MultiSigV2 JSON must contain 'signers'");
+    assert!(json.contains("0xdeadbeef"), "must contain signer address");
+}
+
+// ── Issue #471: auth_mixed.json — Ed25519 + Smart Wallet in one transaction ───
+
+#[test]
+fn test_auth_mixed_fixture_loads() {
+    let fixture = load_fixture("auth_mixed.json");
+    assert_eq!(fixture["status"], "FAILED");
+    assert_eq!(fixture["ledger"], 51002);
+    assert!(!fixture["hash"].as_str().unwrap().is_empty());
+}
+
+#[test]
+fn test_auth_mixed_has_two_auth_entries() {
+    let fixture = load_fixture("auth_mixed.json");
+    let entries = fixture["auth_entries"].as_array().expect("auth_entries");
+    assert_eq!(
+        entries.len(),
+        2,
+        "auth_mixed fixture must have exactly two auth entries"
+    );
+}
+
+#[test]
+fn test_auth_mixed_first_entry_is_ed25519() {
+    let fixture = load_fixture("auth_mixed.json");
+    let entry = &fixture["auth_entries"][0];
+    assert_eq!(entry["auth_type"], "Ed25519");
+    let address = entry["address"].as_str().expect("address");
+    assert!(
+        address.starts_with('G'),
+        "Ed25519 address must start with G, got: {address}"
+    );
+    // Ed25519 entries carry no contract_id.
+    assert!(
+        entry["contract_id"].is_null(),
+        "Ed25519 entries must not have a contract_id"
+    );
+}
+
+#[test]
+fn test_auth_mixed_second_entry_is_smart_wallet() {
+    let fixture = load_fixture("auth_mixed.json");
+    let entry = &fixture["auth_entries"][1];
+    assert_eq!(entry["auth_type"], "Smart Wallet");
+    let address = entry["address"].as_str().expect("address");
+    assert!(
+        address.starts_with('C'),
+        "Smart Wallet address must start with C, got: {address}"
+    );
+    let contract_id = entry["contract_id"].as_str().expect("contract_id");
+    assert_eq!(
+        address, contract_id,
+        "Smart Wallet contract_id must equal address"
+    );
+}
+
+#[test]
+fn test_auth_mixed_diagnostic_events_cover_both_types() {
+    let fixture = load_fixture("auth_mixed.json");
+    let events = fixture["diagnosticEvents"]
+        .as_array()
+        .expect("diagnosticEvents");
+    assert_eq!(events.len(), 2, "mixed auth should have two diagnostic events");
+    let types: Vec<&str> = events
+        .iter()
+        .map(|e| e["data"]["type"].as_str().unwrap_or(""))
+        .collect();
+    assert!(types.contains(&"Ed25519"), "must have an Ed25519 event");
+    assert!(types.contains(&"Smart Wallet"), "must have a Smart Wallet event");
+}
+
+#[test]
+fn test_auth_mixed_hashes_differ_from_smart_wallet_fixture() {
+    let mixed = load_fixture("auth_mixed.json");
+    let smart = load_fixture("auth_smart_wallet.json");
+    assert_ne!(
+        mixed["hash"], smart["hash"],
+        "auth_mixed and auth_smart_wallet must have distinct tx hashes"
+    );
+}
+
+// ── End Issue #471 ────────────────────────────────────────────────────────────
+
 #[test]
 fn test_decode_host_error_code_50_memory_limit_exceeded() {
     let tx_data = serde_json::json!({
