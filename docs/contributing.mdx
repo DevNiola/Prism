@@ -49,8 +49,8 @@ after a blank line in the commit body. Describe the behavior that changed and
 how users can migrate. The current release analyzer uses semantic-release's
 default Angular preset, so use the footer even if the subject contains `!`.
 
-The [Release workflow](../.github/workflows/release.yml) runs on pushes to
-`main`. [Semantic-release](../.releaserc.json) analyzes commits since the
+The [Release workflow](https://github.com/DevNiola/Prism/blob/main/.github/workflows/release.yml) runs on pushes to
+`main`. [Semantic-release](https://github.com/DevNiola/Prism/blob/main/.releaserc.json) analyzes commits since the
 last release tag and generates release notes when a commit warrants a release.
 It prepends the generated notes to `CHANGELOG.md`, publishes the GitHub
 release, and commits the changelog back to `main` in a
