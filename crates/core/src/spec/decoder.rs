@@ -467,6 +467,61 @@ pub fn resolve_error_code(spec: &ContractSpec, error_code: u32) -> Option<&Contr
     spec.errors.iter().find(|e| e.code == error_code)
 }
 
+/// Taxonomy id for the generic contract-error entry, used as the fallback when
+/// a numeric contract error code cannot be matched against the contract spec.
+pub const CONTRACT_ERROR_GENERAL_TAXONOMY_ID: &str = "host.contract.error_general";
+
+/// A contract error code resolved against a [`ContractSpec`].
+///
+/// When the code matches a known error enum variant, `name` and `doc` are
+/// populated — the doc comment is taken from the spec entry, falling back to
+/// the contract metadata `error_docs` map. When the code is unknown, `name`
+/// and `doc` are `None` and `fallback_taxonomy_id` points at
+/// [`CONTRACT_ERROR_GENERAL_TAXONOMY_ID`] so the caller can still produce a
+/// meaningful diagnosis.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedContractError {
+    /// The numeric error code that was resolved.
+    pub code: u32,
+    /// The resolved `EnumName::VariantName`, or `None` when the code is unknown.
+    pub name: Option<String>,
+    /// The doc comment for the variant, if any is known.
+    pub doc: Option<String>,
+    /// Taxonomy id to fall back to when the code is unknown
+    /// (`host.contract.error_general`), or `None` when the code was resolved.
+    pub fallback_taxonomy_id: Option<String>,
+}
+
+/// Resolve a contract error `code` against `spec`.
+///
+/// The spec's `errors` come from the contract's `UdtErrorEnumV0` entries (each
+/// carrying a numeric `code`, a `EnumName::VariantName`, and an optional doc).
+/// When the matched entry has no doc, the contract metadata `error_docs` map
+/// is consulted (keyed by the variant name) as a fallback. Unknown codes
+/// produce a [`ResolvedContractError`] whose `fallback_taxonomy_id` is
+/// [`CONTRACT_ERROR_GENERAL_TAXONOMY_ID`].
+pub fn resolve_contract_error(spec: &ContractSpec, code: u32) -> ResolvedContractError {
+    if let Some(entry) = resolve_error_code(spec, code) {
+        let doc = entry
+            .doc
+            .clone()
+            .or_else(|| spec.metadata.get_error_doc(&entry.name));
+        return ResolvedContractError {
+            code,
+            name: Some(entry.name.clone()),
+            doc,
+            fallback_taxonomy_id: None,
+        };
+    }
+
+    ResolvedContractError {
+        code,
+        name: None,
+        doc: None,
+        fallback_taxonomy_id: Some(CONTRACT_ERROR_GENERAL_TAXONOMY_ID.to_string()),
+    }
+}
+
 #[cfg(test)]
 fn leb128_encode(mut value: u64) -> Vec<u8> {
     let mut result = Vec::new();
@@ -555,6 +610,96 @@ mod tests {
         };
         assert!(resolve_error_code(&spec, 99).is_none());
         assert!(resolve_error_code(&spec, 1).is_some());
+    }
+
+    /// Fixture: a small contract spec with a two-variant error enum. The first
+    /// variant carries its own doc; the second relies on the contract metadata
+    /// `error_docs` map (mirrors how `contractmetav0`/`contractdocs` feed docs).
+    fn spec_with_error_enum() -> ContractSpec {
+        ContractSpec {
+            errors: vec![
+                ContractErrorEntry {
+                    code: 1,
+                    name: "Error::InsufficientBalance".to_string(),
+                    doc: Some("Not enough balance to complete the transfer.".to_string()),
+                },
+                ContractErrorEntry {
+                    code: 2,
+                    name: "Error::Unauthorized".to_string(),
+                    doc: None,
+                },
+            ],
+            functions: Vec::new(),
+            structs: Vec::new(),
+            enums: Vec::new(),
+            unions: Vec::new(),
+            name: Some("TokenContract".to_string()),
+            version: None,
+            metadata: {
+                let mut md = crate::spec::metadata::ContractMetadata::default();
+                md.error_docs.insert(
+                    "Error::Unauthorized".to_string(),
+                    "Caller is not authorized to perform this operation.".to_string(),
+                );
+                md
+            },
+        }
+    }
+
+    /// A failing transaction reported contract error code 1 — resolution must
+    /// map the numeric code back to its enum variant name and doc comment.
+    #[test]
+    fn resolve_contract_error_returns_variant_name_and_doc() {
+        let spec = spec_with_error_enum();
+        let resolved = resolve_contract_error(&spec, 1);
+        assert_eq!(resolved.code, 1);
+        assert_eq!(resolved.name.as_deref(), Some("Error::InsufficientBalance"));
+        assert_eq!(
+            resolved.doc.as_deref(),
+            Some("Not enough balance to complete the transfer.")
+        );
+        assert!(resolved.fallback_taxonomy_id.is_none());
+    }
+
+    /// When the spec entry has no doc, the doc comment is pulled from the
+    /// contract metadata `error_docs` map.
+    #[test]
+    fn resolve_contract_error_falls_back_to_metadata_doc() {
+        let spec = spec_with_error_enum();
+        let resolved = resolve_contract_error(&spec, 2);
+        assert_eq!(resolved.name.as_deref(), Some("Error::Unauthorized"));
+        assert_eq!(
+            resolved.doc.as_deref(),
+            Some("Caller is not authorized to perform this operation.")
+        );
+    }
+
+    /// Unknown error codes fall back to the generic `host.contract.error_general`
+    /// taxonomy entry rather than surfacing an opaque code.
+    #[test]
+    fn resolve_contract_error_unknown_code_falls_back_to_general_taxonomy() {
+        let spec = spec_with_error_enum();
+        let resolved = resolve_contract_error(&spec, 9_999);
+        assert_eq!(resolved.code, 9_999);
+        assert!(resolved.name.is_none());
+        assert!(resolved.doc.is_none());
+        let fallback = resolved
+            .fallback_taxonomy_id
+            .as_deref()
+            .expect("unknown code should produce a fallback taxonomy id");
+        assert_eq!(fallback, CONTRACT_ERROR_GENERAL_TAXONOMY_ID);
+
+        // The fallback must reference a real entry shipped in the embedded taxonomy.
+        let db = crate::taxonomy::loader::TaxonomyDatabase::load_embedded()
+            .expect("embedded taxonomy loads");
+        let exists = db
+            .all_entries()
+            .iter()
+            .any(|entry| entry.id == CONTRACT_ERROR_GENERAL_TAXONOMY_ID);
+        assert!(
+            exists,
+            "host.contract.error_general must exist in the embedded contract taxonomy"
+        );
     }
 
     #[test]
