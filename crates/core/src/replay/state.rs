@@ -4,10 +4,11 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use stellar_xdr::curr::{
-    AccountId, ConfigSettingEntry, ConfigSettingId, ContractCostParams, FeeBumpTransactionInnerTx,
-    InvokeHostFunctionOp, LedgerEntry, LedgerEntryData, LedgerKey, LedgerKeyConfigSetting, Limits,
-    MuxedAccount, OperationBody, PublicKey, ReadXdr, StateArchivalSettings, Transaction,
-    TransactionEnvelope, TransactionExt, TransactionV1Envelope, WriteXdr,
+    AccountId, ConfigSettingEntry, ConfigSettingId, ContractCostParams,
+    FeeBumpTransactionInnerTx, InvokeHostFunctionOp, LedgerEntry, LedgerEntryData, LedgerKey,
+    LedgerKeyConfigSetting, Limits, MuxedAccount, OperationBody, PublicKey, ReadXdr,
+    StateArchivalSettings, Transaction, TransactionEnvelope, TransactionExt,
+    TransactionV1Envelope, WriteXdr,
 };
 
 /// Everything the sandbox needs, beyond raw ledger entries, to actually invoke
@@ -362,4 +363,112 @@ pub(crate) fn encode_xdr<T: WriteXdr>(value: &T, type_name: &'static str) -> Gra
             type_name,
             reason: e.to_string(),
         })
+}
+
+/// Normalize a base64-encoded `LedgerKey` XDR into a canonical, human-readable
+/// string suitable for display in state diffs and for use as a stable map key.
+///
+/// ## Format
+///
+/// The canonical form is `<kind>/<discriminating-fields>`:
+///
+/// | LedgerKey variant   | Format                                    |
+/// |---------------------|-------------------------------------------|
+/// | Account             | `account/<base32-account-id>`             |
+/// | TrustLine           | `trustline/<account-id>/<asset>`          |
+/// | ContractData        | `contract_data/<contract-id>/<key-hex>`   |
+/// | ContractCode        | `contract_code/<wasm-hash-hex>`           |
+/// | ConfigSetting       | `config_setting/<id>`                     |
+/// | Ttl                 | `ttl/<key-hash-hex>`                      |
+/// | *(other/unknown)*   | `raw/<original-base64>`                   |
+///
+/// If the input is not valid base64 or cannot be decoded as a `LedgerKey` XDR,
+/// the function returns `raw/<input>` rather than panicking, so callers always
+/// receive a non-empty, printable string.
+///
+/// The same logical key — identical XDR bytes — always produces the same
+/// normalized string, making it safe to use as a diff map key across runs.
+pub fn normalize_ledger_key(key_b64: &str) -> String {
+    use stellar_xdr::curr::{LedgerKey, LedgerKeyContractData, ReadXdr};
+
+    // 1. Decode base64
+    let bytes = match STANDARD.decode(key_b64) {
+        Ok(b) => b,
+        Err(_) => return format!("raw/{key_b64}"),
+    };
+
+    // 2. Decode XDR
+    let ledger_key = match LedgerKey::from_xdr(&bytes, Limits::none()) {
+        Ok(k) => k,
+        Err(_) => return format!("raw/{key_b64}"),
+    };
+
+    // 3. Render a canonical string
+    match &ledger_key {
+        LedgerKey::Account(acc) => {
+            let account_id = stellar_strkey::Strkey::PublicKeyEd25519(
+                stellar_strkey::ed25519::PublicKey(match &acc.account_id.0 {
+                    PublicKey::PublicKeyTypeEd25519(k) => k.0,
+                }),
+            )
+            .to_string();
+            format!("account/{account_id}")
+        }
+        LedgerKey::Trustline(tl) => {
+            let account_id = stellar_strkey::Strkey::PublicKeyEd25519(
+                stellar_strkey::ed25519::PublicKey(match &tl.account_id.0 {
+                    PublicKey::PublicKeyTypeEd25519(k) => k.0,
+                }),
+            )
+            .to_string();
+            let asset = match &tl.asset {
+                stellar_xdr::curr::TrustLineAsset::Native => "XLM".to_string(),
+                stellar_xdr::curr::TrustLineAsset::CreditAlphanum4(a) => {
+                    String::from_utf8_lossy(&a.asset_code.0)
+                        .trim_end_matches('\0')
+                        .to_string()
+                }
+                stellar_xdr::curr::TrustLineAsset::CreditAlphanum12(a) => {
+                    String::from_utf8_lossy(&a.asset_code.0)
+                        .trim_end_matches('\0')
+                        .to_string()
+                }
+                stellar_xdr::curr::TrustLineAsset::PoolShare(p) => {
+                    format!("pool:{}", hex::encode(p.0))
+                }
+            };
+            format!("trustline/{account_id}/{asset}")
+        }
+        LedgerKey::ContractData(LedgerKeyContractData { contract, key, .. }) => {
+            let contract_str = match contract {
+                stellar_xdr::curr::ScAddress::Account(acc) => {
+                    stellar_strkey::Strkey::PublicKeyEd25519(stellar_strkey::ed25519::PublicKey(
+                        match &acc.0 {
+                            PublicKey::PublicKeyTypeEd25519(k) => k.0,
+                        },
+                    ))
+                    .to_string()
+                }
+                stellar_xdr::curr::ScAddress::Contract(hash) => {
+                    stellar_strkey::Strkey::Contract(stellar_strkey::Contract(hash.0))
+                        .to_string()
+                }
+            };
+            let key_xdr = key
+                .to_xdr(Limits::none())
+                .map(|b| hex::encode(&b))
+                .unwrap_or_else(|_| "?".to_string());
+            format!("contract_data/{contract_str}/{key_xdr}")
+        }
+        LedgerKey::ContractCode(cc) => {
+            format!("contract_code/{}", hex::encode(cc.hash.0))
+        }
+        LedgerKey::ConfigSetting(cs) => {
+            format!("config_setting/{}", cs.config_setting_id as u32)
+        }
+        LedgerKey::Ttl(ttl) => {
+            format!("ttl/{}", hex::encode(ttl.key_hash.0))
+        }
+        _ => format!("raw/{key_b64}"),
+    }
 }

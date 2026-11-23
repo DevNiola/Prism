@@ -20,3 +20,21 @@ Grat uses a modified `soroban-env-host` that:
 ## Execution Timeline
 
 As events are emitted, the engine assembles them into a hierarchical tree representing the full invocation chain.
+
+## State Diff Key Format
+
+Ledger keys in state diffs are normalized to a canonical, human-readable string so the web `StateDiffEntryResponse` viewer always shows a stable, identifiable key rather than opaque base64 XDR.
+
+The normalization is performed by `grat_core::replay::state::normalize_ledger_key`. The format is `<kind>/<discriminating-fields>`:
+
+| LedgerKey variant | Canonical format |
+|---|---|
+| `Account` | `account/<G…-address>` |
+| `TrustLine` | `trustline/<G…-address>/<asset-code>` |
+| `ContractData` | `contract_data/<C…-contract-id>/<key-xdr-hex>` |
+| `ContractCode` | `contract_code/<wasm-hash-hex>` |
+| `ConfigSetting` | `config_setting/<setting-id-number>` |
+| `Ttl` | `ttl/<key-hash-hex>` |
+| *(unrecognised)* | `raw/<original-base64>` |
+
+**Stability guarantee**: the same logical key (identical XDR bytes) always produces the same normalized string, regardless of the order entries are iterated or the run they are produced in. This makes the key safe to use as a stable map key for diff comparison across replays.
