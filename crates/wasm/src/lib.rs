@@ -1,5 +1,6 @@
 use grat_core::decode::host_error::ClassifiedError;
 use grat_core::decode::report::build_report;
+use grat_core::spec::validate_wasm_imports;
 use grat_core::taxonomy::schema::ErrorCategory;
 use grat_core::types::report::DiagnosticReport;
 use grat_core::xdr::codec::XdrCodec;
@@ -197,6 +198,35 @@ fn classify(parsed: &serde_json::Value) -> Result<ClassifiedError, String> {
         contract_id,
         raw_data,
     })
+}
+
+#[wasm_bindgen]
+pub fn validate_contract_imports(wasm_bytes: &[u8]) -> Result<JsValue, JsValue> {
+    match validate_wasm_imports(wasm_bytes) {
+        Ok(()) => {
+            let result = serde_json::json!({ "valid": true, "disallowed": [] });
+            serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+        Err(err) => {
+            let disallowed: Vec<serde_json::Value> = err
+                .disallowed
+                .iter()
+                .map(|d| {
+                    serde_json::json!({
+                        "module": d.module,
+                        "name": d.name,
+                        "reason": d.reason,
+                    })
+                })
+                .collect();
+            let result = serde_json::json!({
+                "valid": false,
+                "disallowed": disallowed,
+                "taxonomy_ref": "host.wasm.invalid_module",
+            });
+            serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+        }
+    }
 }
 
 #[wasm_bindgen]
