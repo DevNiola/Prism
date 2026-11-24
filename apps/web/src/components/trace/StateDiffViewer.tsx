@@ -11,13 +11,13 @@ export function StateDiffViewer({ entries }: StateDiffViewerProps) {
   const getChangeColor = (changeType: string) => {
     switch (changeType.toLowerCase()) {
       case "created":
-        return "bg-green-50 border-green-200";
+        return "bg-success/10 border-success/30";
       case "updated":
-        return "bg-blue-50 border-blue-200";
+        return "bg-info/10 border-info/30";
       case "deleted":
-        return "bg-red-50 border-red-200";
+        return "bg-destructive/10 border-destructive/30";
       default:
-        return "bg-gray-50 border-gray-200";
+        return "bg-muted border-border";
     }
   };
 
@@ -25,25 +25,25 @@ export function StateDiffViewer({ entries }: StateDiffViewerProps) {
     switch (changeType.toLowerCase()) {
       case "created":
         return (
-          <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
+          <span className="px-2 py-1 text-xs font-medium bg-success/15 text-success rounded">
             Created
           </span>
         );
       case "updated":
         return (
-          <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+          <span className="px-2 py-1 text-xs font-medium bg-info/15 text-info rounded">
             Updated
           </span>
         );
       case "deleted":
         return (
-          <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">
+          <span className="px-2 py-1 text-xs font-medium bg-destructive/15 text-destructive rounded">
             Deleted
           </span>
         );
       default:
         return (
-          <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded">
+          <span className="px-2 py-1 text-xs font-medium bg-muted text-muted-foreground rounded">
             Unchanged
           </span>
         );
@@ -51,7 +51,7 @@ export function StateDiffViewer({ entries }: StateDiffViewerProps) {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="rounded-lg border border-border bg-card text-card-foreground shadow p-6">
       <h2 className="text-xl font-semibold mb-4">State Diff</h2>
 
       <div className="space-y-3">
@@ -67,14 +67,14 @@ export function StateDiffViewer({ entries }: StateDiffViewerProps) {
 
             <div className="grid grid-cols-2 gap-4 mt-3">
               <div>
-                <div className="text-xs text-gray-600 mb-1">Before</div>
-                <pre className="text-xs bg-white p-2 rounded border overflow-x-auto">
+                <div className="text-xs text-muted-foreground mb-1">Before</div>
+                <pre className="text-xs bg-muted/30 text-card-foreground p-2 rounded border border-border overflow-x-auto">
                   {entry.before || "(none)"}
                 </pre>
               </div>
               <div>
-                <div className="text-xs text-gray-600 mb-1">After</div>
-                <pre className="text-xs bg-white p-2 rounded border overflow-x-auto">
+                <div className="text-xs text-muted-foreground mb-1">After</div>
+                <pre className="text-xs bg-muted/30 text-card-foreground p-2 rounded border border-border overflow-x-auto">
                   {entry.after || "(none)"}
                 </pre>
               </div>
@@ -84,7 +84,7 @@ export function StateDiffViewer({ entries }: StateDiffViewerProps) {
       </div>
 
       {entries.length === 0 && (
-        <p className="text-gray-500 text-center py-8">
+        <p className="text-muted-foreground text-center py-8">
           No state changes detected yet.
         </p>
       )}

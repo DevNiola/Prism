@@ -30,18 +30,18 @@ function ResourceBar({
     <div>
       <div className="flex justify-between mb-2">
         <span className="text-sm font-medium">{label}</span>
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-muted-foreground">
           {displayValue} / {displayLimit} ({percentage.toFixed(1)}%)
         </span>
       </div>
-      <div className="w-full bg-gray-200 rounded-full h-4">
+      <div className="w-full rounded-full h-4 bg-muted">
         <div
           className={`h-4 rounded-full transition-all duration-300 ${
             percentage > 90
-              ? "bg-red-500"
+              ? "bg-destructive"
               : percentage > 70
-                ? "bg-yellow-500"
-                : "bg-green-500"
+                ? "bg-warning"
+                : "bg-success"
           }`}
           style={{ width: `${Math.min(percentage, 100)}%` }}
         />
@@ -59,7 +59,7 @@ function formatBytes(bytes: number): string {
 
 export function ResourceProfile({ profile }: ResourceProfileProps) {
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="rounded-lg border border-border bg-card text-card-foreground shadow p-6">
       <h2 className="text-xl font-semibold mb-4">Resource Profile</h2>
 
       <div className="space-y-6">
@@ -89,8 +89,8 @@ export function ResourceProfile({ profile }: ResourceProfileProps) {
       </div>
 
       {profile.cpu_limit > 0 && profile.cpu_used / profile.cpu_limit > 0.9 && (
-        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-          <p className="text-sm text-yellow-800">
+        <div className="mt-4 p-3 rounded border bg-warning/10 border-warning/30">
+          <p className="text-sm text-warning">
             Resource usage is approaching limits. Consider optimizing contract
             code.
           </p>

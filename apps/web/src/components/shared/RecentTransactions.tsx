@@ -23,14 +23,15 @@ function formatTimestamp(ts: number): string {
 }
 
 function NetworkBadge({ network }: { network: string }) {
+  // Network-identity accent colors are intentionally retained; the neutral
+  // fallback uses the muted token.
   const styles: Record<string, string> = {
     mainnet: "bg-emerald-950/50 border-emerald-800/40 text-emerald-400",
     testnet: "bg-amber-950/50 border-amber-800/40 text-amber-400",
     futurenet: "bg-violet-950/50 border-violet-800/40 text-violet-400",
-    custom: "bg-slate-800/60 border-slate-700/40 text-slate-400",
+    custom: "bg-muted/60 border-border text-muted-foreground",
   };
-  const cls =
-    styles[network] ?? "bg-slate-800/60 border-slate-700/40 text-slate-400";
+  const cls = styles[network] ?? "bg-muted/60 border-border text-muted-foreground";
   return (
     <span
       className={`text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border ${cls}`}
@@ -50,13 +51,13 @@ function TransactionRow({ entry, onSelect }: TransactionRowProps) {
     <li>
       <button
         onClick={() => onSelect(entry)}
-        className="btn-press w-full text-left px-4 py-3 rounded-lg bg-slate-900/60 border border-slate-800 hover:border-violet-700/50 hover:bg-slate-800/60 transition-colors group"
+        className="btn-press w-full text-left px-4 py-3 rounded-lg bg-card/60 border border-border hover:border-primary/50 hover:bg-muted transition-colors group"
       >
         <div className="flex items-center justify-between gap-3">
           {/* Hash + network */}
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-violet-400 text-sm">⬡</span>
-            <span className="font-mono text-sm text-slate-200 truncate group-hover:text-violet-300 transition-colors">
+            <span className="text-primary text-sm">⬡</span>
+            <span className="font-mono text-sm text-card-foreground truncate group-hover:text-primary transition-colors">
               {truncateHash(entry.txHash)}
             </span>
             <NetworkBadge network={entry.network} />
@@ -64,17 +65,19 @@ function TransactionRow({ entry, onSelect }: TransactionRowProps) {
 
           {/* Error name + timestamp */}
           <div className="flex items-center gap-3 shrink-0">
-            <span className="text-xs text-red-400 font-medium hidden sm:block">
+            <span className="text-xs text-destructive font-medium hidden sm:block">
               {entry.errorName}
             </span>
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted-foreground">
               {formatTimestamp(entry.timestamp)}
             </span>
           </div>
         </div>
 
         {/* Error name on mobile */}
-        <p className="text-xs text-slate-500 mt-1 sm:hidden">{entry.errorName}</p>
+        <p className="text-xs text-muted-foreground mt-1 sm:hidden">
+          {entry.errorName}
+        </p>
       </button>
     </li>
   );
@@ -95,12 +98,12 @@ export default function RecentTransactions() {
   return (
     <section className="max-w-3xl mx-auto w-full px-4">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
           Recent Transactions
         </h2>
         <button
           onClick={clearHistory}
-          className="btn-press text-xs text-slate-600 hover:text-red-400 transition-colors"
+          className="btn-press text-xs text-muted-foreground hover:text-destructive transition-colors"
         >
           Clear history
         </button>

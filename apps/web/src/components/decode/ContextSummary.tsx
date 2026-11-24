@@ -24,17 +24,17 @@ function FeeRow({
   variant?: "default" | "accent" | "success" | "warning" | "muted" | "meta";
 }) {
   const variantClass: Record<string, string> = {
-    default: "text-gray-200",
-    accent: "text-white font-semibold",
-    success: "text-green-400",
-    warning: "text-yellow-400",
-    muted: "text-gray-400",
-    meta: "text-blue-300",
+    default: "text-card-foreground",
+    accent: "text-foreground font-semibold",
+    success: "text-success",
+    warning: "text-warning",
+    muted: "text-muted-foreground",
+    meta: "text-info",
   };
 
   return (
     <div className={`flex justify-between ${sub ? "pl-6" : ""}`}>
-      <span className="text-gray-400">{label}</span>
+      <span className="text-muted-foreground">{label}</span>
       <span className={variantClass[variant]}>{value}</span>
     </div>
   );
@@ -45,7 +45,7 @@ function FeeBreakdownPanel({ fee }: { fee: FeeBreakdown }) {
     <section aria-labelledby="fee-breakdown-heading">
       <h3
         id="fee-breakdown-heading"
-        className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2"
+        className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2"
       >
         Fee Breakdown
       </h3>
@@ -88,7 +88,7 @@ function FeeBreakdownPanel({ fee }: { fee: FeeBreakdown }) {
         )}
       </div>
       {fee.resource_fee > 0 && (
-        <p className="mt-2 text-xs text-gray-500">
+        <p className="mt-2 text-xs text-muted-foreground">
           The refundable portion ({formatFee(fee.refundable_resource_fee)}) may
           be partially returned if unused resources are reclaimed after
           execution.
@@ -117,9 +117,9 @@ function ResourcePanel({ context }: { context: TransactionContext }) {
       : 0;
 
   function barColor(pct: number): string {
-    if (pct >= 90) return "bg-red-500";
-    if (pct >= 70) return "bg-yellow-400";
-    return "bg-green-500";
+    if (pct >= 90) return "bg-destructive";
+    if (pct >= 70) return "bg-warning";
+    return "bg-success";
   }
 
   function UsageBar({
@@ -135,7 +135,7 @@ function ResourcePanel({ context }: { context: TransactionContext }) {
   }) {
     return (
       <div>
-        <div className="flex justify-between text-xs text-gray-400 mb-1">
+        <div className="flex justify-between text-xs text-muted-foreground mb-1">
           <span>{label}</span>
           <span>
             {used.toLocaleString()} / {limit.toLocaleString()} ({pct.toFixed(0)}
@@ -143,7 +143,7 @@ function ResourcePanel({ context }: { context: TransactionContext }) {
           </span>
         </div>
         <div
-          className="w-full h-2 rounded bg-gray-700"
+          className="w-full h-2 rounded bg-muted"
           role="progressbar"
           aria-valuenow={pct}
           aria-valuemin={0}
@@ -163,7 +163,7 @@ function ResourcePanel({ context }: { context: TransactionContext }) {
     <section aria-labelledby="resource-usage-heading">
       <h3
         id="resource-usage-heading"
-        className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2"
+        className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2"
       >
         Resource Usage
       </h3>
@@ -187,30 +187,32 @@ function ResourcePanel({ context }: { context: TransactionContext }) {
 
 export default function ContextSummary({ context }: Props) {
   return (
-    <div className="rounded-lg border border-gray-700 bg-gray-900 p-4 space-y-6 text-sm">
+    <div className="rounded-lg border border-border bg-card text-card-foreground p-4 space-y-6 text-sm">
       {}
       <section aria-labelledby="tx-summary-heading">
         <h3
           id="tx-summary-heading"
-          className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2"
+          className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2"
         >
           Transaction Summary
         </h3>
         <div className="space-y-1">
           <div className="flex justify-between">
-            <span className="text-gray-400">TX Hash</span>
-            <span className="font-mono text-xs text-gray-200 truncate max-w-[60%]">
+            <span className="text-muted-foreground">TX Hash</span>
+            <span className="font-mono text-xs text-card-foreground truncate max-w-[60%]">
               {context.tx_hash}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-400">Ledger</span>
-            <span className="text-gray-200">{context.ledger_sequence}</span>
+            <span className="text-muted-foreground">Ledger</span>
+            <span className="text-card-foreground">
+              {context.ledger_sequence}
+            </span>
           </div>
           {context.function_name && (
             <div className="flex justify-between">
-              <span className="text-gray-400">Function</span>
-              <span className="font-mono text-xs text-gray-200">
+              <span className="text-muted-foreground">Function</span>
+              <span className="font-mono text-xs text-card-foreground">
                 {context.function_name}
               </span>
             </div>
