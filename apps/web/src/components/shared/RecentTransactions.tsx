@@ -3,7 +3,7 @@
 import { useSessionStore, type HistoryEntry } from "@/store/session";
 import { useRouter } from "next/navigation";
 
-function truncateHash(hash: string, chars = 8): string {
+export function truncateHash(hash: string, chars = 8): string {
   if (hash.length <= chars * 2 + 3) return hash;
   return `${hash.slice(0, chars)}...${hash.slice(-chars)}`;
 }
@@ -80,6 +80,11 @@ function TransactionRow({ entry, onSelect }: TransactionRowProps) {
   );
 }
 
+export function recentTransactionHref(entry: HistoryEntry) {
+  const query = new URLSearchParams({ txHash: entry.txHash, network: entry.network });
+  return `/decode?${query}`;
+}
+
 export default function RecentTransactions() {
   const { history, clearHistory } = useSessionStore();
   const router = useRouter();
@@ -87,9 +92,7 @@ export default function RecentTransactions() {
   if (history.length === 0) return null;
 
   function handleSelect(entry: HistoryEntry) {
-    // Navigate to decode page — the selected report can be retrieved from history
-    // via the tx hash stored in the URL query param
-    router.push(`/decode?txHash=${encodeURIComponent(entry.txHash)}`);
+    router.push(recentTransactionHref(entry));
   }
 
   return (
