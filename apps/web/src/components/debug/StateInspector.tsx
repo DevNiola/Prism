@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+
+import EmptyState from "@/components/shared/EmptyState";
+
+const ROW_HEIGHT = 40;
+const VISIBLE_ROWS = 5;
+const OVERSCAN = 2;
 
 export interface StateInspectorProps {
   currentStep?: number;
@@ -28,6 +34,27 @@ export default function StateInspector({
   const [animating, setAnimating] = useState(false);
   const [displayedStep, setDisplayedStep] = useState(currentStep);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+
+  const [query, setQuery] = useState("");
+  const [scrollTop, setScrollTop] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
+  const matchingEntries = useMemo(() => {
+    const search = query.trim().toLowerCase();
+    return search
+      ? storageEntries.filter(({ key }) => key.toLowerCase().includes(search))
+      : storageEntries;
+  }, [query, storageEntries]);
+
+  const maxScrollTop = Math.max(0, matchingEntries.length - VISIBLE_ROWS) * ROW_HEIGHT;
+  const firstVisibleRow = Math.floor(Math.min(scrollTop, maxScrollTop) / ROW_HEIGHT);
+  const start = Math.max(0, firstVisibleRow - OVERSCAN);
+  const end = firstVisibleRow + VISIBLE_ROWS + OVERSCAN + 1;
+
+  function updateQuery(value: string) {
+    setQuery(value);
+    setScrollTop(0);
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }
 
   useEffect(() => {
     setAnimating(true);
@@ -107,40 +134,69 @@ export default function StateInspector({
         <div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-gray-700">Contract Storage</h3>
-            <span className="text-xs text-gray-400">{storageEntries.length} entries</span>
+            <span className="text-xs text-gray-600" role="status">
+              {matchingEntries.length} matching {matchingEntries.length === 1 ? "entry" : "entries"}
+            </span>
           </div>
-          {storageEntries.length > 0 ? (
-            <div className="space-y-1 max-h-48 overflow-y-auto">
-              {storageEntries.map((entry, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    transitionDuration: `${transitionDurationMs}ms`,
-                  }}
-                  className={`p-2 rounded text-xs font-mono flex items-center justify-between transition-all ${
-                    entry.changed
-                      ? "bg-amber-50 border border-amber-200 text-amber-900 shadow-sm"
-                      : "bg-gray-50 border border-gray-100 text-gray-700"
-                  }`}
-                >
-                  <span className="font-semibold text-gray-800 truncate max-w-[45%]">
-                    {entry.key}
-                  </span>
-                  <span className="text-gray-500 truncate max-w-[50%]">
-                    {entry.value}
-                  </span>
-                  {entry.changed && (
-                    <span className="ml-2 px-1.5 py-0.2 bg-amber-200 text-amber-800 text-[10px] rounded font-sans">
-                      modified
-                    </span>
-                  )}
-                </div>
-              ))}
+          <input
+            type="search"
+            aria-label="Search storage keys"
+            placeholder="Search storage keys"
+            value={query}
+            onChange={(event) => updateQuery(event.target.value)}
+            className="mb-2 w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900"
+          />
+          {matchingEntries.length > 0 ? (
+            <div
+              ref={listRef}
+              role="region"
+              aria-label="Contract storage entries"
+              tabIndex={0}
+              onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+              className="overflow-y-auto"
+              style={{ maxHeight: VISIBLE_ROWS * ROW_HEIGHT }}
+            >
+              <div role="list" className="relative" style={{ height: matchingEntries.length * ROW_HEIGHT }}>
+                {matchingEntries.slice(start, end).map((entry, offset) => {
+                  const index = start + offset;
+                  return (
+                    <div
+                      key={index}
+                      role="listitem"
+                      aria-posinset={index + 1}
+                      aria-setsize={matchingEntries.length}
+                      style={{
+                        top: index * ROW_HEIGHT,
+                        height: ROW_HEIGHT - 4,
+                        transitionDuration: `${transitionDurationMs}ms`,
+                      }}
+                      className={`absolute inset-x-0 flex items-center gap-2 rounded border px-2 font-mono text-xs transition-colors ${
+                        entry.changed
+                          ? "border-amber-200 bg-amber-50 text-amber-900"
+                          : "border-gray-100 bg-gray-50 text-gray-700"
+                      }`}
+                    >
+                      <span title={entry.key} className="flex-1 truncate font-semibold text-gray-800">
+                        {entry.key}
+                      </span>
+                      <span title={entry.value} className="flex-1 truncate text-right text-gray-500">
+                        {entry.value}
+                      </span>
+                      {entry.changed && (
+                        <span className="shrink-0 rounded bg-amber-200 px-1.5 font-sans text-[10px] text-amber-800">
+                          modified
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ) : (
-            <div className="p-4 text-center text-xs text-gray-400 bg-gray-50 rounded border border-dashed border-gray-200">
-              No storage accessed at this step
-            </div>
+            <EmptyState
+              title={query.trim() ? "No matching storage entries" : "No storage accessed at this step"}
+              description={query.trim() ? "Try a different key substring." : "Storage entries appear when this step accesses contract storage."}
+            />
           )}
         </div>
 
