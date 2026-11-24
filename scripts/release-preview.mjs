@@ -36,7 +36,7 @@ const result = await semanticRelease(
 );
 
 const body = result
-  ? `### Proposed release \`${result.nextRelease.version}\`\n\n${result.nextRelease.notes}`
+  ? `### Proposed release ${result.nextRelease.version}\n\n${result.nextRelease.notes}`
   : "### Release preview\n\nNo version bump for these commits.";
 
 await writeFile(output, body);
