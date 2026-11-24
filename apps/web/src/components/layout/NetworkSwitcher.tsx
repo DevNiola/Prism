@@ -1,54 +1,77 @@
 "use client";
 
+import { useId, useState, type FormEvent } from "react";
 import { useNetworkStore } from "@/store/network";
 import type { Network } from "@/lib/types";
 import { getHealth } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 
 export default function NetworkSwitcher() {
-  const { network, isValidating, setNetwork, setIsValidating } =
-    useNetworkStore();
+  const {
+    network, customRpcUrl, savedCustomRpcUrls, isValidating,
+    setNetwork, applyCustomRpcUrl, setIsValidating,
+  } = useNetworkStore();
+  const id = useId();
+  const [editingCustom, setEditingCustom] = useState(false);
+  const [draftUrl, setDraftUrl] = useState<string | null>(null);
+  const [urlError, setUrlError] = useState("");
+  const savedUrls = [...new Set([customRpcUrl, ...savedCustomRpcUrls].filter(Boolean))];
   const { showToast } = useToast();
 
   const handleNetworkChange = async (
     e: React.ChangeEvent<HTMLSelectElement>,
   ) => {
     const newNetwork = e.target.value as Network;
-    const previousNetwork = network;
-
-    // Optimistically update the network
-    setNetwork(newNetwork);
+    setEditingCustom(newNetwork === "custom");
+    setDraftUrl(null);
+    setUrlError("");
+    if (newNetwork === "custom") return;
     setIsValidating(true);
 
     try {
       // Validate network via a lightweight /health ping
       await getHealth();
 
-      // Success - network is valid
-      setIsValidating(false);
+      setNetwork(newNetwork);
     } catch {
-      // Roll back to previous network on failure
-      setNetwork(previousNetwork);
-      setIsValidating(false);
-
       showToast(
         `Failed to switch to ${newNetwork}. Network unavailable.`,
         "error",
       );
+    } finally {
+      setIsValidating(false);
     }
   };
 
+  function handleCustomRpcSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      const url = new URL((draftUrl ?? customRpcUrl).trim());
+      if (
+        (url.protocol !== "https:" && url.protocol !== "http:") ||
+        url.username || url.password || url.hash
+      ) {
+        throw new Error();
+      }
+      applyCustomRpcUrl(url.href);
+      setDraftUrl(null);
+      setUrlError("");
+    } catch {
+      setUrlError("Enter an HTTP or HTTPS RPC URL without credentials or a fragment.");
+    }
+  }
+
   return (
-    <div className="relative flex items-center gap-2">
+    <div className="relative flex flex-wrap items-center gap-2">
       <label
-        htmlFor="network-select"
+        htmlFor={`${id}-network`}
         className="text-sm font-medium text-slate-400 sr-only"
       >
         Select network
       </label>
       <select
-        id="network-select"
-        value={network}
+        id={`${id}-network`}
+        value={editingCustom ? "custom" : network}
         onChange={handleNetworkChange}
         disabled={isValidating}
         aria-label="Select Stellar network"
@@ -57,7 +80,36 @@ export default function NetworkSwitcher() {
         <option value="testnet">Testnet</option>
         <option value="mainnet">Mainnet</option>
         <option value="futurenet">Futurenet</option>
+        <option value="custom">Custom RPC</option>
       </select>
+
+      {(editingCustom || network === "custom") && (
+        <form onSubmit={handleCustomRpcSubmit} noValidate className="flex flex-wrap gap-2">
+          <label htmlFor={`${id}-rpc`} className="sr-only">Custom RPC URL</label>
+          <input
+            id={`${id}-rpc`}
+            type="url"
+            list={`${id}-saved-rpcs`}
+            placeholder="https://rpc.example.com"
+            value={draftUrl ?? customRpcUrl}
+            onChange={(event) => {
+              setDraftUrl(event.target.value);
+              setUrlError("");
+            }}
+            aria-invalid={Boolean(urlError)}
+            aria-describedby={urlError ? `${id}-rpc-error` : undefined}
+            disabled={isValidating}
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200"
+          />
+          <datalist id={`${id}-saved-rpcs`}>
+            {savedUrls.map((url) => <option key={url} value={url} />)}
+          </datalist>
+          <button type="submit" disabled={isValidating} className="rounded-lg bg-violet-700 px-3 py-1.5 text-sm text-white">
+            Apply RPC
+          </button>
+          {urlError && <p id={`${id}-rpc-error`} role="alert" className="w-full text-xs text-red-300">{urlError}</p>}
+        </form>
+      )}
 
       {isValidating && (
         <span className="ml-2 inline-flex items-center text-xs text-gray-500">

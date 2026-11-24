@@ -13,6 +13,7 @@ export async function requestReplay(txHash: string, network: string) {
 
 export async function getHealth() {
   const res = await fetch(`${API_BASE}/v1/health`);
+  if (!res.ok) throw new Error(`Health check failed (${res.status}).`);
   return res.json();
 }
 
