@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 interface ExecutionTimelineProps {
   nodes: any[];
   resourceProfile?: {
@@ -12,6 +16,8 @@ export function ExecutionTimeline({
   nodes,
   resourceProfile,
 }: ExecutionTimelineProps) {
+  const [active, setActive] = useState(0);
+
   const isApproachingReadLimit =
     resourceProfile &&
     resourceProfile.read_limit > 0 &&
@@ -21,44 +27,96 @@ export function ExecutionTimeline({
     resourceProfile.write_limit > 0 &&
     resourceProfile.write_bytes / resourceProfile.write_limit > 0.9;
 
+  const last = nodes.length - 1;
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLUListElement>) {
+    if (nodes.length === 0) return;
+    switch (e.key) {
+      case "ArrowDown":
+      case "ArrowRight":
+        e.preventDefault();
+        setActive((a) => Math.min(a + 1, last));
+        break;
+      case "ArrowUp":
+      case "ArrowLeft":
+        e.preventDefault();
+        setActive((a) => Math.max(a - 1, 0));
+        break;
+      case "Home":
+        e.preventDefault();
+        setActive(0);
+        break;
+      case "End":
+        e.preventDefault();
+        setActive(last);
+        break;
+    }
+  }
+
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center justify-between mb-4">
+    <div className="rounded-lg border border-slate-800 bg-slate-900 p-6 shadow-xl text-slate-100">
+      <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl font-semibold">Execution Timeline</h2>
         {(isApproachingReadLimit || isApproachingWriteLimit) && (
-          <span className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full flex items-center">
+          <span className="flex items-center rounded-full bg-red-950/50 px-3 py-1 text-xs font-medium text-red-400">
             <span className="mr-1">⚠️</span>
             Storage IO Warning (Approaching limit)
           </span>
         )}
       </div>
-      <div className="space-y-2">
-        {nodes.map((node, idx) => (
-          <div
-            key={idx}
-            className="p-3 border border-gray-200 rounded hover:bg-gray-50 transition-colors"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <span className="text-xs font-mono text-gray-500">#{idx}</span>
-                <span className="font-mono text-sm">
-                  {node.node?.event_type || "Unknown"}
-                </span>
-              </div>
-              <span className="text-xs text-gray-500">
-                Path: {node.path?.join(" → ") || "root"}
-              </span>
-            </div>
-            {node.node?.data && (
-              <pre className="mt-2 text-xs text-gray-600 overflow-x-auto">
-                {JSON.stringify(node.node.data, null, 2)}
-              </pre>
-            )}
-          </div>
-        ))}
-      </div>
-      {nodes.length === 0 && (
-        <p className="text-gray-500 text-center py-8">
+
+      {nodes.length > 0 ? (
+        <ul
+          role="listbox"
+          aria-label="Execution trace nodes"
+          aria-activedescendant={
+            nodes[active] !== undefined
+              ? `trace-node-${active}`
+              : undefined
+          }
+          tabIndex={0}
+          onKeyDown={handleKeyDown}
+          className="space-y-2 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-500/70 focus-visible:-outline-offset-2 rounded-lg"
+        >
+          {nodes.map((node, idx) => {
+            const selected = idx === active;
+            return (
+              <li
+                key={idx}
+                id={`trace-node-${idx}`}
+                role="option"
+                aria-selected={selected}
+                onClick={() => setActive(idx)}
+                className={`cursor-pointer rounded p-3 transition-colors focus:outline-none ${
+                  selected
+                    ? "border border-violet-500 bg-violet-950/40"
+                    : "border border-slate-800 bg-slate-900/60 hover:bg-slate-800/60"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <span className="font-mono text-xs text-slate-500">
+                      #{idx}
+                    </span>
+                    <span className="font-mono text-sm">
+                      {node.node?.event_type || "Unknown"}
+                    </span>
+                  </div>
+                  <span className="text-xs text-slate-500">
+                    Path: {node.path?.join(" → ") || "root"}
+                  </span>
+                </div>
+                {node.node?.data && (
+                  <pre className="mt-2 overflow-x-auto text-xs text-slate-300">
+                    {JSON.stringify(node.node.data, null, 2)}
+                  </pre>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="py-8 text-center text-slate-500">
           No trace nodes yet. Waiting for trace data...
         </p>
       )}

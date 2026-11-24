@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTrace } from "@/hooks/useTrace";
 import { ExecutionTimeline } from "@/components/trace/ExecutionTimeline";
 import { StateDiffViewer } from "@/components/trace/StateDiffViewer";
 import { ResourceProfile } from "@/components/trace/ResourceProfile";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
+import CommandPalette from "@/components/shared/CommandPalette";
+import { useCommandPalette, type Command } from "@/hooks/useCommandPalette";
 
 export default function TracePage() {
   const [txHash, setTxHash] = useState("");
   const [network, setNetwork] = useState("testnet");
+  const txHashInputRef = useRef<HTMLInputElement>(null);
 
   const wsUrl =
     typeof window !== "undefined"
@@ -19,16 +22,66 @@ export default function TracePage() {
   const { trace, loading, requestTrace, streaming, streamError } =
     useTrace(wsUrl);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const palette = useCommandPalette();
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (txHash) {
       requestTrace(txHash, network);
     }
-  };
+  }
+
+  const commands: Command[] = useMemo(
+    () => [
+      {
+        id: "trace",
+        label: "Trace transaction",
+        hint: "Submit",
+        perform: () => {
+          if (txHash) requestTrace(txHash, network);
+        },
+      },
+      {
+        id: "focus-hash",
+        label: "Focus transaction hash input",
+        perform: () => txHashInputRef.current?.focus(),
+      },
+      {
+        id: "clear-hash",
+        label: "Clear transaction hash",
+        perform: () => setTxHash(""),
+      },
+      {
+        id: "net-testnet",
+        label: "Switch network to Testnet",
+        perform: () => setNetwork("testnet"),
+      },
+      {
+        id: "net-mainnet",
+        label: "Switch network to Mainnet",
+        perform: () => setNetwork("mainnet"),
+      },
+      {
+        id: "net-futurenet",
+        label: "Switch network to Futurenet",
+        perform: () => setNetwork("futurenet"),
+      },
+    ],
+    [txHash, network, requestTrace],
+  );
 
   return (
     <main className="container mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">Execution Trace</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Execution Trace</h1>
+        <button
+          type="button"
+          onClick={palette.openPalette}
+          className="btn-press rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-800"
+        >
+          Commands <kbd className="ml-1 text-slate-500">⌘K</kbd>
+        </button>
+      </div>
 
       <form onSubmit={handleSubmit} className="mb-8 space-y-4">
         <div>
@@ -36,6 +89,7 @@ export default function TracePage() {
             Transaction Hash
           </label>
           <input
+            ref={txHashInputRef}
             id="txHash"
             type="text"
             value={txHash}
@@ -143,6 +197,14 @@ export default function TracePage() {
           )}
         </div>
       )}
+
+      <CommandPalette
+        commands={commands}
+        open={palette.open}
+        query={palette.query}
+        onQueryChange={palette.setQuery}
+        onClose={palette.closePalette}
+      />
     </main>
   );
 }
