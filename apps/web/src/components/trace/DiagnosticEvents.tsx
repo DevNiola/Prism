@@ -7,7 +7,7 @@ interface DiagnosticEventsProps {
 }
 
 const EVENT_ROWS = 3;
-const EVENT_LIST_CLASS = "min-h-[14.75rem] space-y-2";
+const EVENT_LIST_CLASS = "min-h-[14.875rem] space-y-2";
 const EVENT_ROW_CLASS = "min-h-[74px] rounded border border-gray-200 p-3";
 const EVENT_HEADER_CLASS = "flex min-h-6 items-center justify-between gap-2";
 

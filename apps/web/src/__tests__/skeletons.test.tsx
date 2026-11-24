@@ -177,11 +177,11 @@ describe("ResourceProfile", () => {
 describe("DiagnosticEvents", () => {
   it("replaces placeholders with events inside the same reserved list area", () => {
     const { container, rerender } = render(<DiagnosticEvents loading />);
-    const placeholder = container.querySelector('[class*="min-h-[14.75rem]"]');
+    const placeholder = container.querySelector('[class*="min-h-[14.875rem]"]');
     expect(placeholder?.children).toHaveLength(3);
 
     rerender(<DiagnosticEvents events={events} loading />);
-    const list = container.querySelector('[class*="min-h-[14.75rem]"]');
+    const list = container.querySelector('[class*="min-h-[14.875rem]"]');
     expect(list?.className).toBe(placeholder?.className);
     expect(list?.children).toHaveLength(events.length);
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
