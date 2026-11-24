@@ -5,13 +5,20 @@ on:
     branches:
       - main
 
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  # Keep the workflow, config, and scripts on the trusted base revision.
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
 
 jobs:
   release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,9 +31,74 @@ jobs:
         id: semantic
         uses: cycjimmy/semantic-release-action@v4
         with:
-          semantic_version: 24
+          semantic_version: 24.2.9
           extra_plugins: |
             @semantic-release/changelog
             @semantic-release/git
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  preview:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: release-preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Analyze proposed release
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          RELEASE_REPOSITORY: ${{ github.server_url }}/${{ github.repository }}.git
+        run: |
+          git fetch --no-tags origin "refs/pull/$PR_NUMBER/head"
+          if [[ "$(git rev-parse FETCH_HEAD)" != "$PR_HEAD" ]]; then
+            echo "The pull request head changed before this preview could run."
+            exit 1
+          fi
+
+          # Analyze both histories without checking out any PR files.
+          preview_root=$(mktemp -d)
+          preview_commit=$(git -c user.name='Release Preview' -c user.email='release-preview@users.noreply.github.com' \
+            commit-tree 'HEAD^{tree}' -p HEAD -p "$PR_HEAD" -m 'Merge pull request for release preview')
+          git init --bare --initial-branch=main "$preview_root/remote.git"
+          git push "$preview_root/remote.git" "$preview_commit:refs/heads/main" --tags
+          git clone --no-checkout "$preview_root/remote.git" "$preview_root/history"
+
+          npm install --prefix "$preview_root" --no-save --ignore-scripts semantic-release@24.2.9
+          cp scripts/release-preview.mjs "$preview_root/"
+          PREVIEW_REMOTE="file://$preview_root/remote.git" \
+            node "$preview_root/release-preview.mjs" "$PWD/.releaserc.json" \
+            "$preview_root/history" "$RUNNER_TEMP/release-preview.md"
+      - name: Post or update release preview
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const marker = '<!-- prism-release-preview -->';
+            const preview = fs.readFileSync(process.env.RUNNER_TEMP + '/release-preview.md', 'utf8');
+            const params = { ...context.repo, issue_number: context.issue.number };
+            const head = context.payload.pull_request.head.sha;
+            const body = `${marker}\n${preview.slice(0, 60000)}\n\nPreview for commit \`${head}\`. Squash merges may change the release notes or version bump.`;
+            const comments = await github.paginate(github.rest.issues.listComments, params);
+            const previous = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker)
+            );
+            if (previous) {
+              await github.rest.issues.updateComment({
+                ...context.repo, comment_id: previous.id, body
+              });
+            } else {
+              await github.rest.issues.createComment({ ...params, body });
+            }
