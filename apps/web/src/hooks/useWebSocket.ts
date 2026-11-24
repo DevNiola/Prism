@@ -47,6 +47,7 @@ export function useWebSocket(
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const callbacksRef = useRef(callbacks);
+  const cancelRef = useRef<(() => void) | null>(null);
   const connectRef = useRef<(() => void) | null>(null);
   const pendingTrace = useRef<{ tx_hash: string; resume_from?: number } | null>(null);
   const [status, setStatus] = useState<WebSocketStatus>(url ? "connecting" : "closed");
@@ -143,11 +144,21 @@ export function useWebSocket(
 
     connectRef.current = () => {
       finished = false;
-      if (timer !== undefined || wsRef.current) return;
       attempts = 0;
+      if (timer !== undefined || wsRef.current) return;
       setError(null);
       setStatus("connecting");
       connect();
+    };
+
+    cancelRef.current = () => {
+      finished = true;
+      clearTimeout(timer);
+      timer = undefined;
+      pendingTrace.current = null;
+      setStatus("closed");
+      // Discard remaining updates before accepting another replay.
+      wsRef.current?.close();
     };
 
     setStatus("connecting");
@@ -156,6 +167,7 @@ export function useWebSocket(
     return () => {
       clearTimeout(timer);
       connectRef.current = null;
+      cancelRef.current = null;
       pendingTrace.current = null;
       const ws = wsRef.current;
       wsRef.current = null;
@@ -183,11 +195,7 @@ export function useWebSocket(
     }
   }, [sendMessage]);
 
-  const cancelRequest = useCallback(() => {
-    pendingTrace.current = null;
-    // Closing discards updates from the cancelled replay before a new request.
-    wsRef.current?.close();
-  }, []);
+  const cancelRequest = useCallback(() => cancelRef.current?.(), []);
 
   return { connected: status === "open", status, error, sendMessage, requestTrace, cancelRequest };
 }

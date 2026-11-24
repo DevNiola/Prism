@@ -166,7 +166,7 @@ export function useTrace(wsUrl?: string) {
       });
       updatePhase("decoding");
     },
-    onTraceCompleted: () => {
+    onTraceCompleted: (data) => {
       if (cancelledRef.current) return;
       setTrace((prev) => {
         if (!prev) return null;
