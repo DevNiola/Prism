@@ -28,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
@@ -41,7 +41,7 @@ jobs:
         run: pnpm run build
 
       - name: Install vsce
-        run: npm install -g @vscode/vsce
+        run: npm install -g @vscode/vsce@4.1.1
 
       - name: Package extension (.vsix)
         id: package
@@ -62,7 +62,7 @@ jobs:
             artifact="vscode-extension-pre.${GITHUB_SHA}"
           fi
           vsix="grat-vscode-${version}.vsix"
-          vsce package --no-dependencies "${flags[@]}" --out "$vsix"
+          vsce package --allow-missing-repository --skip-license --no-dependencies "${flags[@]}" --out "$vsix"
           printf 'vsix=%s\nartifact=%s\n' "$vsix" "$artifact" >> "$GITHUB_OUTPUT"
 
       - name: Upload .vsix artifact
@@ -82,4 +82,4 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == push ]]; then
             flags+=(--pre-release)
           fi
-          vsce publish "${flags[@]}" --packagePath "$VSIX" --pat "$VSCE_PAT"
+          vsce publish "${flags[@]}" --packagePath "$VSIX" --skip-duplicate
