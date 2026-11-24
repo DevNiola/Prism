@@ -1,6 +1,6 @@
 # Release Process
 
-This document describes the full release process for Prism (Grat), covering version bumps, git tagging, and publishing each distributable artifact.
+This document describes the full release process for Prism, covering version bumps, git tagging, and publishing each distributable artifact.
 
 ---
 
@@ -10,7 +10,7 @@ Prism ships four artifacts from a single monorepo:
 
 | Artifact | Location | Registry |
 |---|---|---|
-| `grat` CLI binary | `crates/cli` | [crates.io](https://crates.io) |
+| `prism` CLI binary | `crates/cli` | [crates.io](https://crates.io) |
 | `grat-core` library | `crates/core` | [crates.io](https://crates.io) |
 | `grat-wasm` WASM package | `crates/wasm` | npm (via `wasm-pack`) |
 | VS Code Extension | `extensions/vscode` | [VS Code Marketplace](https://marketplace.visualstudio.com) |
@@ -108,7 +108,7 @@ Then [create a GitHub Release](https://github.com/DevNiola/Prism/releases/new) f
 
 ## 5. Publish CLI and Core Library to crates.io
 
-The `grat-core` library must be published before `grat` (the CLI) because the CLI depends on it.
+The `grat-core` library must be published before `grat-cli` (the CLI package) because the CLI depends on it.
 
 ### Prerequisites
 
@@ -135,7 +135,7 @@ cd crates/wasm
 cargo publish
 ```
 
-### Publish `grat` (CLI)
+### Publish `grat-cli` (CLI)
 
 ```bash
 cd crates/cli
@@ -225,7 +225,7 @@ Alternatively, upload the `.vsix` file manually at [https://marketplace.visualst
 
 ### Verify
 
-Search for "Grat" in the VS Code Extensions panel or visit the extension's Marketplace page.
+Search for "Prism" in the VS Code Extensions panel or visit the extension's Marketplace page.
 
 ---
 

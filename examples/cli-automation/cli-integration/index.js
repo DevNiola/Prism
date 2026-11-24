@@ -30,7 +30,7 @@ function main() {
   }
 
   // Path to the Rust binary (relative to example, assuming debug build)
-  const gratBinary = path.resolve(__dirname, "../../../target/debug/grat");
+  const gratBinary = path.resolve(__dirname, "../../../target/debug/prism");
 
   // Use execFile with immutable args array - NO SHELL
   const childArgs = ["decode", xdrString, "format", "json"];

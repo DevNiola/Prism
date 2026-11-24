@@ -51,7 +51,7 @@ services:
     environment:
       PORT: "3001"
       REDIS_URL: "redis://redis:6379"
-      GRAT_BINARY: "grat"
+      GRAT_BINARY: "prism"
       # AI provider — override with real values in .env or environment
       AI_API_KEY: "${AI_API_KEY:-}"
       AI_API_BASE_URL: "${AI_API_BASE_URL:-https://api.openai.com/v1}"

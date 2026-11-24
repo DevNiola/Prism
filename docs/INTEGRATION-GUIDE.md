@@ -1,10 +1,10 @@
 # Integration Guide: WebSocket Streaming
 
-This guide explains how to integrate the WebSocket streaming feature with the existing Grat codebase.
+This guide explains how to integrate the WebSocket streaming feature with the existing Prism codebase.
 
 ## Overview
 
-The WebSocket streaming implementation is designed to work alongside the existing batch trace functionality. It adds a new `grat serve` command that streams trace updates in real-time.
+The WebSocket streaming implementation is designed to work alongside the existing batch trace functionality. It adds a new `prism serve` command that streams trace updates in real-time.
 
 ## Architecture Integration
 
@@ -133,7 +133,7 @@ pub async fn execute_with_tracing(
 }
 ```
 
-This ensures existing commands (`grat trace`, `grat profile`, etc.) continue to work.
+This ensures existing commands (`prism trace`, `prism profile`, etc.) continue to work.
 
 ### 5. Add Feature Flag (Optional)
 
@@ -238,9 +238,9 @@ COPY . .
 RUN cargo build --release
 
 FROM debian:bookworm-slim
-COPY --from=builder /app/target/release/grat /usr/local/bin/
+COPY --from=builder /app/target/release/prism /usr/local/bin/
 EXPOSE 8080
-CMD ["grat", "serve", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["prism", "serve", "--host", "0.0.0.0", "--port", "8080"]
 ```
 
 ### Systemd Service
@@ -250,13 +250,13 @@ Create a systemd service for the WebSocket server:
 ```ini
 # /etc/systemd/system/grat-serve.service
 [Unit]
-Description=Grat WebSocket Server
+Description=Prism WebSocket Server
 After=network.target
 
 [Service]
 Type=simple
 User=grat
-ExecStart=/usr/local/bin/grat serve --port 8080 --network mainnet
+ExecStart=/usr/local/bin/prism serve --port 8080 --network mainnet
 Restart=on-failure
 RestartSec=5s
 
@@ -524,8 +524,8 @@ NEXT_PUBLIC_WS_URL=wss://grat.example.com/ws
 
 If issues arise, the feature can be disabled without affecting existing functionality:
 
-1. Stop the `grat serve` process
-2. Users fall back to batch `grat trace` command
+1. Stop the `prism serve` process
+2. Users fall back to batch `prism trace` command
 3. Web UI falls back to REST API (if implemented)
 4. No data loss or corruption
 

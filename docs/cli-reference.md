@@ -1,12 +1,14 @@
-# Grat CLI Reference
+# Prism CLI Reference
 
-A complete reference for every `grat` command, flag, and output format.
+A complete reference for every `prism` command, flag, and output format.
+
+Install the `grat-cli` Cargo package to get the `prism` executable. See the [installation guide](installation.mdx) for details.
 
 ---
 
 ## Installation & Setup
 
-After building from source, the binary is at `./target/release/grat`. Add it to your `PATH`:
+After building from source, the binary is at `./target/release/prism`. Add it to your `PATH`:
 
 ```bash
 cargo build --release
@@ -16,7 +18,7 @@ export PATH="$PATH:$(pwd)/target/release"
 Verify the installation:
 
 ```bash
-grat --version
+prism --version
 ```
 
 ---
@@ -42,13 +44,13 @@ These flags apply to every subcommand and must be placed **before** the subcomma
 
 ```bash
 # Use mainnet with JSON output
-grat --network mainnet --output json decode <TX_HASH>
+prism --network mainnet --output json decode <TX_HASH>
 
 # Save result to file while also printing
-grat --save report.json decode <TX_HASH>
+prism --save report.json decode <TX_HASH>
 
 # Use a custom RPC endpoint
-grat --rpc-url https://my-rpc.example.com decode <TX_HASH>
+prism --rpc-url https://my-rpc.example.com decode <TX_HASH>
 
 # Increase verbosity for debugging
 grat -vv decode <TX_HASH>
@@ -63,7 +65,7 @@ grat -vv decode <TX_HASH>
 Decodes a failed transaction and produces a full diagnostic report explaining the error in plain English.
 
 ```
-grat decode <TX_HASH> [FLAGS]
+prism decode <TX_HASH> [FLAGS]
 ```
 
 **Arguments:**
@@ -83,19 +85,19 @@ grat decode <TX_HASH> [FLAGS]
 
 ```bash
 # Decode a failed mainnet transaction
-grat decode d5c3b2a1f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2 --network mainnet
+prism decode d5c3b2a1f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2 --network mainnet
 
 # Decode with JSON output (useful for piping to jq)
-grat --output json decode <TX_HASH> | jq '.error_name'
+prism --output json decode <TX_HASH> | jq '.error_name'
 
 # Decode raw XDR from a log message
-grat decode --raw AAAAA...base64...AAAAA
+prism decode --raw AAAAA...base64...AAAAA
 
 # Decode and save the report
-grat --save ./report.json decode <TX_HASH>
+prism --save ./report.json decode <TX_HASH>
 
 # Short output for quick scanning
-grat decode <TX_HASH> --short
+prism decode <TX_HASH> --short
 ```
 
 **Sample Output (human):**
@@ -117,7 +119,7 @@ grat decode <TX_HASH> --short
 Decodes multiple transactions in one command and displays an error summary table.
 
 ```
-grat batch <TX_HASH>... [FLAGS]
+prism batch <TX_HASH>... [FLAGS]
 ```
 
 **Arguments:**
@@ -130,10 +132,10 @@ grat batch <TX_HASH>... [FLAGS]
 
 ```bash
 # Decode two transactions at once
-grat batch <TX_HASH_1> <TX_HASH_2>
+prism batch <TX_HASH_1> <TX_HASH_2>
 
 # Decode a list of transactions on mainnet
-grat --network mainnet batch hash1 hash2 hash3
+prism --network mainnet batch hash1 hash2 hash3
 ```
 
 ---
@@ -143,7 +145,7 @@ grat --network mainnet batch hash1 hash2 hash3
 Similar to `decode`, but allows targeting a specific operation index within a multi-operation transaction.
 
 ```
-grat inspect <TX_HASH> [FLAGS]
+prism inspect <TX_HASH> [FLAGS]
 ```
 
 **Arguments:**
@@ -162,13 +164,13 @@ grat inspect <TX_HASH> [FLAGS]
 
 ```bash
 # Inspect all operations in a transaction
-grat inspect <TX_HASH>
+prism inspect <TX_HASH>
 
 # Inspect only the second operation (index 1)
-grat inspect <TX_HASH> --op-index 1
+prism inspect <TX_HASH> --op-index 1
 
 # Inspect with JSON output
-grat --output json inspect <TX_HASH> --op-index 0
+prism --output json inspect <TX_HASH> --op-index 0
 ```
 
 ---
@@ -178,7 +180,7 @@ grat --output json inspect <TX_HASH> --op-index 0
 Replays a transaction and outputs a detailed, hierarchical execution timeline showing every host function call, event, and state mutation.
 
 ```
-grat trace <TX_HASH> [FLAGS]
+prism trace <TX_HASH> [FLAGS]
 ```
 
 **Arguments:**
@@ -199,16 +201,16 @@ grat trace <TX_HASH> [FLAGS]
 
 ```bash
 # Print a full execution trace
-grat trace <TX_HASH>
+prism trace <TX_HASH>
 
 # Save the trace to a file
-grat trace <TX_HASH> --output-file trace.txt
+prism trace <TX_HASH> --output-file trace.txt
 
 # Show only the authorization flow
-grat trace <TX_HASH> --auth-only
+prism trace <TX_HASH> --auth-only
 
 # Trace with authorization tree appended, save raw JSON
-grat --save trace.json trace <TX_HASH> --auth
+prism --save trace.json trace <TX_HASH> --auth
 ```
 
 ---
@@ -218,7 +220,7 @@ grat --save trace.json trace <TX_HASH> --auth
 Replays a transaction and produces a resource usage profile showing CPU instructions and memory bytes consumed per call.
 
 ```
-grat profile <TX_HASH> [FLAGS]
+prism profile <TX_HASH> [FLAGS]
 ```
 
 **Arguments:**
@@ -231,13 +233,13 @@ grat profile <TX_HASH> [FLAGS]
 
 ```bash
 # Profile a transaction
-grat profile <TX_HASH>
+prism profile <TX_HASH>
 
 # Profile on mainnet with JSON output
-grat --network mainnet --output json profile <TX_HASH>
+prism --network mainnet --output json profile <TX_HASH>
 
 # Profile and save the result
-grat --save profile.json profile <TX_HASH>
+prism --save profile.json profile <TX_HASH>
 ```
 
 **Sample Output (human):**
@@ -260,7 +262,7 @@ Resource Profile
 Computes and displays the ledger state diff for a transaction — what storage entries were created, updated, or deleted.
 
 ```
-grat diff <TX_HASH> [FLAGS]
+prism diff state <TX_HASH> [FLAGS]
 ```
 
 **Arguments:**
@@ -273,13 +275,13 @@ grat diff <TX_HASH> [FLAGS]
 
 ```bash
 # Show state changes for a transaction
-grat diff <TX_HASH>
+prism diff state <TX_HASH>
 
 # Output diff as JSON
-grat --output json diff <TX_HASH>
+prism --output json diff state <TX_HASH>
 
 # Save diff to file
-grat --save state_diff.json diff <TX_HASH>
+prism --save state_diff.json diff state <TX_HASH>
 ```
 
 **Sample Output (human):**
@@ -301,7 +303,7 @@ State Diff
 Launches an interactive TUI (Terminal UI) debugger for step-by-step transaction replay. Supports breakpoints, stepping, and live inspection.
 
 ```
-grat replay <TX_HASH> [FLAGS]
+prism replay <TX_HASH> [FLAGS]
 ```
 
 **Arguments:**
@@ -320,13 +322,13 @@ grat replay <TX_HASH> [FLAGS]
 
 ```bash
 # Launch the interactive TUI debugger
-grat replay <TX_HASH> --interactive
+prism replay <TX_HASH> --interactive
 
 # Short form
-grat replay <TX_HASH> -i
+prism replay <TX_HASH> -i
 
 # Pipe the TUI launch event as JSON (useful for tooling)
-grat --output json replay <TX_HASH> --interactive
+prism --output json replay <TX_HASH> --interactive
 ```
 
 #### TUI Mode
@@ -350,7 +352,7 @@ When launched with `--interactive`, the TUI debugger opens in your terminal. It 
 | `q` | Quit the TUI |
 | `?` | Show help overlay |
 
-> **Tip:** For a non-interactive trace, use `grat trace <TX_HASH>` which outputs the full timeline to stdout without launching a TUI.
+> **Tip:** For a non-interactive trace, use `prism trace <TX_HASH>` which outputs the full timeline to stdout without launching a TUI.
 
 ---
 
@@ -359,7 +361,7 @@ When launched with `--interactive`, the TUI debugger opens in your terminal. It 
 Re-simulates a transaction with optional modifications to test hypothetical scenarios ("what if the input was different?").
 
 ```
-grat whatif <TX_HASH> [FLAGS]
+prism whatif <TX_HASH> [FLAGS]
 ```
 
 **Arguments:**
@@ -393,13 +395,13 @@ grat whatif <TX_HASH> [FLAGS]
 
 ```bash
 # Inspect the transaction without modifications
-grat whatif <TX_HASH>
+prism whatif <TX_HASH>
 
 # Re-simulate with a patch file
-grat whatif <TX_HASH> --modify patches.json
+prism whatif <TX_HASH> --modify patches.json
 
 # Save the what-if result
-grat --save whatif_result.json whatif <TX_HASH> --modify patches.json
+prism --save whatif_result.json whatif <TX_HASH> --modify patches.json
 ```
 
 ---
@@ -409,7 +411,7 @@ grat --save whatif_result.json whatif <TX_HASH> --modify patches.json
 Exports a failed transaction as a standalone Rust test case that can be added to a test suite for regression testing.
 
 ```
-grat export <TX_HASH> [FLAGS]
+prism export <TX_HASH> [FLAGS]
 ```
 
 **Arguments:**
@@ -429,13 +431,13 @@ grat export <TX_HASH> [FLAGS]
 
 ```bash
 # Export as a Rust test case with default filename
-grat export <TX_HASH>
+prism export <TX_HASH>
 
 # Specify the output path
-grat export <TX_HASH> --output tests/regression/my_test.rs
+prism export <TX_HASH> --output tests/regression/my_test.rs
 
 # Export on mainnet
-grat --network mainnet export <TX_HASH> --output tests/mainnet_regression.rs
+prism --network mainnet export <TX_HASH> --output tests/mainnet_regression.rs
 ```
 
 ---
@@ -451,17 +453,17 @@ Manages the local taxonomy database of Soroban error definitions.
 Downloads the latest version of the taxonomy database from the official release channel.
 
 ```
-grat db update [FLAGS]
+prism db update [FLAGS]
 ```
 
 **Examples:**
 
 ```bash
 # Update the taxonomy database
-grat db update
+prism db update
 
 # Update and confirm via JSON
-grat --output json db update
+prism --output json db update
 ```
 
 #### `db stats`
@@ -469,16 +471,16 @@ grat --output json db update
 Displays the number of error definitions currently loaded in the local database.
 
 ```
-grat db stats [FLAGS]
+prism db stats [FLAGS]
 ```
 
 **Examples:**
 
 ```bash
-grat db stats
+prism db stats
 # → Taxonomy database: 142 entries
 
-grat --output json db stats
+prism --output json db stats
 # → { "status": "ok", "entries": 142 }
 ```
 
@@ -487,7 +489,7 @@ grat --output json db stats
 Searches the taxonomy database for errors matching a query string. Case-insensitive substring match against error names, categories, and descriptions.
 
 ```
-grat db search <QUERY>
+prism db search <QUERY>
 ```
 
 **Arguments:**
@@ -500,13 +502,13 @@ grat db search <QUERY>
 
 ```bash
 # Search for budget-related errors
-grat db search budget
+prism db search budget
 
 # Search for auth errors
-grat db search auth
+prism db search auth
 
 # Search for a specific error name
-grat db search "cpu exceeded"
+prism db search "cpu exceeded"
 ```
 
 ---
@@ -516,7 +518,7 @@ grat db search "cpu exceeded"
 Alias for a taxonomy search with a rich tabular output. Prints results as a formatted table with category, code, name, and summary columns.
 
 ```
-grat search-error <QUERY>
+prism search-error <QUERY>
 ```
 
 **Arguments:**
@@ -528,8 +530,8 @@ grat search-error <QUERY>
 **Examples:**
 
 ```bash
-grat search-error storage
-grat search-error "wasm trap"
+prism search-error storage
+prism search-error "wasm trap"
 ```
 
 **Sample Output:**
@@ -551,27 +553,27 @@ grat search-error "wasm trap"
 Clears the local disk cache of fetched transaction data and compiled WASM artifacts.
 
 ```
-grat clean [FLAGS]
+prism clean [FLAGS]
 ```
 
 **Examples:**
 
 ```bash
 # Clean the cache
-grat clean
+prism clean
 
 # Clean with verbose output
-grat -v clean
+prism -v clean
 ```
 
 ---
 
 ### `auth`
 
-Manages authentication credentials used for connecting to private RPC endpoints or the Grat cloud service.
+Manages authentication credentials used for connecting to private RPC endpoints or the Prism cloud service.
 
 ```
-grat auth <SUBCOMMAND>
+prism auth <SUBCOMMAND>
 ```
 
 **Subcommands:**
@@ -587,13 +589,13 @@ grat auth <SUBCOMMAND>
 
 ```bash
 # Authenticate
-grat auth login
+prism auth login
 
 # Check current auth status
-grat auth status
+prism auth status
 
 # Log out
-grat auth logout
+prism auth logout
 ```
 
 ---
@@ -603,7 +605,7 @@ grat auth logout
 Runs a suite of health checks covering binary version, network reachability, and local cache state.
 
 ```
-grat diagnostic [FLAGS]
+prism diagnostic [FLAGS]
 ```
 
 **Flags:**
@@ -616,10 +618,10 @@ grat diagnostic [FLAGS]
 
 ```bash
 # Run all checks
-grat diagnostic
+prism diagnostic
 
 # Only show problems
-grat diagnostic --quiet
+prism diagnostic --quiet
 ```
 
 **Sample Output:**
@@ -648,13 +650,13 @@ grat diagnostic --quiet
 Displays the last 10 transaction hashes that were decoded in the current environment.
 
 ```
-grat history [FLAGS]
+prism history [FLAGS]
 ```
 
 **Examples:**
 
 ```bash
-grat history
+prism history
 ```
 
 **Sample Output:**
@@ -670,10 +672,10 @@ grat history
 
 ### `serve`
 
-Starts a local HTTP and WebSocket server that bridges the CLI engine to the Grat web dashboard. The server streams live trace events over WebSocket as the replay progresses.
+Starts a local HTTP and WebSocket server that bridges the CLI engine to the Prism web dashboard. The server streams live trace events over WebSocket as the replay progresses.
 
 ```
-grat serve [FLAGS]
+prism serve [FLAGS]
 ```
 
 **Flags:**
@@ -687,16 +689,16 @@ grat serve [FLAGS]
 
 ```bash
 # Start on default port 8080
-grat serve
+prism serve
 
 # Start on a custom port
-grat serve --port 9090
+prism serve --port 9090
 
 # Bind to all interfaces (expose on LAN)
-grat serve --host 0.0.0.0 --port 8080
+prism serve --host 0.0.0.0 --port 8080
 ```
 
-**Endpoints exposed by `grat serve`:**
+**Endpoints exposed by `prism serve`:**
 
 | Endpoint | Description |
 |----------|-------------|
@@ -746,7 +748,7 @@ Use `"resume_from": <last_node_index>` to resume a dropped connection without re
 Generates shell completion scripts.
 
 ```
-grat completions <SHELL>
+prism completions <SHELL>
 ```
 
 **Arguments:**
@@ -759,15 +761,15 @@ grat completions <SHELL>
 
 ```bash
 # Add bash completions
-grat completions bash >> ~/.bashrc
+prism completions bash >> ~/.bashrc
 
 # Add zsh completions
-grat completions zsh > ~/.zfunc/_grat
+prism completions zsh > ~/.zfunc/_prism
 echo 'fpath=(~/.zfunc $fpath)' >> ~/.zshrc
 autoload -Uz compinit && compinit
 
 # Fish completions
-grat completions fish > ~/.config/fish/completions/grat.fish
+prism completions fish > ~/.config/fish/completions/prism.fish
 ```
 
 ---
@@ -787,20 +789,20 @@ All analysis commands accept `--output <FORMAT>` (or the global `--output` flag 
 
 ```bash
 # Machine-readable JSON for scripting
-grat --output json decode <TX_HASH> | jq '.severity'
+prism --output json decode <TX_HASH> | jq '.severity'
 
 # Compact for quick scanning in CI logs
-grat --output compact batch hash1 hash2 hash3
+prism --output compact batch hash1 hash2 hash3
 
 # Short for quick terminal checks
-grat decode <TX_HASH> --short
+prism decode <TX_HASH> --short
 ```
 
 ---
 
 ## Configuration File
 
-Grat reads configuration from `~/.grat/config.toml` on startup. Override the path with `--config-path`.
+Prism reads configuration from `~/.grat/config.toml` on startup. Override the path with `--config-path`.
 
 ```toml
 # ~/.grat/config.toml
@@ -812,7 +814,7 @@ max_cache_size_mb = 512
 Override the config file for a single invocation:
 
 ```bash
-grat --config-path /path/to/custom.toml decode <TX_HASH>
+prism --config-path /path/to/custom.toml decode <TX_HASH>
 ```
 
 ---
@@ -828,22 +830,22 @@ grat --config-path /path/to/custom.toml decode <TX_HASH>
 ## Quick Reference
 
 ```
-grat decode <TX_HASH>                    # Decode a failed transaction
-grat batch <HASH> <HASH> ...             # Decode multiple transactions
-grat inspect <TX_HASH> [--op-index N]   # Inspect a specific operation
-grat trace <TX_HASH>                     # Full execution timeline
-grat profile <TX_HASH>                   # Resource usage breakdown
-grat diff <TX_HASH>                      # Ledger state diff
-grat replay <TX_HASH> -i                 # Interactive TUI debugger
-grat whatif <TX_HASH> [--modify f.json] # Re-simulate with changes
-grat export <TX_HASH>                    # Export as Rust test case
-grat search-error <QUERY>               # Search error taxonomy
-grat db update                           # Update taxonomy database
-grat db stats                            # Show database entry count
-grat clean                               # Clear local cache
-grat auth login                          # Authenticate
-grat diagnostic                          # Health check
-grat history                             # Recent transaction history
-grat serve [--port N]                    # Start local web server
-grat completions <SHELL>                 # Generate shell completions
+prism decode <TX_HASH>                    # Decode a failed transaction
+prism batch <HASH> <HASH> ...             # Decode multiple transactions
+prism inspect <TX_HASH> [--op-index N]   # Inspect a specific operation
+prism trace <TX_HASH>                     # Full execution timeline
+prism profile <TX_HASH>                   # Resource usage breakdown
+prism diff state <TX_HASH>                      # Ledger state diff
+prism replay <TX_HASH> -i                 # Interactive TUI debugger
+prism whatif <TX_HASH> [--modify f.json] # Re-simulate with changes
+prism export <TX_HASH>                    # Export as Rust test case
+prism search-error <QUERY>               # Search error taxonomy
+prism db update                           # Update taxonomy database
+prism db stats                            # Show database entry count
+prism clean                               # Clear local cache
+prism auth login                          # Authenticate
+prism diagnostic                          # Health check
+prism history                             # Recent transaction history
+prism serve [--port N]                    # Start local web server
+prism completions <SHELL>                 # Generate shell completions
 ```

@@ -1,7 +1,7 @@
 {
   "name": "cli-integration",
   "version": "1.0.0",
-  "description": "Example showing how to wrap the grat rust CLI.",
+  "description": "Example showing how to wrap the Prism Rust CLI.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"

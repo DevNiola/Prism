@@ -2,12 +2,12 @@ import { execFile } from "child_process";
 
 export function callGrat(args: string[]): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    execFile("grat", [...args, "--output", "json"], (error, stdout, stderr) => {
+    execFile("prism", [...args, "--output", "json"], (error, stdout, stderr) => {
       if (error) {
         const stderrMsg = stderr ? stderr.trim() : "";
         const message = stderrMsg
-          ? "grat CLI error: " + stderrMsg
-          : "grat CLI failed: " + (error.message || "Unknown error");
+          ? "Prism CLI error: " + stderrMsg
+          : "Prism CLI failed: " + (error.message || "Unknown error");
         return reject(new Error(message));
       }
       try {
@@ -15,8 +15,8 @@ export function callGrat(args: string[]): Promise<unknown> {
       } catch {
         const stderrMsg = stderr ? stderr.trim() : "";
         const message = stderrMsg
-          ? "Failed to parse grat output: " + stderrMsg
-          : "Failed to parse grat output";
+          ? "Failed to parse Prism output: " + stderrMsg
+          : "Failed to parse Prism output";
         reject(new Error(message));
       }
     });

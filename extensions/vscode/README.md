@@ -19,7 +19,7 @@ The extension requires the `grat` CLI binary to be installed and accessible from
 git clone https://github.com/DevNiola/Prism.git
 cd Prism
 cargo build --release
-cp target/release/grat ~/.local/bin/grat
+cp target/release/prism ~/.local/bin/prism
 ```
 
 ## Usage
@@ -34,14 +34,14 @@ cp target/release/grat ~/.local/bin/grat
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `grat.network` | `"testnet"` | Network for operations: `mainnet`, `testnet`, `futurenet` |
-| `grat.binaryPath` | `"grat"` | Absolute path to the `grat` binary if not on `PATH` |
+| `grat.binaryPath` | `"prism"` | Absolute path to the `prism` binary if not on `PATH` |
 
 Add to your `settings.json`:
 
 ```json
 {
   "grat.network": "mainnet",
-  "grat.binaryPath": "/home/user/.local/bin/grat"
+  "grat.binaryPath": "/home/user/.local/bin/prism"
 }
 ```
 

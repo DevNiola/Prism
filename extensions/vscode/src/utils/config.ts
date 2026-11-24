@@ -4,6 +4,6 @@ export function getConfig() {
   const config = vscode.workspace.getConfiguration("grat");
   return {
     network: config.get<string>("network", "testnet"),
-    binaryPath: config.get<string>("binaryPath", "grat"),
+    binaryPath: config.get<string>("binaryPath", "prism"),
   };
 }

@@ -1,35 +1,35 @@
 ---
 title: "CLI Reference"
-description: "A complete guide to the Grat command-line interface."
+description: "A complete guide to the Prism command-line interface."
 ---
 
-The CLI is the primary interface for Grat. Every feature is accessible from the terminal with human-readable colored output.
+The CLI is the primary interface for Prism. Every feature is accessible from the terminal with human-readable colored output.
 
 ## Essential Commands
 
-### `grat decode <tx-hash>`
+### `prism decode <tx-hash>`
 
 The most common command. Fetches and decodes a transaction failure.
 
 - `--network`: `mainnet`, `testnet` (default), or a custom RPC URL.
 - `--output json`: For machine-readable results.
 
-### `grat trace <tx-hash>`
+### `prism trace <tx-hash>`
 
 Replays the transaction and outputs a hierarchical execution timeline.
 
-### `grat replay <tx-hash> --interactive`
+### `prism replay <tx-hash> --interactive`
 
 Launches the TUI debugger for step-through investigation.
 
-### `grat profile <tx-hash>`
+### `prism profile <tx-hash>`
 
 Identifies budget hotspots and expensive operations.
 
-### `grat serve`
+### `prism serve`
 
 Starts a WebSocket server for streaming trace updates to the web interface.
 
-### `grat db update`
+### `prism db update`
 
 Downloads the latest version of the Error Taxonomy Database.
