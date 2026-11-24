@@ -1,8 +1,8 @@
 "use client";
 
+import Skeleton from "@/components/shared/Skeleton";
 import type { DiagnosticReport } from "@/lib/types";
 import SuggestedFixes from "./SuggestedFixes";
-import Skeleton from "@/components/shared/Skeleton";
 import { getSeverityMeta } from "@/components/shared/SeverityBadge";
 
 interface ErrorCardProps {
