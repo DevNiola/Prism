@@ -14,6 +14,36 @@ pub fn decode_error(tx_result_json: &str) -> Result<JsValue, JsValue> {
     serde_wasm_bindgen::to_value(&report).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Decode a value using its Stellar XDR schema and return formatted JSON.
+#[wasm_bindgen]
+pub fn decode_xdr(xdr_type: &str, bytes: &[u8]) -> Result<String, JsValue> {
+    use stellar_xdr::curr::{
+        DiagnosticEvent, Limits, ReadXdr, ScVal, TransactionEnvelope, TransactionMeta,
+        TransactionResult,
+    };
+
+    fn pretty<T: ReadXdr + serde::Serialize>(bytes: &[u8]) -> Result<String, JsValue> {
+        let value = T::from_xdr(
+            bytes,
+            Limits {
+                depth: 64,
+                len: 4 * 1024 * 1024,
+            },
+        )
+        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+        serde_json::to_string_pretty(&value).map_err(|error| JsValue::from_str(&error.to_string()))
+    }
+
+    match xdr_type {
+        "TransactionEnvelope" => pretty::<TransactionEnvelope>(bytes),
+        "TransactionResult" => pretty::<TransactionResult>(bytes),
+        "TransactionMeta" => pretty::<TransactionMeta>(bytes),
+        "DiagnosticEvent" => pretty::<DiagnosticEvent>(bytes),
+        "ScVal" => pretty::<ScVal>(bytes),
+        _ => Err(JsValue::from_str("Unsupported Stellar XDR type.")),
+    }
+}
+
 #[allow(clippy::too_many_lines)]
 fn decode_report_inner(tx_result_json: &str) -> Result<DiagnosticReport, String> {
     let parsed: serde_json::Value =

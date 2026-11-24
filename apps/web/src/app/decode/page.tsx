@@ -10,6 +10,8 @@ import {
   ContractErrorView,
   ContextSummary,
 } from "@/components";
+import XdrViewer from "@/components/shared/XdrViewer";
+import { stellarXdrTypes, type StellarXdrType } from "@/lib/wasm";
 import Button from "@/components/shared/Button";
 import type { DiagnosticReport } from "@/lib/types";
 import { useSessionStore } from "@/store/session";
@@ -18,6 +20,8 @@ import EmptyState from "@/components/shared/EmptyState";
 
 function DecodePageContent() {
   const [activeTab, setActiveTab] = useState<"diagnose" | "lookup">("diagnose");
+  const [xdr, setXdr] = useState("");
+  const [xdrType, setXdrType] = useState<StellarXdrType>("TransactionEnvelope");
   const [report, setReport] = useState<DiagnosticReport | null>(null);
 
   const { addToHistory, history } = useSessionStore();
@@ -100,6 +104,30 @@ function DecodePageContent() {
           {activeTab === "diagnose" ? (
             <div className="space-y-6">
               <DecodeForm onDecode={handleDecode} />
+              <details className="rounded-lg border border-slate-800 p-4">
+                <summary className="cursor-pointer font-semibold">Inspect Stellar XDR</summary>
+                <div className="mt-4 space-y-3">
+                  <label className="block text-sm">
+                    XDR type
+                    <select
+                      value={xdrType}
+                      onChange={(event) => setXdrType(event.target.value as StellarXdrType)}
+                      className="ml-2 rounded bg-slate-800 px-2 py-1"
+                    >
+                      {stellarXdrTypes.map((type) => <option key={type}>{type}</option>)}
+                    </select>
+                  </label>
+                  <label className="block text-sm">
+                    Base64 XDR
+                    <textarea
+                      value={xdr}
+                      onChange={(event) => setXdr(event.target.value)}
+                      className="mt-1 block w-full rounded border border-slate-700 bg-slate-900 p-2 font-mono"
+                    />
+                  </label>
+                  <XdrViewer xdr={xdr} xdrType={xdrType} />
+                </div>
+              </details>
               {!report && (
                 <EmptyState
                   title="Ready to decode an error"

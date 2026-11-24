@@ -97,3 +97,10 @@ web-dev:
 ## server-dev: start the Fastify server in development mode
 server-dev:
 	pnpm --filter grat-server run dev
+
+.PHONY: web-wasm
+## web-wasm: build and stage the browser XDR decoder
+web-wasm:
+	wasm-pack build crates/wasm --target web --release
+	mkdir -p apps/web/public/wasm
+	cp crates/wasm/pkg/grat_wasm.js crates/wasm/pkg/grat_wasm_bg.wasm apps/web/public/wasm/
