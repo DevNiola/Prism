@@ -1,14 +1,28 @@
 ---
-title: "replay_transaction"
-description: "Starts a Tier 2/3 simulation."
+title: "Replay a transaction"
+description: "Inspect the Fastify replay route and fetch a full trace from the CLI bridge."
 ---
 
-```rust
-pub async fn replay_transaction(
-    tx_hash: &str,
-    state: &ReconstructedState,
-    options: ReplayOptions
-) -> Result<TraceTimeline, GratError>
+## Fastify replay routes
+
+`POST /api/replay` on port 3001 is a rate-limited placeholder. It accepts no defined body and returns HTTP 200 with `{"status":"queued"}`. It does not enqueue a job or return a job ID.
+
+```bash
+curl --fail-with-body -X POST http://localhost:3001/api/replay
 ```
 
-Replays a transaction against a reconstructed state snapshot and returns a hierarchical execution trace.
+`GET /api/replay/:jobId` looks up an existing BullMQ job using its string ID. It returns `jobId`, `state`, `progress`, `result`, and `failedReason`. The last two fields can be null. An unknown job ID returns HTTP 404 with `error` and `statusCode`.
+
+```bash
+curl --fail-with-body "http://localhost:3001/api/replay/${JOB_ID}"
+```
+
+## Fetch a full trace
+
+Run `grat --network testnet serve` and call `GET /api/trace/:tx_hash` on the CLI bridge. It accepts a transaction hash as a path parameter and returns the JSON execution trace. A replay failure returns HTTP 500 with a plain-text error.
+
+```bash
+curl --fail-with-body "http://localhost:8080/api/trace/${TX_HASH}"
+```
+
+The Fastify operations will use the [generated OpenAPI specification](https://github.com/DevNiola/Prism/issues/400) when it is available.

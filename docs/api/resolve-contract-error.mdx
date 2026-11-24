@@ -1,14 +1,8 @@
 ---
-title: "resolve_contract_error"
-description: "Resolves custom error codes via WASM metadata."
+title: "Resolve a contract error"
+description: "Look up the name of a Soroban contract's custom error."
 ---
 
-```rust
-pub async fn resolve_contract_error(
-    contract_id: &str,
-    error_index: u32,
-    wasm_cache: &WasmCache
-) -> Result<ResolvedError, GratError>
-```
+The Fastify server does not expose a contract-error resolution route. Use the Rust engine's `grat_core::decode::contract_error_resolver::ContractErrorResolver::resolve` with a contract address and a `u32` error code. It looks up the contract specification and returns a pair containing the error name and optional documentation. If lookup fails, it returns the numeric code as a string and no documentation.
 
-Parses the `contractspecv0` sections of the contract's WASM to resolve numeric error codes into human-readable enum names.
+The WASM export `resolve_contract_error(wasm_bytes, error_code)` is currently a placeholder that returns `{"status":"not_yet_implemented"}`.

@@ -81,67 +81,7 @@ curl http://localhost:3001/health
 
 ## Replay
 
-### `POST /api/replay`
-
-Enqueues a transaction replay job. The job runs asynchronously; poll `GET /api/replay/:jobId` for status.
-
-**Request Body:**
-
-```json
-{
-  "txHash": "d5c3b2a1...a6f5e4d3c2",
-  "network": "mainnet"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `txHash` | string | Yes | The transaction hash to replay |
-| `network` | string | Yes | Network name: `mainnet`, `testnet`, `futurenet` |
-
-**Response `200 OK`:**
-
-```json
-{
-  "status": "queued"
-}
-```
-
-**Example:**
-
-```bash
-curl -X POST http://localhost:3001/api/replay \
-  -H "Content-Type: application/json" \
-  -d '{"txHash": "d5c3b2a1...", "network": "testnet"}'
-```
-
----
-
-### `GET /api/replay/:jobId`
-
-Polls the status of a previously enqueued replay job.
-
-**Path Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `jobId` | string | The job ID returned when the replay was enqueued |
-
-**Response `200 OK`:**
-
-```json
-{
-  "status": "pending"
-}
-```
-
-Possible `status` values: `pending`, `running`, `completed`, `failed`.
-
-**Example:**
-
-```bash
-curl http://localhost:3001/api/replay/job_abc123
-```
+The [replay reference](api/replay-transaction.mdx) documents the Fastify placeholder, the job status response, and the CLI trace bridge.
 
 ---
 
@@ -716,7 +656,7 @@ The server is configured via environment variables:
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | `GET` | `/health` | — | Server health check |
-| `POST` | `/api/replay` | — | Enqueue a replay job |
+| `POST` | `/api/replay` | — | Return the queued placeholder response |
 | `GET` | `/api/replay/:jobId` | — | Poll replay job status |
 | `POST` | `/api/session` | — | Create a debug session |
 | `GET` | `/api/session/:sessionId` | — | Get session metadata |
