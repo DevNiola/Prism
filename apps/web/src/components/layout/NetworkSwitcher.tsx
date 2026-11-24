@@ -54,6 +54,7 @@ export default function NetworkSwitcher() {
         throw new Error();
       }
       applyCustomRpcUrl(url.href);
+      setEditingCustom(false);
       setDraftUrl(null);
       setUrlError("");
     } catch {
