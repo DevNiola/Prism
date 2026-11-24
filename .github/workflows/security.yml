@@ -87,3 +87,14 @@ jobs:
           format: table
           severity: HIGH,CRITICAL
           exit-code: "1"
+
+  security:
+    name: security
+    if: ${{ always() }}
+    needs: [cargo-audit, javascript-audit, codeql, trivy]
+    runs-on: ubuntu-latest
+    env:
+      RESULTS: ${{ toJSON(needs.*.result) }}
+    steps:
+      - name: Require all security jobs to succeed
+        run: jq -e 'all(.[]; . == "success")' <<< "$RESULTS"

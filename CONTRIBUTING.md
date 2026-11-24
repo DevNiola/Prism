@@ -80,3 +80,7 @@ The hooks automatically verify:
 ## License
 
 Contributions are licensed under the project's MIT License.
+
+## Required checks and branch protection
+
+See the [branch protection policy](.github/branch-protection.md) for the required GitHub Actions checks and the administrator setup command.
