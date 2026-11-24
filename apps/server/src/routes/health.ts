@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, RouteHandlerMethod } from "fastify";
 import { config } from "../config";
 import { getRedis } from "../redis";
 import { replayQueue } from "../workers/queue";
@@ -28,7 +28,7 @@ async function checkDependency<T extends object>(
 }
 
 export async function healthRoutes(app: FastifyInstance) {
-  app.get("/health", { preHandler: [defaultRateLimiter] }, async (_request, reply) => {
+  const readiness: RouteHandlerMethod = async (_request, reply) => {
     const [redis, sorobanRpc, workerQueue] = await Promise.all([
       checkDependency(async () => {
         await getRedis().ping();
@@ -69,5 +69,19 @@ export async function healthRoutes(app: FastifyInstance) {
       version: "0.1.0",
       dependencies,
     });
-  });
+  };
+
+  app.get("/health", { preHandler: [defaultRateLimiter] }, readiness);
+  app.get("/v1/health/ready", readiness);
+  app.get("/metrics", async (_request, reply) =>
+    reply.type("text/plain; version=0.0.4; charset=utf-8").send([
+      "# HELP process_uptime_seconds Seconds since the server process started.",
+      "# TYPE process_uptime_seconds gauge",
+      `process_uptime_seconds ${process.uptime()}`,
+      "# HELP process_resident_memory_bytes Resident memory size in bytes.",
+      "# TYPE process_resident_memory_bytes gauge",
+      `process_resident_memory_bytes ${process.memoryUsage.rss()}`,
+      "",
+    ].join("\n")),
+  );
 }

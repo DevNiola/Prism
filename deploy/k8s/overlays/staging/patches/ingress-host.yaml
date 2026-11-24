@@ -15,21 +15,21 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: prism-server
+                name: server
                 port:
                   number: 3001
           - path: /health
             pathType: Exact
             backend:
               service:
-                name: prism-server
+                name: server
                 port:
                   number: 3001
           - path: /ws
             pathType: Prefix
             backend:
               service:
-                name: prism-server
+                name: server
                 port:
                   number: 3001
           - path: /
