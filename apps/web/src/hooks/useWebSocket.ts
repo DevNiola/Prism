@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
+import type { DiagnosticEventEntry } from "@/lib/types";
+
 export interface TraceNode {
   node: any;
   path: number[];
@@ -31,12 +33,19 @@ export interface TraceStreamCallbacks {
   onTraceCompleted?: (data: {
     total_nodes: number;
     duration_ms: number;
+    diagnostic_events?: DiagnosticEventEntry[];
   }) => void;
   onTraceError?: (data: { error: string }) => void;
 }
 
 export function useWebSocket(url: string, callbacks?: TraceStreamCallbacks) {
   const wsRef = useRef<WebSocket | null>(null);
+  const callbacksRef = useRef(callbacks);
+
+  useEffect(() => {
+    callbacksRef.current = callbacks;
+  }, [callbacks]);
+
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,22 +67,22 @@ export function useWebSocket(url: string, callbacks?: TraceStreamCallbacks) {
 
         switch (message.type) {
           case "trace_started":
-            callbacks?.onTraceStarted?.(message);
+            callbacksRef.current?.onTraceStarted?.(message);
             break;
           case "trace_node":
-            callbacks?.onTraceNode?.(message);
+            callbacksRef.current?.onTraceNode?.(message);
             break;
           case "resource_update":
-            callbacks?.onResourceUpdate?.(message);
+            callbacksRef.current?.onResourceUpdate?.(message);
             break;
           case "state_diff_entry":
-            callbacks?.onStateDiffEntry?.(message);
+            callbacksRef.current?.onStateDiffEntry?.(message);
             break;
           case "trace_completed":
-            callbacks?.onTraceCompleted?.(message);
+            callbacksRef.current?.onTraceCompleted?.(message);
             break;
           case "trace_error":
-            callbacks?.onTraceError?.(message);
+            callbacksRef.current?.onTraceError?.(message);
             setError(message.error);
             break;
           default:
@@ -97,7 +106,7 @@ export function useWebSocket(url: string, callbacks?: TraceStreamCallbacks) {
     return () => {
       ws.close();
     };
-  }, [url, callbacks]);
+  }, [url]);
 
   const sendMessage = useCallback((message: any) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

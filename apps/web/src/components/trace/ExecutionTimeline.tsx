@@ -1,11 +1,12 @@
-import Skeleton from "@/components/shared/Skeleton";
-
 "use client";
+
+import Skeleton from "@/components/shared/Skeleton";
 
 import React, { useEffect, useRef } from "react";
 
 interface ExecutionTimelineProps {
   nodes: any[];
+  id?: string;
   currentStep?: number;
   transitionDurationMs?: number;
   onSelectStep?: (index: number) => void;
@@ -47,6 +48,7 @@ export function ExecutionTimelineSkeleton() {
 
 export function ExecutionTimeline({
   nodes,
+  id,
   currentStep = 0,
   transitionDurationMs = 200,
   onSelectStep,
@@ -100,12 +102,13 @@ export function ExecutionTimeline({
           return (
             <div
               key={idx}
+              id={id ? `${id}-step-${idx}` : undefined}
               ref={isActive ? activeItemRef : null}
               onClick={() => onSelectStep?.(idx)}
               style={{
                 transitionDuration: `${transitionDurationMs}ms`,
               }}
-              className={`min-w-[280px] p-3 border rounded cursor-pointer transition-all ${
+              className={`min-w-[280px] p-3 border rounded cursor-pointer transition-all target:ring-2 target:ring-violet-500 ${
                 isActive
                   ? "bg-purple-50 border-purple-500 shadow-sm translate-x-1 border-l-4 border-l-purple-600"
                   : "border-gray-200 hover:bg-gray-50"
