@@ -26,7 +26,12 @@ export function useSessionUrl(page: "decode" | "trace") {
   const explicitNetwork = parseSessionNetwork(params.get("network"));
   const txHash = params.get("txHash")?.trim() || null;
   const view = page === "trace" ? "trace" : params.get("view") === "lookup" ? "lookup" : "diagnose";
-  const network = explicitNetwork ?? (page === "trace" ? "testnet" : preferredNetwork);
+  const historyNetwork = useSessionStore((state) =>
+    page === "decode" && txHash
+      ? state.history.find((entry) => entry.txHash === txHash)?.network
+      : undefined,
+  );
+  const network = explicitNetwork ?? historyNetwork ?? (page === "trace" ? "testnet" : preferredNetwork);
 
   useEffect(() => {
     useSessionStore.getState().setSessionLocation({ txHash, network, view });
@@ -45,5 +50,5 @@ export function useSessionUrl(page: "decode" | "trace") {
     }
   }
 
-  return { txHash, network, explicitNetwork, view, updateSessionUrl };
+  return { txHash, network, view, updateSessionUrl };
 }

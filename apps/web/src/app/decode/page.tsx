@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSessionUrl } from "@/hooks/useSessionUrl";
 import {
   Header,
@@ -15,7 +15,7 @@ import { useSessionStore } from "@/store/session";
 import EmptyState from "@/components/shared/EmptyState";
 
 function DecodePageContent() {
-  const { txHash: txHashParam, network, explicitNetwork, view: activeTab, updateSessionUrl } =
+  const { txHash: txHashParam, network, view: activeTab, updateSessionUrl } =
     useSessionUrl("decode");
   const { addToHistory, history } = useSessionStore();
   const [localResult, setLocalResult] = useState<{
@@ -26,21 +26,24 @@ function DecodePageContent() {
 
   const cachedEntry = txHashParam
     ? history.find((entry) => entry.txHash === txHashParam &&
-        (!explicitNetwork || entry.network === explicitNetwork))
+        entry.network === network)
     : undefined;
-  const activeNetwork = cachedEntry?.network ?? network;
-  const report = localResult?.txHash === txHashParam && localResult.network === activeNetwork
+  const report = localResult?.txHash === txHashParam && localResult.network === network
     ? localResult.report
     : cachedEntry?.report ?? null;
 
+  useEffect(() => {
+    if (report) useSessionStore.getState().setReport(report);
+  }, [txHashParam, network, report]);
+
   function handleDecode(decoded: DiagnosticReport | null) {
     const txHash = decoded?.transaction_context?.tx_hash || txHashParam;
-    setLocalResult({ txHash, network: activeNetwork, report: decoded });
+    setLocalResult({ txHash, network: network, report: decoded });
     if (decoded) {
       const historyKey = txHash ??
         `${decoded.error_category.toLowerCase()}-${decoded.error_code}-${Date.now()}`;
-      addToHistory(historyKey, activeNetwork, decoded);
-      if (txHash) updateSessionUrl({ txHash, network: activeNetwork });
+      addToHistory(historyKey, network, decoded);
+      if (txHash) updateSessionUrl({ txHash, network: network });
     }
   }
 
@@ -65,7 +68,7 @@ function DecodePageContent() {
         {/* Tabs */}
         <div className="flex justify-center border-b border-slate-800 mb-8 max-w-md mx-auto">
           <button
-            onClick={() => updateSessionUrl({ view: "diagnose", network: activeNetwork })}
+            onClick={() => updateSessionUrl({ view: "diagnose", network: network })}
             aria-selected={activeTab === "diagnose"}
             role="tab"
             className={`flex-1 pb-3 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 border-b-2 ${
@@ -77,7 +80,7 @@ function DecodePageContent() {
             🔍 Diagnose Error
           </button>
           <button
-            onClick={() => updateSessionUrl({ view: "lookup", network: activeNetwork })}
+            onClick={() => updateSessionUrl({ view: "lookup", network: network })}
             aria-selected={activeTab === "lookup"}
             role="tab"
             className={`flex-1 pb-3 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 border-b-2 ${
