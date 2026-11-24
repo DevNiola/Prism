@@ -25,6 +25,8 @@ struct RpcMetrics {
     request_duration: HistogramVec,
     /// Counter of HTTP 500 / 429 (and other tracked error statuses) responses.
     http_errors: CounterVec,
+    /// Counter of RPC retry attempts, labeled by endpoint URL and JSON-RPC method.
+    retries: CounterVec,
 }
 
 static METRICS: OnceLock<RpcMetrics> = OnceLock::new();
@@ -50,9 +52,19 @@ fn metrics() -> &'static RpcMetrics {
         )
         .expect("failed to register rpc_http_errors_total counter");
 
+        let retries = register_counter_vec!(
+            opts!(
+                "rpc_retries_total",
+                "Total number of RPC retry attempts due to transient failures (429, 5xx)"
+            ),
+            &["endpoint", "method"]
+        )
+        .expect("failed to register rpc_retries_total counter");
+
         RpcMetrics {
             request_duration,
             http_errors,
+            retries,
         }
     })
 }
@@ -83,6 +95,19 @@ pub fn record_rpc_http_error(endpoint: &str, method: &str, status: u16) {
     metrics()
         .http_errors
         .with_label_values(&[endpoint, method, &status.to_string()])
+        .inc();
+}
+
+/// Increment the retry counter for a given RPC method.
+///
+/// Called each time a transient failure (429 or 5xx) triggers a retry attempt.
+/// Labels:
+/// - `endpoint` — the RPC node URL
+/// - `method` — the JSON-RPC method name
+pub fn record_rpc_retry(endpoint: &str, method: &str) {
+    metrics()
+        .retries
+        .with_label_values(&[endpoint, method])
         .inc();
 }
 
@@ -153,6 +178,20 @@ mod tests {
         assert!(
             output.contains("429") || output.contains("status=\"429\""),
             "expected status 429 label:\n{output}"
+        );
+    }
+
+    #[test]
+    fn record_rpc_retry_tracks_attempts() {
+        let endpoint = "https://soroban-testnet.stellar.org";
+        record_rpc_retry(endpoint, "getTransaction");
+        record_rpc_retry(endpoint, "getTransaction");
+        record_rpc_retry(endpoint, "getLedgerEntries");
+
+        let output = gather();
+        assert!(
+            output.contains("rpc_retries_total"),
+            "expected retry counter in exposition:\n{output}"
         );
     }
 

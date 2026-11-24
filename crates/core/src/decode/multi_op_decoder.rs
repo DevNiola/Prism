@@ -133,6 +133,19 @@ impl MultiOpDecoder {
         let summary = resource_summary(&resources);
         let fee = crate::decode::fee_analyzer::analyze_fee_breakdown(tx_data);
 
+        let decoded_results: Vec<DecodedOperationResult> = operations
+            .iter()
+            .enumerate()
+            .map(|(index, operation)| {
+                decode_operation_result(
+                    operation,
+                    results.operation_results.get(index),
+                    results.transaction_failure,
+                )
+            })
+            .collect();
+        let first_failing_index = decoded_results.iter().position(|r| !r.success);
+
         operations
             .iter()
             .enumerate()
@@ -145,23 +158,26 @@ impl MultiOpDecoder {
                     single_return
                         .and_then(|(return_index, value)| (return_index == index).then_some(value))
                 });
+                let is_first_failure = first_failing_index == Some(index);
+                let result = decode_operation_result(
+                    operation,
+                    results.operation_results.get(index),
+                    results.transaction_failure,
+                );
                 Ok(build_operation_report(
                     tx_data,
                     operations.len(),
                     index,
                     operation,
                     self.decode_operation(operation, return_value),
-                    decode_operation_result(
-                        operation,
-                        results.operation_results.get(index),
-                        results.transaction_failure,
-                    ),
+                    result,
                     results.committed,
                     diagnostics,
                     events.get(index).map(Vec::as_slice).unwrap_or_default(),
                     &resources,
                     fee.clone(),
                     summary.clone(),
+                    is_first_failure,
                 ))
             })
             .collect()
@@ -212,6 +228,82 @@ mod tests {
         assert!(!decoded.success);
         assert_eq!(decoded.category, "Xdr");
         assert_eq!(decoded.code, "OperationResultTypeMismatch");
+    }
+
+    #[test]
+    fn first_failing_operation_is_correctly_identified_and_highlighted() {
+        let op1 = operation(OperationBody::Inflation);
+        let op2 = operation(OperationBody::Inflation);
+        let op3 = operation(OperationBody::Inflation);
+
+        let res1 = DecodedOperationResult {
+            success: true,
+            attempted: true,
+            category: "ClassicStellar".into(),
+            code: "Success".into(),
+        };
+        let res2 = DecodedOperationResult {
+            success: false,
+            attempted: true,
+            category: "ClassicStellar".into(),
+            code: "OpUnderfunded".into(),
+        };
+        let res3 = DecodedOperationResult {
+            success: false,
+            attempted: false,
+            category: "ClassicStellar".into(),
+            code: "OpNotAttempted".into(),
+        };
+
+        let decoded_results = vec![res1, res2, res3];
+        let first_failing_idx = decoded_results.iter().position(|r| !r.success);
+        assert_eq!(first_failing_idx, Some(1));
+
+        let tx_data = serde_json::json!({"hash": "abcd", "ledger": 100});
+        let resources = crate::decode::resource_analyzer::TransactionResultMeta::default();
+        let fee = crate::types::report::FeeBreakdown {
+            total_charged_fee: 100,
+            inclusion_fee: 100,
+            resource_fee: 0,
+            refundable_resource_fee: 0,
+            refundable_fee: 0,
+            non_refundable_fee: 100,
+            bid_fee: None,
+        };
+        let resource_summary = crate::types::report::ResourceSummary {
+            cpu_instructions_used: 0,
+            cpu_instructions_limit: 1000,
+            memory_bytes_used: 0,
+            memory_bytes_limit: 1000,
+            read_bytes: 0,
+            read_bytes_limit: 1000,
+            write_bytes: 0,
+        };
+
+        let rep0 = build_operation_report(
+            &tx_data, 3, 0, &op1,
+            DecodedOperation { operation_name: "Inflation".into(), display_name: "Inflation".into(), arguments: vec![], return_value: None },
+            DecodedOperationResult { success: true, attempted: true, category: "ClassicStellar".into(), code: "Success".into() },
+            false, &[], &[], &resources, fee.clone(), resource_summary.clone(), false,
+        );
+        let rep1 = build_operation_report(
+            &tx_data, 3, 1, &op2,
+            DecodedOperation { operation_name: "Inflation".into(), display_name: "Inflation".into(), arguments: vec![], return_value: None },
+            DecodedOperationResult { success: false, attempted: true, category: "ClassicStellar".into(), code: "OpUnderfunded".into() },
+            false, &[], &[], &resources, fee.clone(), resource_summary.clone(), true,
+        );
+        let rep2 = build_operation_report(
+            &tx_data, 3, 2, &op3,
+            DecodedOperation { operation_name: "Inflation".into(), display_name: "Inflation".into(), arguments: vec![], return_value: None },
+            DecodedOperationResult { success: false, attempted: false, category: "ClassicStellar".into(), code: "OpNotAttempted".into() },
+            false, &[], &[], &resources, fee, resource_summary, false,
+        );
+
+        assert_eq!(rep0.is_first_failure, Some(false));
+        assert_eq!(rep1.is_first_failure, Some(true));
+        assert_eq!(rep2.is_first_failure, Some(false));
+        assert!(rep1.summary.contains("[FIRST FAILING OPERATION]"));
+        assert!(rep1.detailed_explanation.contains("first failing operation"));
     }
 }
 
@@ -583,6 +675,7 @@ fn build_operation_report(
     resources: &crate::decode::resource_analyzer::TransactionResultMeta,
     fee: crate::types::report::FeeBreakdown,
     resource_summary: crate::types::report::ResourceSummary,
+    is_first_failure: bool,
 ) -> DiagnosticReport {
     let committed = transaction_committed && result.success;
     let outcome = if committed {
@@ -594,16 +687,22 @@ fn build_operation_report(
     } else {
         "was not executed"
     };
+    let tag = if is_first_failure {
+        " [FIRST FAILING OPERATION]"
+    } else {
+        ""
+    };
     let mut report = DiagnosticReport::new(
         &result.category,
         0,
         &result.code,
         &format!(
-            "Operation {}/{} ({}) {}",
+            "Operation {}/{} ({}) {}{}",
             index + 1,
             count,
             decoded.operation_name,
-            outcome
+            outcome,
+            tag
         ),
     );
     report.severity = if committed {
@@ -615,12 +714,14 @@ fn build_operation_report(
     };
     report.operation_index = Some(index);
     report.operation_count = Some(count);
+    report.is_first_failure = Some(is_first_failure);
     report.detailed_explanation = operation_explanation(
         index,
         count,
         &decoded.operation_name,
         &result,
         transaction_committed,
+        is_first_failure,
     );
     report.transaction_context = Some(crate::types::report::TransactionContext {
         tx_hash: tx_data
@@ -707,6 +808,7 @@ fn operation_explanation(
     name: &str,
     result: &DecodedOperationResult,
     transaction_committed: bool,
+    is_first_failure: bool,
 ) -> String {
     let mut explanation = format!(
         "Operation {}/{} is a {} operation. Its XDR result is {}.",
@@ -715,6 +817,9 @@ fn operation_explanation(
         name,
         result.code,
     );
+    if is_first_failure {
+        explanation.push_str(" This is the first failing operation that triggered the transaction failure.");
+    }
     if result.success && !transaction_committed {
         explanation.push_str(
             " The operation-level result was successful, but its effects were rolled back because the atomic transaction failed.",

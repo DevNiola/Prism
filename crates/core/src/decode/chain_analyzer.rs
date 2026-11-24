@@ -99,6 +99,17 @@ impl ChainFrame {
     }
 }
 
+/// Information about a detected failure pattern in diagnostic events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FailurePatternMatch {
+    pub pattern_name: String,
+    pub description: String,
+    pub explanation: String,
+    pub confidence: String,
+    pub detected_indicators: Vec<String>,
+    pub suggested_fixes: Vec<String>,
+}
+
 /// The reconstructed call chain for a failed transaction.
 ///
 /// Contains the ordered sequence of contract frames that were active when the
@@ -120,6 +131,10 @@ pub struct CallChain {
 
     /// A short human-readable summary of where the fault occurred.
     pub summary: String,
+
+    /// Common failure patterns detected across the diagnostic events.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub pattern_matches: Vec<FailurePatternMatch>,
 }
 
 impl CallChain {
@@ -238,11 +253,115 @@ impl ChainAnalyzer {
             // Detect failure
             // ----------------------------------------------------------------
             if is_failure(event, &topics, &v0.data) {
-                return Some(Self::build_chain(&stack, event));
+                let mut chain = Self::build_chain(&stack, event);
+                let patterns = Self::detect_patterns(events, &chain);
+                if !patterns.is_empty() {
+                    let names: Vec<&str> = patterns.iter().map(|p| p.pattern_name.as_str()).collect();
+                    chain.summary.push_str(&format!("  |  Failure patterns: {}", names.join(", ")));
+                    chain.pattern_matches = patterns;
+                }
+                return Some(chain);
             }
         }
 
         None
+    }
+
+    /// Detect common failure patterns from diagnostic events and the call chain.
+    pub fn detect_patterns(events: &[DiagnosticEvent], chain: &CallChain) -> Vec<FailurePatternMatch> {
+        let mut matches = Vec::new();
+        let mut all_topics = Vec::new();
+        let mut all_text = String::new();
+
+        for ev in events {
+            if let ContractEventBody::V0(v0) = &ev.event.body {
+                for t in &v0.topics {
+                    if let Some(s) = topic_to_string(t) {
+                        all_topics.push(s.to_lowercase());
+                    }
+                }
+                all_text.push_str(&format!(" {:?} ", v0.data).to_lowercase());
+            }
+        }
+        let topics_str = all_topics.join(" ");
+        let full_text = format!("{} {}", topics_str, all_text);
+
+        // Pattern 1: Insufficient balance + auth failure
+        let has_balance = full_text.contains("balance") || full_text.contains("underfunded") || full_text.contains("insufficient");
+        let has_auth = full_text.contains("auth") || full_text.contains("signature") || full_text.contains("unauthorized");
+        if has_balance && has_auth {
+            matches.push(FailurePatternMatch {
+                pattern_name: "InsufficientBalanceWithAuthFailure".to_string(),
+                description: "Insufficient balance combined with authorization failure".to_string(),
+                explanation: "The transaction failed during authorization while operating on an account with insufficient balance or uninitialized reserves.".to_string(),
+                confidence: "High".to_string(),
+                detected_indicators: vec![
+                    "Detected authorization failure event".to_string(),
+                    "Detected insufficient balance error indicator".to_string(),
+                ],
+                suggested_fixes: vec![
+                    "Verify the source account has sufficient available XLM and token reserves prior to signing.".to_string(),
+                    "Ensure contract authorizations and account trustlines are in place before transaction submission.".to_string(),
+                ],
+            });
+        }
+
+        // Pattern 2: Budget exceeded + large storage read
+        let has_budget = full_text.contains("budget") || full_text.contains("cpu_limit") || full_text.contains("insns") || full_text.contains("mem_bytes");
+        let has_storage = full_text.contains("storage") || full_text.contains("read") || full_text.contains("ledger_entry");
+        if has_budget && has_storage {
+            matches.push(FailurePatternMatch {
+                pattern_name: "BudgetExceededWithLargeStorageRead".to_string(),
+                description: "Budget limit exceeded during heavy storage read operations".to_string(),
+                explanation: "The Soroban budget was exhausted while loading or querying contract storage entries.".to_string(),
+                confidence: "High".to_string(),
+                detected_indicators: vec![
+                    "Detected budget limit exhaustion indicator".to_string(),
+                    "Detected storage read / footprint access".to_string(),
+                ],
+                suggested_fixes: vec![
+                    "Increase the transaction CPU instruction limit in SorobanResources.".to_string(),
+                    "Break large contract storage queries into paginated batches to reduce single-invocation resource consumption.".to_string(),
+                ],
+            });
+        }
+
+        // Pattern 3: Expired ledger entry / TTL
+        let has_expired = full_text.contains("expired") || full_text.contains("ttl") || full_text.contains("liveto");
+        if has_expired {
+            matches.push(FailurePatternMatch {
+                pattern_name: "ExpiredStorageEntryAccess".to_string(),
+                description: "Attempted access to an expired contract storage entry".to_string(),
+                explanation: "The contract attempted to read or modify a storage entry whose Time-To-Live (TTL) has passed.".to_string(),
+                confidence: "High".to_string(),
+                detected_indicators: vec![
+                    "Detected storage TTL expiration event".to_string(),
+                ],
+                suggested_fixes: vec![
+                    "Submit an ExtendFootprintTTL operation to restore and prolong the entry lifetime.".to_string(),
+                    "Ensure rent bump operations are triggered before entry expiration.".to_string(),
+                ],
+            });
+        }
+
+        // Pattern 4: Deep recursion / call depth
+        if chain.frames.len() >= 4 {
+            matches.push(FailurePatternMatch {
+                pattern_name: "DeepRecursionOrCascadeFailure".to_string(),
+                description: "Call stack exceeded safe recursion threshold before failing".to_string(),
+                explanation: format!("The transaction reached a call stack depth of {} contracts, indicating an unconstrained recursion loop or cascade.", chain.frames.len()),
+                confidence: "Medium".to_string(),
+                detected_indicators: vec![
+                    format!("Call depth reached {} frames", chain.frames.len()),
+                ],
+                suggested_fixes: vec![
+                    "Inspect the contract invocation graph to remove cyclic or recursive cross-contract calls.".to_string(),
+                    "Implement a reentrancy guard or maximum call depth check in contract logic.".to_string(),
+                ],
+            });
+        }
+
+        matches
     }
 
     // -----------------------------------------------------------------------
@@ -274,6 +393,7 @@ impl ChainAnalyzer {
                 root_cause_index: Some(0),
                 trace: String::new(), // filled below
                 summary,
+                pattern_matches: Vec::new(),
             };
             return Self::finalize(chain);
         }
@@ -313,6 +433,7 @@ impl ChainAnalyzer {
             root_cause_index: Some(root_cause_index),
             trace: String::new(), // filled by finalize
             summary,
+            pattern_matches: Vec::new(),
         };
         Self::finalize(chain)
     }
@@ -712,5 +833,34 @@ mod tests {
         let a = ChainAnalyzer::new().analyze(&events);
         let b = ChainAnalyzer::new().analyze(&events);
         assert_eq!(a.is_some(), b.is_some());
+    }
+
+    #[test]
+    fn test_detects_insufficient_balance_with_auth_failure_pattern() {
+        let h = contract_hash(12);
+        let events = vec![
+            fn_call(h.clone(), "transfer"),
+            error_event(h.clone(), "auth_failed: insufficient_balance for account"),
+        ];
+
+        let chain = ChainAnalyzer::new().analyze(&events).expect("Should produce chain");
+        assert!(!chain.pattern_matches.is_empty());
+        let pattern = &chain.pattern_matches[0];
+        assert_eq!(pattern.pattern_name, "InsufficientBalanceWithAuthFailure");
+        assert!(!pattern.suggested_fixes.is_empty());
+        assert!(chain.summary.contains("InsufficientBalanceWithAuthFailure"));
+    }
+
+    #[test]
+    fn test_detects_budget_exceeded_with_large_storage_read_pattern() {
+        let h = contract_hash(13);
+        let events = vec![
+            fn_call(h.clone(), "query_ledger"),
+            error_event(h.clone(), "budget_exceeded: storage_read CPU insns limit reached"),
+        ];
+
+        let chain = ChainAnalyzer::new().analyze(&events).expect("Should produce chain");
+        assert!(!chain.pattern_matches.is_empty());
+        assert_eq!(chain.pattern_matches[0].pattern_name, "BudgetExceededWithLargeStorageRead");
     }
 }

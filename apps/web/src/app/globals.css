@@ -1,5 +1,67 @@
 @import "tailwindcss";
 
+/* ── Severity Color Palette ─────────────────────────────────────────────────── */
+:root {
+  --severity-info: #3b82f6;
+  --severity-info-bg: #eff6ff;
+  --severity-warning: #f59e0b;
+  --severity-warning-bg: #fffbeb;
+  --severity-error: #ef4444;
+  --severity-error-bg: #fef2f2;
+  --severity-fatal: #7f1d1d;
+  --severity-fatal-bg: #450a0a;
+}
+
+.severity-info {
+  color: var(--severity-info);
+  background-color: var(--severity-info-bg);
+}
+
+.severity-warning {
+  color: var(--severity-warning);
+  background-color: var(--severity-warning-bg);
+}
+
+.severity-error {
+  color: var(--severity-error);
+  background-color: var(--severity-error-bg);
+}
+
+.severity-fatal {
+  color: #fecaca;
+  background-color: var(--severity-fatal-bg);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+html[data-theme="light"] body,
+html[data-theme="light"] .bg-slate-950 {
+  background-color: #f1f5f9 !important;
+  color: #0f172a;
+}
+
+html[data-theme="light"] .bg-slate-900 {
+  background-color: #ffffff !important;
+}
+
+html[data-theme="light"] .text-slate-100 {
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] .text-slate-400 {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .border-slate-800 {
+  border-color: #cbd5e1 !important;
+}
+
 /* ── Micro-interaction utilities ───────────────────────────────────────────── */
 
 /* Card hover lift */
@@ -52,6 +114,29 @@
   animation: accordion-up 0.18s ease forwards;
 }
 
+/* Indeterminate loading spinner used as a fallback for unknown content shapes */
+.spinner {
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  border-top-color: currentColor;
+  border-radius: 9999px;
+  animation: spinner-rotate 0.7s linear infinite;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.6s;
+  }
+}
+
 /* Smooth focus ring for all interactive elements */
 :focus-visible {
   outline: 2px solid rgba(139, 92, 246, 0.7);
@@ -86,4 +171,34 @@ input,
   transition-property: color, background-color, border-color, opacity, transform, box-shadow;
   transition-duration: 150ms;
   transition-timing-function: ease;
+}
+
+/* ── Debugger Step Transitions ─────────────────────────────────────────── */
+:root {
+  --debug-transition-duration: 200ms;
+}
+
+.debug-step-transition {
+  transition: all var(--debug-transition-duration) cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.debug-step-active {
+  transition: all var(--debug-transition-duration) ease-in-out;
+  transform: translateX(4px);
+  border-left-width: 4px;
+}
+
+@keyframes debugFadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.debug-fade-slide-enter {
+  animation: debugFadeSlideIn var(--debug-transition-duration) ease-out forwards;
 }

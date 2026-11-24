@@ -139,3 +139,57 @@ pub struct ExecutionTrace {
 
     pub diagnostic_events: Vec<DiagnosticEvent>,
 }
+
+// ── Call Graph (Issue #62) ────────────────────────────────────────────────
+
+/// A directed edge in the cross-contract call graph.
+///
+/// Represents one invocation boundary: `caller` called `callee` at the given
+/// function with the listed arguments.  `call_index` preserves the temporal
+/// order of edges so callers can reconstruct the exact invocation sequence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallEdge {
+    /// Stellar strkey of the calling contract (`C…`).
+    pub caller: String,
+    /// Stellar strkey of the called contract (`C…`).
+    pub callee: String,
+    /// Name of the function invoked on `callee`.
+    pub function_name: String,
+    /// Human-readable argument values (best-effort).
+    pub arguments: Vec<String>,
+    /// Zero-based position of this call among all calls in the transaction.
+    pub call_index: usize,
+    /// Call-stack depth at the time of this invocation (root = 0).
+    pub depth: usize,
+    /// `true` if this edge is part of a detected cycle.
+    pub is_cycle: bool,
+}
+
+/// A node in the call graph — one participating contract.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CallNode {
+    /// Stellar strkey for this contract.
+    pub contract_id: String,
+    /// All functions that were invoked on this contract during the transaction.
+    pub invoked_functions: Vec<String>,
+    /// Total number of times this contract was called (in-degree).
+    pub call_count: usize,
+}
+
+/// Full directed call graph for a transaction.
+///
+/// The graph is serialised as a flat list of edges (suitable for any graph
+/// renderer) together with a per-node summary.  Any cycle in the call path
+/// is flagged on the relevant edges rather than stored separately so the
+/// structure stays acyclic when serialised.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CallGraph {
+    /// All directed edges, in temporal (call_index) order.
+    pub edges: Vec<CallEdge>,
+    /// One entry per distinct contract that participated in the transaction.
+    pub nodes: Vec<CallNode>,
+    /// `true` if at least one cycle was detected.
+    pub has_cycles: bool,
+    /// Human-readable descriptions of any cycles that were found.
+    pub cycle_descriptions: Vec<String>,
+}

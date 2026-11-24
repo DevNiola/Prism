@@ -1,0 +1,57 @@
+name: Publish VS Code Extension
+
+# Triggers on published GitHub releases (e.g. v1.2.3 tags).
+# Set the VSCE_PAT repository secret with a personal access token that has the
+# "Marketplace (Manage)" scope from https://dev.azure.com.
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: Build and Publish VS Code Extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build extension
+        working-directory: extensions/vscode
+        run: pnpm run build
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Package extension (.vsix)
+        working-directory: extensions/vscode
+        run: vsce package
+        # Produces a .vsix file, e.g. grat-vscode-0.1.0.vsix
+
+      - name: Upload .vsix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension
+          path: extensions/vscode/*.vsix
+          retention-days: 30
+
+      - name: Publish to VS Code Marketplace
+        working-directory: extensions/vscode
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: vsce publish --pat "$VSCE_PAT"
+        # Requires VSCE_PAT to be stored as a GitHub Actions secret.
+        # See: https://code.visualstudio.com/api/working-with-extensions/publishing-extension

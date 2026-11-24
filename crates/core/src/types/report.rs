@@ -144,6 +144,11 @@ pub struct DiagnosticReport {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub call_chain: Option<CallChain>,
 
+    /// Full directed call graph for this transaction (populated when cross-contract
+    /// calls are present in the diagnostic events).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub call_graph: Option<crate::types::trace::CallGraph>,
+
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub resource_diagnostics: Option<crate::decode::resource_analyzer::ResourceDiagnostics>,
 
@@ -152,6 +157,15 @@ pub struct DiagnosticReport {
 
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub operation_count: Option<usize>,
+
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub is_first_failure: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub call_depth: Option<usize>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub nested_reports: Vec<DiagnosticReport>,
 
     pub learn_more: String,
 }
@@ -175,9 +189,13 @@ impl DiagnosticReport {
             auth_entries: Vec::new(),
             failing_contract_id: None,
             call_chain: None,
+            call_graph: None,
             resource_diagnostics: None,
             operation_index: None,
             operation_count: None,
+            is_first_failure: None,
+            call_depth: None,
+            nested_reports: Vec::new(),
             learn_more: "https://developers.stellar.org/docs/learn/smart-contracts/errors"
                 .to_string(),
         }

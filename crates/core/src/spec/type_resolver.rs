@@ -26,6 +26,7 @@
 
 use crate::error::{GratError, GratResult};
 use stellar_xdr::curr::ScSpecTypeDef;
+use std::collections::HashMap;
 
 /// Utility for translating [`ScSpecTypeDef`] values into developer-readable
 /// type-name strings.
@@ -104,6 +105,144 @@ impl TypeResolver {
 
             // ── User-defined / named types ────────────────────────────────
             ScSpecTypeDef::Udt(udt) => Ok(udt.name.to_string()),
+        }
+    }
+}
+
+// ── Generic type parameter substitution (Issue #61) ──────────────────────
+
+/// A mapping from a named type parameter (e.g. `"K"`, `"V"`, `"T"`) to the
+/// concrete [`ScSpecTypeDef`] it should be substituted with.
+///
+/// When a Soroban contract spec uses user-defined generic parameters — for
+/// example a `Wrapper<T>` struct whose field is typed as `Udt("T")` — the
+/// resolver cannot know the concrete type from the spec alone.  Callers can
+/// provide a `GenericContext` containing the substitution table so that
+/// `resolve_with_context` can replace those parameter names with real types.
+///
+/// # Example
+///
+/// ```rust
+/// use grat_core::spec::type_resolver::{GenericContext, TypeResolver};
+/// use stellar_xdr::curr::{ScSpecTypeDef, ScSpecTypeUdt};
+///
+/// let mut ctx = GenericContext::new();
+/// ctx.bind("T", ScSpecTypeDef::I128);
+///
+/// // "Udt("T")" resolves to "i128" when T → i128 is in context.
+/// let udt_t = ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+///     name: "T".try_into().unwrap(),
+/// }));
+/// assert_eq!(TypeResolver::resolve_with_context(&udt_t, &ctx).unwrap(), "i128");
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct GenericContext {
+    bindings: HashMap<String, ScSpecTypeDef>,
+}
+
+impl GenericContext {
+    /// Create an empty context with no type parameter bindings.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Bind type parameter `name` to concrete type `def`.
+    ///
+    /// If `name` was already bound, the previous binding is replaced.
+    pub fn bind(&mut self, name: impl Into<String>, def: ScSpecTypeDef) {
+        self.bindings.insert(name.into(), def);
+    }
+
+    /// Look up a binding by type parameter name.
+    pub fn get(&self, name: &str) -> Option<&ScSpecTypeDef> {
+        self.bindings.get(name)
+    }
+}
+
+impl TypeResolver {
+    /// Resolve `type_def` with type-parameter substitution.
+    ///
+    /// Behaves identically to [`TypeResolver::resolve`] for all non-`Udt`
+    /// variants.  When a `Udt` variant is encountered its name is first
+    /// looked up in `ctx`; if a binding exists the concrete type is resolved
+    /// recursively (also with context), enabling full substitution through
+    /// arbitrarily nested generics.
+    ///
+    /// # Example — `Map<K, V>` where `K = Symbol`, `V = Vec<u32>`
+    ///
+    /// ```rust
+    /// use grat_core::spec::type_resolver::{GenericContext, TypeResolver};
+    /// use stellar_xdr::curr::{ScSpecTypeDef, ScSpecTypeMap, ScSpecTypeUdt, ScSpecTypeVec};
+    ///
+    /// let mut ctx = GenericContext::new();
+    /// ctx.bind("K", ScSpecTypeDef::Symbol);
+    /// ctx.bind("V", ScSpecTypeDef::Vec(Box::new(stellar_xdr::curr::ScSpecTypeVec {
+    ///     element_type: Box::new(ScSpecTypeDef::U32),
+    /// })));
+    ///
+    /// let map_t = ScSpecTypeDef::Map(Box::new(ScSpecTypeMap {
+    ///     key_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+    ///         name: "K".try_into().unwrap(),
+    ///     }))),
+    ///     value_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+    ///         name: "V".try_into().unwrap(),
+    ///     }))),
+    /// }));
+    ///
+    /// assert_eq!(
+    ///     TypeResolver::resolve_with_context(&map_t, &ctx).unwrap(),
+    ///     "Map<Symbol, Vec<u32>>"
+    /// );
+    /// ```
+    pub fn resolve_with_context(
+        type_def: &ScSpecTypeDef,
+        ctx: &GenericContext,
+    ) -> GratResult<String> {
+        match type_def {
+            // ── Udt: check for a type-parameter substitution first ────────
+            ScSpecTypeDef::Udt(udt) => {
+                let name = udt.name.to_string();
+                if let Some(concrete) = ctx.get(&name) {
+                    // Substitute and recurse so nested generics are resolved too.
+                    Self::resolve_with_context(concrete, ctx)
+                } else {
+                    Ok(name)
+                }
+            }
+
+            // ── BytesN ────────────────────────────────────────────────────
+            ScSpecTypeDef::BytesN(b) => Ok(format!("BytesN<{}>", b.n)),
+
+            // ── Generic containers — recurse with context ─────────────────
+            ScSpecTypeDef::Option(opt) => {
+                let inner = Self::resolve_with_context(&opt.value_type, ctx)?;
+                Ok(format!("Option<{inner}>"))
+            }
+            ScSpecTypeDef::Vec(vec) => {
+                let elem = Self::resolve_with_context(&vec.element_type, ctx)?;
+                Ok(format!("Vec<{elem}>"))
+            }
+            ScSpecTypeDef::Map(map) => {
+                let key = Self::resolve_with_context(&map.key_type, ctx)?;
+                let val = Self::resolve_with_context(&map.value_type, ctx)?;
+                Ok(format!("Map<{key}, {val}>"))
+            }
+            ScSpecTypeDef::Result(res) => {
+                let ok = Self::resolve_with_context(&res.ok_type, ctx)?;
+                let err = Self::resolve_with_context(&res.error_type, ctx)?;
+                Ok(format!("Result<{ok}, {err}>"))
+            }
+            ScSpecTypeDef::Tuple(tuple) => {
+                let parts: GratResult<Vec<String>> = tuple
+                    .value_types
+                    .iter()
+                    .map(|t| Self::resolve_with_context(t, ctx))
+                    .collect();
+                Ok(format!("({})", parts?.join(", ")))
+            }
+
+            // ── Everything else: fall back to the context-free resolver ───
+            other => Self::resolve(other),
         }
     }
 }
@@ -429,6 +568,226 @@ mod tests {
         assert_eq!(
             msg,
             "Expected parameter 'amount' to be of type 'i128', but received 'u32'"
+        );
+    }
+
+    // ── GenericContext / resolve_with_context (Issue #61) ─────────────────
+
+    #[test]
+    fn resolve_with_empty_context_behaves_like_resolve() {
+        let ctx = GenericContext::new();
+        assert_eq!(
+            TypeResolver::resolve_with_context(&ScSpecTypeDef::I128, &ctx).unwrap(),
+            "i128"
+        );
+    }
+
+    #[test]
+    fn resolves_single_type_parameter() {
+        let mut ctx = GenericContext::new();
+        ctx.bind("T", ScSpecTypeDef::U32);
+
+        let udt_t = ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+            name: "T".try_into().unwrap(),
+        }));
+        assert_eq!(
+            TypeResolver::resolve_with_context(&udt_t, &ctx).unwrap(),
+            "u32"
+        );
+    }
+
+    #[test]
+    fn unbound_udt_resolves_to_its_name() {
+        let ctx = GenericContext::new();
+        let udt = ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+            name: "MyStruct".try_into().unwrap(),
+        }));
+        assert_eq!(
+            TypeResolver::resolve_with_context(&udt, &ctx).unwrap(),
+            "MyStruct"
+        );
+    }
+
+    #[test]
+    fn resolves_vec_of_type_parameter() {
+        // Vec<T> where T = i64  →  Vec<i64>
+        let mut ctx = GenericContext::new();
+        ctx.bind("T", ScSpecTypeDef::I64);
+
+        let vec_t = ScSpecTypeDef::Vec(Box::new(ScSpecTypeVec {
+            element_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+                name: "T".try_into().unwrap(),
+            }))),
+        }));
+
+        assert_eq!(
+            TypeResolver::resolve_with_context(&vec_t, &ctx).unwrap(),
+            "Vec<i64>"
+        );
+    }
+
+    #[test]
+    fn resolves_map_with_two_type_parameters() {
+        // Map<K, V> where K = Symbol, V = u128  →  Map<Symbol, u128>
+        let mut ctx = GenericContext::new();
+        ctx.bind("K", ScSpecTypeDef::Symbol);
+        ctx.bind("V", ScSpecTypeDef::U128);
+
+        let map_t = ScSpecTypeDef::Map(Box::new(ScSpecTypeMap {
+            key_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+                name: "K".try_into().unwrap(),
+            }))),
+            value_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+                name: "V".try_into().unwrap(),
+            }))),
+        }));
+
+        assert_eq!(
+            TypeResolver::resolve_with_context(&map_t, &ctx).unwrap(),
+            "Map<Symbol, u128>"
+        );
+    }
+
+    #[test]
+    fn resolves_map_where_value_is_user_defined_type_not_a_param() {
+        // Map<Symbol, MyToken> where MyToken is not a type param — keep name
+        let mut ctx = GenericContext::new();
+        ctx.bind("K", ScSpecTypeDef::Symbol);
+
+        let map_t = ScSpecTypeDef::Map(Box::new(ScSpecTypeMap {
+            key_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+                name: "K".try_into().unwrap(),
+            }))),
+            value_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+                name: "MyToken".try_into().unwrap(),
+            }))),
+        }));
+
+        assert_eq!(
+            TypeResolver::resolve_with_context(&map_t, &ctx).unwrap(),
+            "Map<Symbol, MyToken>"
+        );
+    }
+
+    #[test]
+    fn resolves_nested_generic_vec_inside_map() {
+        // Map<Symbol, Vec<T>> where T = u32  →  Map<Symbol, Vec<u32>>
+        let mut ctx = GenericContext::new();
+        ctx.bind("T", ScSpecTypeDef::U32);
+
+        let vec_t = ScSpecTypeDef::Vec(Box::new(ScSpecTypeVec {
+            element_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+                name: "T".try_into().unwrap(),
+            }))),
+        }));
+        let map_t = ScSpecTypeDef::Map(Box::new(ScSpecTypeMap {
+            key_type: Box::new(ScSpecTypeDef::Symbol),
+            value_type: Box::new(vec_t),
+        }));
+
+        assert_eq!(
+            TypeResolver::resolve_with_context(&map_t, &ctx).unwrap(),
+            "Map<Symbol, Vec<u32>>"
+        );
+    }
+
+    #[test]
+    fn resolves_option_of_type_parameter() {
+        // Option<T> where T = Address  →  Option<Address>
+        let mut ctx = GenericContext::new();
+        ctx.bind("T", ScSpecTypeDef::Address);
+
+        let opt_t = ScSpecTypeDef::Option(Box::new(ScSpecTypeOption {
+            value_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+                name: "T".try_into().unwrap(),
+            }))),
+        }));
+
+        assert_eq!(
+            TypeResolver::resolve_with_context(&opt_t, &ctx).unwrap(),
+            "Option<Address>"
+        );
+    }
+
+    #[test]
+    fn resolves_result_with_type_parameter_as_ok() {
+        // Result<T, Error> where T = Bytes  →  Result<Bytes, Error>
+        let mut ctx = GenericContext::new();
+        ctx.bind("T", ScSpecTypeDef::Bytes);
+
+        let result_t = ScSpecTypeDef::Result(Box::new(ScSpecTypeResult {
+            ok_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+                name: "T".try_into().unwrap(),
+            }))),
+            error_type: Box::new(ScSpecTypeDef::Error),
+        }));
+
+        assert_eq!(
+            TypeResolver::resolve_with_context(&result_t, &ctx).unwrap(),
+            "Result<Bytes, Error>"
+        );
+    }
+
+    #[test]
+    fn resolves_tuple_with_type_parameters() {
+        // (T, U) where T = u32, U = Symbol  →  (u32, Symbol)
+        let mut ctx = GenericContext::new();
+        ctx.bind("T", ScSpecTypeDef::U32);
+        ctx.bind("U", ScSpecTypeDef::Symbol);
+
+        let types: VecM<ScSpecTypeDef> = vec![
+            ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+                name: "T".try_into().unwrap(),
+            })),
+            ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+                name: "U".try_into().unwrap(),
+            })),
+        ]
+        .try_into()
+        .unwrap();
+        let tuple_t = ScSpecTypeDef::Tuple(Box::new(ScSpecTypeTuple { value_types: types }));
+
+        assert_eq!(
+            TypeResolver::resolve_with_context(&tuple_t, &ctx).unwrap(),
+            "(u32, Symbol)"
+        );
+    }
+
+    #[test]
+    fn type_param_bound_to_generic_type_resolves_recursively() {
+        // T = Vec<u64>  →  Vec<T> should become Vec<Vec<u64>>
+        let mut ctx = GenericContext::new();
+        ctx.bind(
+            "T",
+            ScSpecTypeDef::Vec(Box::new(ScSpecTypeVec {
+                element_type: Box::new(ScSpecTypeDef::U64),
+            })),
+        );
+
+        let vec_t = ScSpecTypeDef::Vec(Box::new(ScSpecTypeVec {
+            element_type: Box::new(ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+                name: "T".try_into().unwrap(),
+            }))),
+        }));
+
+        assert_eq!(
+            TypeResolver::resolve_with_context(&vec_t, &ctx).unwrap(),
+            "Vec<Vec<u64>>"
+        );
+    }
+
+    #[test]
+    fn generic_context_bind_overrides_previous_binding() {
+        let mut ctx = GenericContext::new();
+        ctx.bind("T", ScSpecTypeDef::U32);
+        ctx.bind("T", ScSpecTypeDef::I128); // override
+
+        let udt_t = ScSpecTypeDef::Udt(Box::new(ScSpecTypeUdt {
+            name: "T".try_into().unwrap(),
+        }));
+        assert_eq!(
+            TypeResolver::resolve_with_context(&udt_t, &ctx).unwrap(),
+            "i128"
         );
     }
 }

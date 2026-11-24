@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { SessionStore, TraceSnapshot } from "../session-store";
+import { checkReplayBudget } from "../budget";
+import { defaultRateLimiter } from "../middleware/rate-limiter";
 
 // ---------------------------------------------------------------------------
 // Request / response schemas
@@ -88,15 +90,21 @@ export async function sessionRoutes(app: FastifyInstance) {
   // ------------------------------------------------------------------
   app.post<{
     Body: { txHash: string; network: string; wsUrl: string };
-  }>("/session", { schema: createSessionSchema }, async (request, reply) => {
+  }>("/session", { schema: createSessionSchema, preHandler: [defaultRateLimiter] }, async (request, reply) => {
     const { txHash, network, wsUrl } = request.body;
 
     const meta = await store.create({ txHash, network, wsUrl });
+    const jwtToken = signSessionToken({
+      sessionId: meta.sessionId,
+      txHash,
+      network,
+    });
 
-    // Return the full meta to the CLI (token is only revealed on creation).
+    // Return the full meta and signed JWT to the client.
     return reply.status(201).send({
       sessionId: meta.sessionId,
-      token: meta.token,
+      token: jwtToken,
+      rawToken: meta.token,
       wsUrl: meta.wsUrl,
       createdAt: meta.createdAt,
     });
@@ -104,14 +112,17 @@ export async function sessionRoutes(app: FastifyInstance) {
 
   // ------------------------------------------------------------------
   // GET /api/session/:sessionId
-  // Frontend polls / bootstraps from this endpoint.  Token is NOT
-  // returned here – it is only issued to the CLI at creation time.
+  // Frontend polls / bootstraps from this endpoint.
+  // Protected with JWT authentication.
   // ------------------------------------------------------------------
   app.get<{
     Params: { sessionId: string };
   }>(
     "/session/:sessionId",
-    { schema: sessionIdParamSchema },
+    {
+      schema: sessionIdParamSchema,
+      preHandler: [sessionAuthMiddleware as any],
+    },
     async (request, reply) => {
       const { sessionId } = request.params;
 
@@ -163,12 +174,22 @@ export async function sessionRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: "Invalid or expired token" });
       }
 
+      const sessionMeta = await store.get(sessionId);
+      const previousUsage = sessionMeta?.traceSnapshot?.resource_profile;
       const updated = await store.updateSnapshot(sessionId, snapshot);
       if (!updated) {
         return reply.status(404).send({
           status: "not_found",
           message: `Session '${sessionId}' does not exist or has expired.`,
         });
+      }
+
+      if (snapshot.resource_profile) {
+        await checkReplayBudget(
+          sessionMeta?.txHash ?? "unknown",
+          snapshot.resource_profile,
+          previousUsage,
+        );
       }
 
       return reply.send({ status: "ok" });

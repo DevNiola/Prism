@@ -44,5 +44,17 @@ jobs:
       - name: Build all crates
         run: cargo build --workspace --all-targets --all-features
 
+      - name: Set up Chrome for WASM browser tests
+        if: matrix.os == 'ubuntu-latest'
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Install wasm-pack
+        if: matrix.os == 'ubuntu-latest'
+        uses: taiki-e/install-action@wasm-pack
+
+      - name: Run WASM browser tests
+        if: matrix.os == 'ubuntu-latest'
+        run: wasm-pack test --headless --chrome crates/wasm
+
       - name: Run tests with all features
         run: cargo test --workspace --all-features

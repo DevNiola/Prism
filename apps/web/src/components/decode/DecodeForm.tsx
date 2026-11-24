@@ -223,10 +223,14 @@ export default function DecodeForm({ onDecode }: DecodeFormProps) {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            <label
+              htmlFor="decode-error-code"
+              className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2"
+            >
               Error Code (Numeric)
             </label>
             <input
+              id="decode-error-code"
               type="number"
               value={code}
               onChange={(e) => setCode(e.target.value)}

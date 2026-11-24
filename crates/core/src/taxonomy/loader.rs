@@ -11,10 +11,18 @@ impl TaxonomyParser {
     }
 }
 
+#[derive(Default)]
 pub struct TaxonomyDatabase {
     entries: HashMap<(ErrorCategory, u32), TaxonomyEntry>,
 
     all_entries: Vec<TaxonomyEntry>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct TaxonomyDiff {
+    pub added: Vec<TaxonomyEntry>,
+    pub updated: Vec<TaxonomyEntry>,
+    pub unchanged_count: usize,
 }
 
 impl TaxonomyDatabase {
@@ -145,6 +153,47 @@ impl TaxonomyDatabase {
 
     pub fn all_entries(&self) -> &[TaxonomyEntry] {
         &self.all_entries
+    }
+
+    pub fn insert_or_update(&mut self, entry: TaxonomyEntry) -> bool {
+        let key = (entry.category.clone(), entry.code);
+        let is_new = !self.entries.contains_key(&key);
+        self.entries.insert(key, entry.clone());
+        if let Some(pos) = self
+            .all_entries
+            .iter()
+            .position(|e| e.category == entry.category && e.code == entry.code)
+        {
+            self.all_entries[pos] = entry;
+        } else {
+            self.all_entries.push(entry);
+        }
+        is_new
+    }
+
+    pub fn diff(&self, incoming: &TaxonomyDatabase) -> TaxonomyDiff {
+        let mut added = Vec::new();
+        let mut updated = Vec::new();
+        let mut unchanged_count = 0;
+
+        for entry in incoming.all_entries() {
+            match self.lookup(&entry.category, entry.code) {
+                None => added.push(entry.clone()),
+                Some(existing) => {
+                    if existing != entry {
+                        updated.push(entry.clone());
+                    } else {
+                        unchanged_count += 1;
+                    }
+                }
+            }
+        }
+
+        TaxonomyDiff {
+            added,
+            updated,
+            unchanged_count,
+        }
     }
 
     pub fn len(&self) -> usize {
