@@ -2,7 +2,7 @@
 
 import type { DiagnosticReport } from "@/lib/types";
 import SuggestedFixes from "./SuggestedFixes";
-import { SeverityBadge, getSeverityMeta } from "@/components/shared/SeverityBadge";
+import { getSeverityMeta } from "@/components/shared/SeverityBadge";
 
 interface ErrorCardProps {
   report: DiagnosticReport;
@@ -89,7 +89,7 @@ export default function ErrorCard({ report }: ErrorCardProps) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded border px-2.5 py-1 text-xs font-semibold uppercase ${severity.text} ${severity.panel}`}>
+            <span className={`rounded border px-2.5 py-1 text-xs font-semibold uppercase ${meta.badgeClass}`}>
               {report.severity}
             </span>
             <button
