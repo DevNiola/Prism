@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import type { DecodedScValArgument, DiagnosticReport } from "@/lib/types";
 import { parseScValJson } from "@/lib/wasm";
 
@@ -25,20 +25,15 @@ export default function WhatIfEditor({
 }: WhatIfEditorProps) {
   const fields = providedFields ?? report?.transaction_context?.decoded_arguments ?? NO_FIELDS;
   const id = useId();
-  const [values, setValues] = useState(() => getInitialValues(fields));
+  const [draft, setDraft] = useState<{
+    report: DiagnosticReport | null | undefined;
+    values: Record<string, string>;
+  }>({ report, values: {} });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setValues((current) => ({
-      ...getInitialValues(fields),
-      ...Object.fromEntries(
-        fields
-          .filter((field) => current[field.name] !== undefined)
-          .map((field) => [field.name, current[field.name]]),
-      ),
-    }));
-  }, [fields]);
+  const edits = draft.report === report ? draft.values : {};
+  const values = { ...getInitialValues(fields), ...edits };
 
   const argumentsWithValidation = fields.map((field) => {
     try {
@@ -99,10 +94,10 @@ export default function WhatIfEditor({
                   spellCheck={false}
                   value={values[field.name] ?? ""}
                   onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      [field.name]: event.target.value,
-                    }))
+                    setDraft({
+                      report,
+                      values: { ...edits, [field.name]: event.target.value },
+                    })
                   }
                   aria-invalid={Boolean(error)}
                   aria-describedby={error ? errorId : undefined}
