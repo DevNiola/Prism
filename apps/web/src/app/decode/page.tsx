@@ -10,8 +10,7 @@ import {
   ContractErrorView,
   ContextSummary,
 } from "@/components";
-import Button from "@/components/shared/Button";
-import type { DiagnosticReport } from "@/lib/types";
+import type { DiagnosticReport, TxHash } from "@/lib/types";
 import { useSessionStore } from "@/store/session";
 import { useNetworkStore } from "@/store/network";
 import EmptyState from "@/components/shared/EmptyState";
@@ -20,7 +19,7 @@ function DecodePageContent() {
   const [activeTab, setActiveTab] = useState<"diagnose" | "lookup">("diagnose");
   const [report, setReport] = useState<DiagnosticReport | null>(null);
 
-  const { addToHistory, history } = useSessionStore();
+  const { addToHistory, history, hasHydrated } = useSessionStore();
   const { network } = useNetworkStore();
 
   const searchParams = useSearchParams();
@@ -28,7 +27,7 @@ function DecodePageContent() {
 
   // If the user navigated here from the history list, pre-load the last matching report
   useEffect(() => {
-    if (txHashParam) {
+    if (txHashParam && hasHydrated) {
       const entry = history.find((h) => h.txHash === txHashParam);
       if (entry) {
         setReport(entry.report);
@@ -36,16 +35,20 @@ function DecodePageContent() {
     }
     // Only run on initial mount / txHashParam change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [txHashParam]);
+  }, [hasHydrated, txHashParam]);
 
-  function handleDecode(decoded: DiagnosticReport | null) {
+  function handleDecode(decoded: DiagnosticReport | null, submittedHash?: TxHash) {
     setReport(decoded);
     if (decoded) {
-      // Use the txHash from the URL param if present; otherwise generate a placeholder key
       const txHash =
-        txHashParam ??
+        submittedHash ??
         `${decoded.error_category.toLowerCase()}-${decoded.error_code}-${Date.now()}`;
       addToHistory(txHash, network, decoded);
+      if (submittedHash) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("txHash", submittedHash);
+        window.history.replaceState(null, "", url);
+      }
     }
   }
 
@@ -99,11 +102,11 @@ function DecodePageContent() {
         <div className="transition-all duration-300">
           {activeTab === "diagnose" ? (
             <div className="space-y-6">
-              <DecodeForm onDecode={handleDecode} />
+              <DecodeForm initialTxHash={txHashParam ?? ""} network={network} onDecode={handleDecode} />
               {!report && (
                 <EmptyState
                   title="Ready to decode an error"
-                  description="Choose an error category and enter its code above to see a diagnosis and suggested fixes."
+                  description="Enter a transaction hash or choose an error category and code to see a diagnosis and suggested fixes."
                   illustration={
                     <svg viewBox="0 0 160 112" className="h-28 w-40" fill="none">
                       <path d="M34 82h57a9 9 0 0 0 9-9V31a9 9 0 0 0-9-9H44a9 9 0 0 0-9 9v51Z" stroke="currentColor" strokeWidth="2" />

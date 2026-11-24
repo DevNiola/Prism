@@ -1,18 +1,19 @@
 import { useCallback, useState } from "react";
-import type { DiagnosticReport } from "@/lib/types";
+import type { DiagnosticReport, Network, TxHash } from "@/lib/types";
 
 export function useDecode() {
   const [report, setReport] = useState<DiagnosticReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const decode = useCallback(async (txHash: string, network: string) => {
+  const decode = useCallback(async (txHash: TxHash, network: Network, signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     setReport(null);
     try {
       const response = await fetch("/api/decode", {
         method: "POST",
+        signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ txHash, network }),
       });
@@ -28,6 +29,7 @@ export function useDecode() {
       setReport(decoded);
       return decoded;
     } catch (decodeError) {
+      if (signal?.aborted) return null;
       setError(
         decodeError instanceof Error
           ? decodeError.message

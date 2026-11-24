@@ -1,13 +1,72 @@
 "use client";
 
-import { useState } from "react";
-import type { DiagnosticReport } from "@/lib/types";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useDecode } from "@/hooks/useDecode";
+import { isTxHash, type DiagnosticReport, type Network, type TxHash } from "@/lib/types";
 
 interface DecodeFormProps {
-  onDecode: (report: DiagnosticReport | null) => void;
+  initialTxHash?: string;
+  network: Network;
+  onDecode: (report: DiagnosticReport | null, txHash?: TxHash) => void;
 }
 
-export default function DecodeForm({ onDecode }: DecodeFormProps) {
+export default function DecodeForm({ initialTxHash = "", network, onDecode }: DecodeFormProps) {
+  const [hash, setHash] = useState(initialTxHash);
+  const [hashTouched, setHashTouched] = useState(false);
+  const [pasteMessage, setPasteMessage] = useState("");
+  const [pasting, setPasting] = useState(false);
+  const { decode, loading, error } = useDecode();
+  const hashInput = useRef<HTMLInputElement>(null);
+  const submitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const request = useRef<AbortController | null>(null);
+  const validHash = isTxHash(hash);
+  const hashError = hashTouched && !validHash;
+
+  useEffect(() => () => {
+    if (submitTimer.current !== null) clearTimeout(submitTimer.current);
+    submitTimer.current = null;
+    request.current?.abort();
+  }, [network]);
+
+  function updateHash(value: string) {
+    if (submitTimer.current !== null) clearTimeout(submitTimer.current);
+    submitTimer.current = null;
+    setHash(value);
+    setHashTouched(true);
+    setPasteMessage("");
+  }
+
+  async function pasteHash() {
+    setPasting(true);
+    try {
+      updateHash((await navigator.clipboard.readText()).trim());
+    } catch {
+      setPasteMessage("Use your browser’s paste shortcut to enter the transaction hash.");
+    } finally {
+      setPasting(false);
+      hashInput.current?.focus();
+    }
+  }
+
+  function submitHash(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setHashTouched(true);
+    if (!isTxHash(hash) || request.current || pasting) return;
+    if (submitTimer.current !== null) clearTimeout(submitTimer.current);
+    submitTimer.current = setTimeout(async () => {
+      submitTimer.current = null;
+      const controller = new AbortController();
+      request.current = controller;
+      onDecode(null);
+      try {
+        const decoded = await decode(hash, network, controller.signal);
+        if (decoded && !controller.signal.aborted) onDecode(decoded, hash);
+      } finally {
+        request.current = null;
+      }
+    }, 400);
+  }
+
   const [category, setCategory] = useState<string>("contract");
   const [code, setCode] = useState<string>("0");
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -198,6 +257,50 @@ export default function DecodeForm({ onDecode }: DecodeFormProps) {
 
   return (
     <div className="card-interactive bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl max-w-3xl mx-auto my-6 text-slate-100">
+      <h2 className="mb-4 text-xl font-bold text-violet-400">Decode Transaction</h2>
+      <form onSubmit={submitHash} className="mb-6 space-y-3 border-b border-slate-800 pb-6">
+        <label htmlFor="decode-tx-hash" className="block text-sm font-medium">
+          Transaction hash
+        </label>
+        <div className="flex gap-2">
+          <input
+            ref={hashInput}
+            id="decode-tx-hash"
+            value={hash}
+            onChange={(event) => updateHash(event.target.value)}
+            onBlur={() => { if (hash) setHashTouched(true); }}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            disabled={loading || pasting}
+            aria-invalid={hashError}
+            aria-describedby={hashError ? "decode-hash-error" : undefined}
+            className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono"
+          />
+          <button
+            type="button"
+            onClick={pasteHash}
+            disabled={loading || pasting}
+            className="rounded-lg border border-slate-600 px-4 py-2 disabled:opacity-50"
+          >
+            Paste
+          </button>
+        </div>
+        {hashError && (
+          <p id="decode-hash-error" role="alert" className="text-sm text-rose-400">
+            Enter exactly 64 lowercase hexadecimal characters.
+          </p>
+        )}
+        {pasteMessage && <p role="status" className="text-sm text-slate-300">{pasteMessage}</p>}
+        {error && !hashError && <p role="alert" className="text-sm text-rose-400">{error}</p>}
+        <button
+          type="submit"
+          disabled={!validHash || loading || pasting}
+          className="rounded-lg bg-violet-600 px-4 py-2 font-medium text-white disabled:opacity-50"
+        >
+          {loading ? "Decoding…" : "Decode transaction"}
+        </button>
+      </form>
       <h2 className="text-xl font-bold tracking-tight text-violet-400 mb-4">
         🔎 Decode Error Code
       </h2>

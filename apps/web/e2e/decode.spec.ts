@@ -14,20 +14,6 @@ const diagnosticReport = {
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/decode", async (route) => {
-    const body = route.request().postDataJSON() as {
-      txHash: string;
-      network: string;
-    };
-
-    if (body.txHash === "invalid") {
-      await route.fulfill({
-        status: 400,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "Transaction hash was not found." }),
-      });
-      return;
-    }
-
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -69,9 +55,9 @@ test("share link restores a decoded session", async ({ page }) => {
 test("invalid transaction hash shows an error", async ({ page }) => {
   await page.goto("/decode");
   await page.getByLabel("Transaction hash").fill("invalid");
-  await page.getByRole("button", { name: "Decode transaction" }).click();
 
+  await expect(page.getByRole("button", { name: "Decode transaction" })).toBeDisabled();
   await expect(page.getByRole("alert")).toHaveText(
-    "Transaction hash was not found."
+    "Enter exactly 64 lowercase hexadecimal characters."
   );
 });
