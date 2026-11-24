@@ -38,12 +38,12 @@ function DecodePageContent() {
 
   function handleDecode(decoded: DiagnosticReport | null) {
     const txHash = decoded?.transaction_context?.tx_hash || txHashParam;
-    setLocalResult({ txHash, network: network, report: decoded });
+    setLocalResult({ txHash, network, report: decoded });
     if (decoded) {
       const historyKey = txHash ??
         `${decoded.error_category.toLowerCase()}-${decoded.error_code}-${Date.now()}`;
       addToHistory(historyKey, network, decoded);
-      if (txHash) updateSessionUrl({ txHash, network: network });
+      if (txHash) updateSessionUrl({ txHash });
     }
   }
 
@@ -68,7 +68,7 @@ function DecodePageContent() {
         {/* Tabs */}
         <div className="flex justify-center border-b border-slate-800 mb-8 max-w-md mx-auto">
           <button
-            onClick={() => updateSessionUrl({ view: "diagnose", network: network })}
+            onClick={() => updateSessionUrl({ view: "diagnose" })}
             aria-selected={activeTab === "diagnose"}
             role="tab"
             className={`flex-1 pb-3 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 border-b-2 ${
@@ -80,7 +80,7 @@ function DecodePageContent() {
             🔍 Diagnose Error
           </button>
           <button
-            onClick={() => updateSessionUrl({ view: "lookup", network: network })}
+            onClick={() => updateSessionUrl({ view: "lookup" })}
             aria-selected={activeTab === "lookup"}
             role="tab"
             className={`flex-1 pb-3 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 border-b-2 ${
