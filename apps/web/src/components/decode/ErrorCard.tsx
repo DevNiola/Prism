@@ -4,6 +4,9 @@ import type { DiagnosticReport } from "@/lib/types";
 import SuggestedFixes from "./SuggestedFixes";
 import { SeverityBadge, getSeverityMeta } from "@/components/shared/SeverityBadge";
 
+const likelihoodRank = new Map([["high", 3], ["medium", 2], ["low", 1]]);
+const likelihoodStyle = new Map([["high", "error"], ["medium", "warning"], ["low", "info"]]);
+
 interface ErrorCardProps {
   report: DiagnosticReport;
 }
@@ -11,6 +14,11 @@ interface ErrorCardProps {
 export default function ErrorCard({ report }: ErrorCardProps) {
   const meta = getSeverityMeta(report.severity);
   const SeverityIcon = meta.Icon;
+  const causes = [...(report.root_causes ?? [])].sort(
+    (a, b) => (likelihoodRank.get(b.likelihood.toLowerCase()) ?? 0)
+      - (likelihoodRank.get(a.likelihood.toLowerCase()) ?? 0),
+  );
+  const causeCount = `${causes.length} possible ${causes.length === 1 ? "cause" : "causes"}`;
 
   const handleExportJson = () => {
     const txHash = report.transaction_context?.tx_hash || "diagnostic";
@@ -89,9 +97,7 @@ export default function ErrorCard({ report }: ErrorCardProps) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded border px-2.5 py-1 text-xs font-semibold uppercase ${severity.text} ${severity.panel}`}>
-              {report.severity}
-            </span>
+            <SeverityBadge severity={report.severity} showIcon={false} />
             <button
               type="button"
               onClick={handleExportJson}
@@ -132,7 +138,7 @@ export default function ErrorCard({ report }: ErrorCardProps) {
                   Root causes
                 </span>
                 <span className="mt-1 block text-xs text-slate-500">
-                  {report.root_causes?.length ?? 0} possible causes
+                  {causeCount}
                 </span>
               </span>
               <span aria-hidden="true" className="text-slate-400 transition-transform group-open:rotate-180">
@@ -140,9 +146,9 @@ export default function ErrorCard({ report }: ErrorCardProps) {
               </span>
             </summary>
             <div className="border-t border-slate-800 px-4 py-4">
-              {report.root_causes?.length ? (
-                <ol className="space-y-4">
-                  {report.root_causes.map((cause, index) => (
+              {causes.length ? (
+                <ol className="space-y-4" aria-label={causeCount}>
+                  {causes.map((cause, index) => (
                     <li key={`${cause.description}-${index}`} className="flex gap-3">
                       <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-amber-950 text-xs font-semibold text-amber-300">
                         {index + 1}
@@ -151,9 +157,12 @@ export default function ErrorCard({ report }: ErrorCardProps) {
                         <p className="text-sm leading-relaxed text-slate-200">
                           {cause.description}
                         </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Likelihood: {cause.likelihood}
-                        </p>
+                        <SeverityBadge
+                          severity={likelihoodStyle.get(cause.likelihood.toLowerCase()) ?? "info"}
+                          label={`${cause.likelihood} likelihood`}
+                          className="mt-1"
+                          showIcon={false}
+                        />
                       </div>
                     </li>
                   ))}
