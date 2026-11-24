@@ -1,0 +1,20 @@
+{
+  "status": "FAILED",
+  "hash": "d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5",
+  "ledger": 51003,
+  "resultXdr": "AAAAAAAAAGT/////AAAAAQAAAAAAAAAB////9AAAAAA=",
+  "diagnosticEvents": [
+    {
+      "type": "auth",
+      "data": {
+        "error": "missing_auth",
+        "message": "No authorization entries were provided for this transaction."
+      }
+    }
+  ],
+  "auth_entries": [],
+  "soroban_meta": {
+    "v": 1,
+    "auth": []
+  }
+}

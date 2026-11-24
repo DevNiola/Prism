@@ -20,6 +20,26 @@ impl EnumDecoder {
         Self
     }
 
+    /// Checks if an enum definition represents a Soroban `Option` pattern.
+    pub fn is_option_enum(enum_def: &ContractEnumDef) -> bool {
+        if enum_def.name.eq_ignore_ascii_case("Option") {
+            return true;
+        }
+        let has_none = enum_def.cases.iter().any(|c| c.name.eq_ignore_ascii_case("None"));
+        let has_some = enum_def.cases.iter().any(|c| c.name.eq_ignore_ascii_case("Some"));
+        has_none && has_some && enum_def.cases.len() == 2
+    }
+
+    /// Checks if an enum definition represents a Soroban `Result` pattern.
+    pub fn is_result_enum(enum_def: &ContractEnumDef) -> bool {
+        if enum_def.name.eq_ignore_ascii_case("Result") {
+            return true;
+        }
+        let has_ok = enum_def.cases.iter().any(|c| c.name.eq_ignore_ascii_case("Ok"));
+        let has_err = enum_def.cases.iter().any(|c| c.name.eq_ignore_ascii_case("Err"));
+        has_ok && has_err && enum_def.cases.len() == 2
+    }
+
     /// Decodes an enum value into a human-readable JSON representation.
     ///
     /// Unknown discriminants and variant heads are deliberately preserved via
@@ -27,6 +47,16 @@ impl EnumDecoder {
     /// payload-free variant is rendered as its name; a variant with one or
     /// more payload values is rendered as `{ "Variant": payload }`.
     pub fn decode(&self, val: &ScVal, enum_def: &ContractEnumDef) -> Value {
+        // Special handling for Option pattern
+        if Self::is_option_enum(enum_def) {
+            return self.decode_option(val, enum_def);
+        }
+
+        // Special handling for Result pattern
+        if Self::is_result_enum(enum_def) {
+            return self.decode_result(val, enum_def);
+        }
+
         match val {
             ScVal::U32(discriminant) => enum_def
                 .cases
@@ -46,21 +76,80 @@ impl EnumDecoder {
             ScVal::String(string) => json!(string.to_string()),
             ScVal::Vec(Some(values)) if !values.is_empty() => {
                 let Some(variant_name) = variant_name(&values[0]) else {
-                    return scval_to_json(val);
+                    return scval_to_json(val, None);
                 };
 
                 if !enum_def.cases.iter().any(|case| case.name == variant_name) {
-                    return scval_to_json(val);
+                    return scval_to_json(val, None);
                 }
 
-                let payload: Vec<Value> = values[1..].iter().map(scval_to_json).collect();
+                let payload: Vec<Value> = values[1..]
+                    .iter()
+                    .map(|v| scval_to_json(v, None))
+                    .collect();
                 match payload.as_slice() {
                     [] => json!(variant_name),
                     [value] => json!({ variant_name: value }),
                     _ => json!({ variant_name: payload }),
                 }
             }
-            _ => scval_to_json(val),
+            _ => scval_to_json(val, None),
+        }
+    }
+
+    /// Decodes an `Option` enum value, returning `{ "None": null }` or `{ "Some": value }`.
+    pub fn decode_option(&self, val: &ScVal, _enum_def: &ContractEnumDef) -> Value {
+        match val {
+            ScVal::Void => json!({ "None": null }),
+            ScVal::Vec(Some(values)) if !values.is_empty() => {
+                if let Some(name) = variant_name(&values[0]) {
+                    if name.eq_ignore_ascii_case("None") {
+                        return json!({ "None": null });
+                    }
+                    if name.eq_ignore_ascii_case("Some") {
+                        let inner = if values.len() > 1 {
+                            scval_to_json(&values[1], None)
+                        } else {
+                            Value::Null
+                        };
+                        return json!({ "Some": inner });
+                    }
+                }
+                json!({ "Some": scval_to_json(val, None) })
+            }
+            ScVal::Symbol(s) if s.to_string().eq_ignore_ascii_case("None") => {
+                json!({ "None": null })
+            }
+            other => json!({ "Some": scval_to_json(other, None) }),
+        }
+    }
+
+    /// Decodes a `Result` enum value, returning `{ "Ok": value }` or `{ "Err": error }`.
+    pub fn decode_result(&self, val: &ScVal, _enum_def: &ContractEnumDef) -> Value {
+        match val {
+            ScVal::Error(err) => json!({ "Err": format!("{err:?}") }),
+            ScVal::Vec(Some(values)) if !values.is_empty() => {
+                if let Some(name) = variant_name(&values[0]) {
+                    if name.eq_ignore_ascii_case("Err") {
+                        let inner = if values.len() > 1 {
+                            scval_to_json(&values[1], None)
+                        } else {
+                            Value::Null
+                        };
+                        return json!({ "Err": inner });
+                    }
+                    if name.eq_ignore_ascii_case("Ok") {
+                        let inner = if values.len() > 1 {
+                            scval_to_json(&values[1], None)
+                        } else {
+                            Value::Null
+                        };
+                        return json!({ "Ok": inner });
+                    }
+                }
+                json!({ "Ok": scval_to_json(val, None) })
+            }
+            other => json!({ "Ok": scval_to_json(other, None) }),
         }
     }
 }
@@ -97,6 +186,87 @@ mod tests {
             doc: None,
         }
     }
+
+    fn option_enum_def() -> ContractEnumDef {
+        ContractEnumDef {
+            name: "Option".to_string(),
+            cases: vec![
+                ContractEnumCase {
+                    name: "None".to_string(),
+                    value: 0,
+                    doc: None,
+                },
+                ContractEnumCase {
+                    name: "Some".to_string(),
+                    value: 1,
+                    doc: None,
+                },
+            ],
+            doc: None,
+        }
+    }
+
+    fn result_enum_def() -> ContractEnumDef {
+        ContractEnumDef {
+            name: "Result".to_string(),
+            cases: vec![
+                ContractEnumCase {
+                    name: "Ok".to_string(),
+                    value: 0,
+                    doc: None,
+                },
+                ContractEnumCase {
+                    name: "Err".to_string(),
+                    value: 1,
+                    doc: None,
+                },
+            ],
+            doc: None,
+        }
+    }
+
+    #[test]
+    fn test_option_enum_decoding_none_and_some() {
+        let decoder = EnumDecoder::new();
+        let opt_def = option_enum_def();
+
+        let none_val = ScVal::Void;
+        let decoded_none = decoder.decode(&none_val, &opt_def);
+        assert_eq!(decoded_none, json!({ "None": null }));
+
+        let some_val = ScVal::U32(42);
+        let decoded_some = decoder.decode(&some_val, &opt_def);
+        assert_eq!(decoded_some, json!({ "Some": 42 }));
+    }
+
+    #[test]
+    fn test_result_enum_decoding_ok_and_err() {
+        let decoder = EnumDecoder::new();
+        let res_def = result_enum_def();
+
+        let ok_vec = ScVal::Vec(Some(
+            vec![
+                ScVal::Symbol(ScSymbol("Ok".try_into().unwrap())),
+                ScVal::U32(100),
+            ]
+            .try_into()
+            .unwrap(),
+        ));
+        let decoded_ok = decoder.decode(&ok_vec, &res_def);
+        assert_eq!(decoded_ok, json!({ "Ok": 100 }));
+
+        let err_vec = ScVal::Vec(Some(
+            vec![
+                ScVal::Symbol(ScSymbol("Err".try_into().unwrap())),
+                ScVal::Symbol(ScSymbol("NotFound".try_into().unwrap())),
+            ]
+            .try_into()
+            .unwrap(),
+        ));
+        let decoded_err = decoder.decode(&err_vec, &res_def);
+        assert_eq!(decoded_err, json!({ "Err": "NotFound" }));
+    }
+}
 
     fn symbol(value: &str) -> ScVal {
         ScVal::Symbol(ScSymbol(value.try_into().unwrap()))

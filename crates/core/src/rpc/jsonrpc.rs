@@ -2,7 +2,9 @@ use crate::error::{GratError, GratResult, JsonRpcError};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
-const BASE_DELAY_MS: u64 = 100;
+/// Base delay for exponential backoff. With the formula `BASE_DELAY_MS × 2^attempt`,
+/// this yields 1 s, 2 s, 4 s for retry attempts 1, 2, 3 respectively.
+const BASE_DELAY_MS: u64 = 500;
 
 const MAX_DELAY_MS: u64 = 10_000;
 
@@ -130,6 +132,7 @@ impl JsonRpcTransport {
                 );
                 tokio::time::sleep(delay).await;
                 tracing::debug!(attempt, method, "retrying RPC request");
+                crate::rpc::record_rpc_retry(&self.endpoint, method);
             }
 
             // Start the Prometheus latency timer before the network request.

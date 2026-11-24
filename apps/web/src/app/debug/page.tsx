@@ -1,22 +1,53 @@
 "use client";
 
-import BreakpointManager from "@/components/debug/BreakpointManager";
+import { useSearchParams } from "next/navigation";
+import EmptyState from "@/components/shared/EmptyState";
+import { Breadcrumbs } from "@/components/shared/Breadcrumbs";
 
 export default function DebugPage() {
-  return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center px-4 py-16 gap-8">
-      <section className="text-center max-w-2xl mx-auto">
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-100 via-violet-200 to-violet-400 bg-clip-text text-transparent mb-3">
-          Interactive Debugger
-        </h1>
-        <p className="text-slate-400">
-          Set, group, and reorder breakpoints to control execution replay.
-        </p>
-      </section>
+  const searchParams = useSearchParams();
+  const network = searchParams.get("network") || "testnet";
+  const txHash = searchParams.get("txHash") || "No Transaction";
+  const fnName = searchParams.get("function") || "invocation";
+  const currentStep = searchParams.get("step") || "Step 0";
 
-      <div className="w-full max-w-2xl">
-        <BreakpointManager />
-      </div>
+  const breadcrumbs = [
+    { label: "Home", href: "/" },
+    { label: network.toUpperCase(), href: `/trace?network=${network}` },
+    {
+      label: txHash.length > 12 ? `${txHash.slice(0, 6)}...${txHash.slice(-4)}` : txHash,
+      href: `/trace?txHash=${txHash}&network=${network}`,
+    },
+    { label: fnName, href: `/debug?txHash=${txHash}&network=${network}&function=${fnName}` },
+    { label: currentStep, current: true },
+  ];
+
+  return (
+    <main className="container mx-auto px-4 sm:px-6 py-6 max-w-full overflow-x-hidden">
+      <h1 className="mb-2 text-2xl sm:text-3xl font-bold">Interactive Debugger</h1>
+      <EmptyState
+        title="Start with an execution trace"
+        description="Load a transaction in Trace to inspect its execution steps and state changes."
+        illustration={
+          <svg viewBox="0 0 160 112" className="h-28 w-40" fill="none">
+            <rect x="25" y="20" width="110" height="72" rx="7" stroke="currentColor" strokeWidth="2" />
+            <path d="M25 38h110" stroke="currentColor" strokeWidth="2" />
+            <circle cx="37" cy="29" r="2" fill="#fb7185" />
+            <circle cx="45" cy="29" r="2" fill="#fbbf24" />
+            <circle cx="53" cy="29" r="2" fill="#34d399" />
+            <path d="m43 55 8 6-8 6M58 67h17" stroke="#34d399" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
+            <path d="M89 53h27M89 63h19M89 73h23" stroke="currentColor" strokeLinecap="round" strokeWidth="2" opacity=".4" />
+          </svg>
+        }
+        action={
+          <a
+            href="/trace"
+            className="inline-flex rounded-md border border-emerald-600/50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+          >
+            Open Execution Trace
+          </a>
+        }
+      />
     </main>
   );
 }

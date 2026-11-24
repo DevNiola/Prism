@@ -1,0 +1,152 @@
+name: Decode Benchmarks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "crates/core/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/benchmark.yml"
+  workflow_run:
+    workflows: [Decode Benchmarks]
+    types: [completed]
+
+jobs:
+  benchmark:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CARGO_TARGET_DIR: ${{ runner.temp }}/cargo-target
+    steps:
+      - name: Check out pull request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/core -> target
+          shared-key: decode-benchmarks
+
+      - name: Prepare base revision with benchmark harness
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git worktree add "$RUNNER_TEMP/baseline" "$BASE_SHA"
+          cp Cargo.lock "$RUNNER_TEMP/baseline/Cargo.lock"
+          cp crates/core/Cargo.toml "$RUNNER_TEMP/baseline/crates/core/Cargo.toml"
+          mkdir -p "$RUNNER_TEMP/baseline/crates/core/benches"
+          cp crates/core/benches/decode_pipeline.rs "$RUNNER_TEMP/baseline/crates/core/benches/decode_pipeline.rs"
+
+      - name: Benchmark base revision
+        run: cargo bench --manifest-path "$RUNNER_TEMP/baseline/crates/core/Cargo.toml" --bench decode_pipeline -- --save-baseline main
+
+      - name: Benchmark pull request
+        run: cargo bench -p grat-core --bench decode_pipeline -- --baseline main
+
+      - name: Compare results and enforce regression limit
+        id: compare
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          root = Path(os.environ["CARGO_TARGET_DIR"]) / "criterion"
+          report = ["## Decode benchmark comparison", "", "Compared with the PR base revision; regressions above 10% fail this check.", "", "| Benchmark | Base (ns) | PR (ns) | Change |", "| --- | ---: | ---: | ---: |"]
+          regressions = []
+          compared = 0
+
+          for baseline_file in sorted(root.rglob("main/estimates.json")):
+              candidate_file = baseline_file.parent.parent / "new" / "estimates.json"
+              if not candidate_file.is_file():
+                  continue
+              baseline = json.loads(baseline_file.read_text())["mean"]["point_estimate"]
+              candidate = json.loads(candidate_file.read_text())["mean"]["point_estimate"]
+              change = (candidate / baseline - 1) * 100 if baseline else 0
+              name = "/".join(baseline_file.relative_to(root).parts[:-2])
+              report.append(f"| `{name}` | {baseline:.0f} | {candidate:.0f} | {change:+.2f}% |")
+              compared += 1
+              if change > 10:
+                  regressions.append(f"{name}: {change:.2f}%")
+
+          if compared == 0:
+              report.extend(["", "No paired Criterion estimates were found."])
+              Path("benchmark-report.md").write_text("\n".join(report) + "\n")
+              print("::error::No paired Criterion estimates were found")
+              sys.exit(1)
+
+          if regressions:
+              report.extend(["", "Regressions above 10%:", *[f"- {item}" for item in regressions]])
+          else:
+              report.extend(["", "No benchmark regressed by more than 10%."])
+
+          markdown = "\n".join(report) + "\n"
+          Path("benchmark-report.md").write_text(markdown)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(markdown)
+
+          if regressions:
+              print("::error::Performance regression exceeded 10%: " + ", ".join(regressions))
+              sys.exit(1)
+          PY
+
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-report.md
+          if-no-files-found: ignore
+          retention-days: 14
+
+  comment:
+    needs: benchmark
+    if: >-
+      always() && (
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0] != null)
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Download benchmark report
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || github.run_id }}
+
+      - name: Comment on pull request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const pullRequest = context.payload.pull_request ?? context.payload.workflow_run.pull_requests[0];
+            const reportPath = 'benchmark-results/benchmark-report.md';
+            const report = fs.existsSync(reportPath)
+              ? fs.readFileSync(reportPath, 'utf8')
+              : 'The benchmark job did not produce a report. Check its workflow run for build or benchmark errors.';
+            const marker = '<!-- prism-decode-benchmark -->';
+            const body = `${marker}\n${report}`;
+            const { owner, repo } = context.repo;
+            const comments = await github.rest.issues.listComments({ owner, repo, issue_number: pullRequest.number, per_page: 100 });
+            const previous = comments.data.find((comment) => comment.body.includes(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number: pullRequest.number, body });
+            }

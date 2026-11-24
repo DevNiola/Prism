@@ -4,6 +4,7 @@ members = [
     "crates/core",
     "crates/cli",
     "crates/wasm",
+    "tests",
 ]
 
 [workspace.lints.rust]
@@ -47,42 +48,42 @@ description = "Soroban Transaction Debugger — From cryptic error to root cause
 
 [workspace.dependencies]
 # Stellar / Soroban — Critical Path
-stellar-xdr = { version = "21.2.0", features = ["std", "serde", "next"] }
+stellar-xdr = { version = "30.0.0", features = ["std", "serde", "next"] }
 stellar-strkey = "0.0.9"
 soroban-env-host = "21.2.0"
 soroban-spec = "21.0.0"
 soroban-spec-tools = "21.5.3"
 
 # Networking & Serialization
-reqwest = { version = "0.12", features = ["json", "gzip", "rustls-tls"] }
+reqwest = { version = "0.13", features = ["json", "gzip", "rustls-tls"] }
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.24"
 futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.8"
+toml = "1.1"
 base64 = "0.22"
 hex = "0.4.3"
 libc = "0.2"
-sha2 = "0.10"
+sha2 = "0.11"
 
 # Web Server (using built-in HTTP server)
 
 # CLI Framework & Output
 clap = { version = "4", features = ["derive", "env", "color"] }
 anyhow = "1"
-thiserror = "1"
+thiserror = "2"
 colored = "2"
 indicatif = "0.17"
 dialoguer = "0.11"
-tabled = "0.16"
+tabled = "0.22"
 termcolor = "1.4"
 
 # WASM Processing
 wasmparser = "0.218"
 
 # Storage & Caching
-redb = "2"
+redb = "4"
 sled = "0.34"
 dashmap = "6"
 directories = "5"
@@ -91,7 +92,7 @@ xz2 = "0.1"
 rpassword = "7"
 
 # TUI Debugger (Tier 3)
-ratatui = "0.29"
+ratatui = "0.30"
 crossterm = "0.28"
 
 # Logging & Tracing
@@ -109,4 +110,4 @@ pulldown-cmark = "0.13"
 unicode-width = "0.2"
 
 # Shared internal crates
-grat-core = { path = "crates/core" }
+grat-core = { path = "crates/core", version = "0.1.0" }

@@ -39,6 +39,25 @@ pub trait CacheProvider: Send + Sync {
     where
         V: Serialize + Sync;
 
+    /// Serializes `value` and stores it under `key` with an optional TTL.
+    ///
+    /// When `ttl` is `Some(duration)`, the entry will expire after that
+    /// duration and will not be returned by [`get`](Self::get) once expired.
+    /// When `ttl` is `None`, the entry never expires (equivalent to [`put`](Self::put)).
+    fn put_with_ttl<V>(
+        &self,
+        key: &str,
+        value: &V,
+        ttl: Option<std::time::Duration>,
+    ) -> impl Future<Output = GratResult<()>> + Send
+    where
+        V: Serialize + Sync,
+    {
+        // Default: ignore TTL (backends that don't support TTL just call put).
+        let _ = ttl;
+        self.put(key, value)
+    }
+
     /// Removes the entry stored under `key`, if any. Removing a key that is
     /// not present is not an error.
     fn remove(&self, key: &str) -> impl Future<Output = GratResult<()>> + Send;

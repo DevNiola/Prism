@@ -1,0 +1,24 @@
+name: Stale issues and pull requests
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+  issues:
+    types: [opened, edited, labeled]
+  pull_request:
+    types: [opened, synchronize, edited, labeled]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          config-path: .github/stale.yml
