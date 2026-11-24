@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { diffLines } from "diff";
+import type { StateDiffEntryResponse } from "@/lib/api";
 import Skeleton from "@/components/shared/Skeleton";
 
+type LedgerDiffEntry = Omit<StateDiffEntryResponse, "before" | "after"> & {
+  before?: string | null;
+  after?: string | null;
+};
+
 interface StateDiffViewerProps {
-  entries: Array<{
-    key: string;
-    before?: string;
-    after?: string;
-    change_type: string;
-  }>;
+  entries: LedgerDiffEntry[];
   loading?: boolean;
 }
 
@@ -55,8 +57,8 @@ function areDeeplyEqual(left: unknown, right: unknown): boolean {
 }
 
 function getChangeType(entry: StateDiffViewerProps["entries"][number]) {
-  if (entry.before === undefined) return "created";
-  if (entry.after === undefined) return "deleted";
+  if (entry.before == null) return "created";
+  if (entry.after == null) return "deleted";
 
   const before = parseJson(entry.before);
   const after = parseJson(entry.after);
@@ -65,6 +67,130 @@ function getChangeType(entry: StateDiffViewerProps["entries"][number]) {
   }
 
   return entry.change_type.toLowerCase();
+}
+
+type DiffSide = "before" | "after";
+
+const changedText = {
+  before: "bg-red-100 text-red-800",
+  after: "bg-green-100 text-green-800",
+};
+
+function DiffText({ before, after, side, syntax = "" }: {
+  before?: string;
+  after?: string;
+  side: DiffSide;
+  syntax?: string;
+}) {
+  const value = side === "before" ? before : after;
+  if (value === undefined) return <span className="text-gray-500">(none)</span>;
+
+  const chunks = diffLines(before ?? "", after ?? "");
+  return (
+    <span className="whitespace-pre-wrap break-all">
+      {chunks.map((chunk, index) => {
+        if (side === "before" ? chunk.added : chunk.removed) return null;
+        const changed = chunk.added || chunk.removed;
+        return (
+          <span key={index} className={changed ? changedText[side] : syntax}>
+            {chunk.value}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function JsonDiffNode({ value, other, label, side, root = false }: {
+  value: unknown;
+  other: unknown;
+  label?: string;
+  side: DiffSide;
+  root?: boolean;
+}) {
+  const record = asRecord(value);
+  const peer = Array.isArray(value) === Array.isArray(other) ? asRecord(other) : undefined;
+  const unchanged = areDeeplyEqual(value, other);
+  const property = label === undefined ? null : (
+    <><span className="text-indigo-700">{JSON.stringify(label)}</span>: </>
+  );
+
+  if (record) {
+    const keys = Object.keys(record);
+    const array = Array.isArray(value);
+    const [open, close] = array ? ["[", "]"] : ["{", "}"];
+    return (
+      <details open={root && !unchanged ? true : undefined}>
+        <summary className="cursor-pointer break-all">
+          {property}
+          <span className={unchanged ? "text-gray-500" : changedText[side]}>
+            {open} {keys.length} {array ? "items" : "properties"} {close}
+          </span>
+        </summary>
+        <div className="ml-2 border-l border-gray-200 pl-2">
+          {keys.map((key) => (
+            <JsonDiffNode
+              key={key}
+              value={record[key]}
+              other={peer && Object.hasOwn(peer, key) ? peer[key] : undefined}
+              label={array ? undefined : key}
+              side={side}
+            />
+          ))}
+        </div>
+      </details>
+    );
+  }
+
+  const formatted = JSON.stringify(value);
+  const counterpart = asRecord(other) ? undefined : JSON.stringify(other);
+  const syntax = typeof value === "string" ? "text-teal-700"
+    : typeof value === "number" ? "text-blue-700"
+    : "text-purple-700";
+
+  return (
+    <div>
+      {property}
+      <DiffText
+        before={side === "before" ? formatted : counterpart}
+        after={side === "after" ? formatted : counterpart}
+        side={side}
+        syntax={syntax}
+      />
+    </div>
+  );
+}
+
+function DiffValue({ before, after, side }: {
+  before?: string;
+  after?: string;
+  side: DiffSide;
+}) {
+  const value = side === "before" ? before : after;
+  const other = side === "before" ? after : before;
+  const parsed = parseJson(value);
+  const content = parsed.valid && asRecord(parsed.parsed) ? (
+    <JsonDiffNode value={parsed.parsed} other={parseJson(other).parsed} side={side} root />
+  ) : (
+    <DiffText before={before} after={after} side={side} />
+  );
+
+  return (
+    <div className="overflow-x-auto rounded border bg-white p-2 font-mono text-xs">
+      {!asRecord(parsed.parsed) && value !== undefined && (value.length > 240 || value.includes("\n")) ? (
+        <details>
+          <summary className="cursor-pointer">Show value ({value.length.toLocaleString()} characters)</summary>
+          {content}
+        </details>
+      ) : content}
+    </div>
+  );
 }
 
 /**
@@ -82,7 +208,7 @@ export function StateDiffViewerSkeleton() {
               <Skeleton className="h-4 w-40" />
               <Skeleton className="h-6 w-20" />
             </div>
-            <div className="grid grid-cols-2 gap-4 mt-3">
+            <div className="grid gap-4 mt-3 sm:grid-cols-2">
               <div>
                 <Skeleton className="mb-1 h-3 w-12" />
                 <Skeleton className="h-10 w-full" />
@@ -178,18 +304,14 @@ export function StateDiffViewer({ entries, loading }: StateDiffViewerProps) {
               {getChangeBadge(changeType)}
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-3">
+            <div className="grid gap-4 mt-3 sm:grid-cols-2">
               <div>
                 <div className="text-xs text-gray-600 mb-1">Before</div>
-                <pre className="text-xs bg-white p-2 rounded border overflow-x-auto">
-                  {entry.before || "(none)"}
-                </pre>
+                <DiffValue before={entry.before ?? undefined} after={entry.after ?? undefined} side="before" />
               </div>
               <div>
                 <div className="text-xs text-gray-600 mb-1">After</div>
-                <pre className="text-xs bg-white p-2 rounded border overflow-x-auto">
-                  {entry.after || "(none)"}
-                </pre>
+                <DiffValue before={entry.before ?? undefined} after={entry.after ?? undefined} side="after" />
               </div>
             </div>
           </div>
