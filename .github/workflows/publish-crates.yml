@@ -6,6 +6,8 @@ on:
       - "Cargo.toml"
       - "crates/**/Cargo.toml"
       - ".github/workflows/publish-crates.yml"
+      - "scripts/publish-workspace-crates.py"
+      - "scripts/verify-crate-published.sh"
   release:
     types: [published]
 
@@ -25,12 +27,16 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Dry-run publish all workspace crates
-        run: cargo publish --workspace --dry-run
+        run: cargo publish --workspace --dry-run --all-features
 
   publish:
     name: Publish crates to crates.io
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
+    concurrency: crates-io-publication
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -38,26 +44,24 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Publish grat-core
-        run: cargo publish -p grat-core
+      - name: Publish and verify workspace crates
+        id: publish
+        run: python3 scripts/publish-workspace-crates.py
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      - name: Verify grat-core publication
-        run: bash scripts/verify-crate-published.sh grat-core
-
-      - name: Publish grat-cli
-        run: cargo publish -p grat-cli
+      - name: Report partial publication
+        if: failure() && steps.publish.outputs.published != ''
+        uses: actions/github-script@v7
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Verify grat-cli publication
-        run: bash scripts/verify-crate-published.sh grat-cli
-
-      - name: Publish grat-wasm
-        run: cargo publish -p grat-wasm
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Verify grat-wasm publication
-        run: bash scripts/verify-crate-published.sh grat-wasm
+          PUBLISHED: ${{ steps.publish.outputs.published }}
+          FAILED: ${{ steps.publish.outputs.failed }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner, repo,
+              title: `Partial crates.io publication for ${context.payload.release.tag_name}`,
+              body: `Cargo reported successful publication for: ${process.env.PUBLISHED}.\n\nPublication or verification failed for ${process.env.FAILED}. Remaining crates were skipped. Check crates.io and the [workflow logs](${run}) before resuming.`
+            });
