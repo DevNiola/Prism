@@ -3,21 +3,41 @@ name: Web E2E
 on:
   pull_request:
     branches: [main, master]
+    paths:
+      - 'apps/web/**'
+      - 'crates/wasm/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/web-e2e.yml'
+      - '.github/workflows/web-e2e-report.yml'
   push:
     branches: [main, master]
+
+permissions:
+  contents: read
 
 jobs:
   playwright:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.15.9
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter grat-web exec playwright install --with-deps chromium
-      - run: pnpm --filter grat-web test:e2e
+      - name: Run Playwright
+        id: playwright
+        run: pnpm --filter grat-web test:e2e
+      - name: Upload Playwright report and traces
+        if: failure() && steps.playwright.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-${{ github.run_attempt }}
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 14
