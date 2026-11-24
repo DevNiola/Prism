@@ -25,9 +25,10 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-    env:
-      CARGO_TARGET_DIR: ${{ runner.temp }}/cargo-target
     steps:
+      - name: Set Cargo target directory
+        run: printf 'CARGO_TARGET_DIR=%s/cargo-target\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+
       - name: Check out benchmark revision
         uses: actions/checkout@v4
         with:
@@ -39,7 +40,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: crates/core -> target
+          workspaces: . -> ${{ env.CARGO_TARGET_DIR }}
           shared-key: decode-benchmarks
 
       - name: Restore Criterion baseline for the base commit
