@@ -6,9 +6,9 @@ description: "Decode a Soroban transaction failure into a diagnostic report."
 The Fastify server does not expose an HTTP route for decoding transaction errors. Run the CLI with a failed transaction hash on the selected network.
 
 ```bash
-grat --network testnet --output json decode "$TX_HASH"
+cargo run -p grat-cli -- --network testnet --output json decode "$TX_HASH"
 ```
 
 The JSON output is a diagnostic report with fields such as `error_name`, `severity`, and `summary`. Browser integrations can call the WASM export `decode_error(tx_result_json)` with a serialized Soroban RPC transaction result and receive a diagnostic report or a decoding error.
 
-The Fastify API can [explain an existing report](/api-reference#post-apiaiexplain) after you decode it.
+The Fastify API can [explain an existing report](https://github.com/DevNiola/Prism/blob/main/docs/api-reference.md#post-apiaiexplain) after you decode it.

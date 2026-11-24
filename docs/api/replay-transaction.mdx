@@ -19,7 +19,7 @@ curl --fail-with-body "http://localhost:3001/api/replay/${JOB_ID}"
 
 ## Fetch a full trace
 
-Run `grat --network testnet serve` and call `GET /api/trace/:tx_hash` on the CLI bridge. It accepts a transaction hash as a path parameter and returns the JSON execution trace. A replay failure returns HTTP 500 with a plain-text error.
+Run `cargo run -p grat-cli -- --network testnet serve` and call `GET /api/trace/:tx_hash` on the CLI bridge. It accepts a transaction hash as a path parameter and returns the JSON execution trace. A replay failure returns HTTP 500 with a plain-text error.
 
 ```bash
 curl --fail-with-body "http://localhost:8080/api/trace/${TX_HASH}"
