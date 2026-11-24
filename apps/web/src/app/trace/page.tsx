@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTrace } from "@/hooks/useTrace";
 import { ExecutionTimeline } from "@/components/trace/ExecutionTimeline";
 import { StateDiffViewer } from "@/components/trace/StateDiffViewer";
+import DiagnosticEvents from "@/components/trace/DiagnosticEvents";
 import { ResourceProfile } from "@/components/trace/ResourceProfile";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import Skeleton from "@/components/shared/Skeleton";
@@ -134,6 +135,7 @@ export default function TracePage() {
           <ResourceProfile loading />
           <ExecutionTimeline nodes={[]} loading />
           <StateDiffViewer entries={[]} loading />
+          <DiagnosticEvents loading />
         </div>
       )}
 
@@ -217,6 +219,7 @@ export default function TracePage() {
           />
 
           <StateDiffViewer entries={trace.state_diff} loading={loading} />
+          <DiagnosticEvents events={trace.diagnostic_events} loading={loading} />
         </div>
       )}
     </main>

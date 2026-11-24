@@ -2,10 +2,35 @@
 
 import type { DiagnosticReport } from "@/lib/types";
 import SuggestedFixes from "./SuggestedFixes";
-import { SeverityBadge, getSeverityMeta } from "@/components/shared/SeverityBadge";
+import Skeleton from "@/components/shared/Skeleton";
+import { getSeverityMeta } from "@/components/shared/SeverityBadge";
 
 interface ErrorCardProps {
   report: DiagnosticReport;
+}
+
+const CARD_CLASS = "mx-auto my-6 max-w-3xl overflow-hidden rounded-lg border border-slate-800 bg-slate-900 text-slate-100 shadow-xl";
+const BODY_CLASS = "space-y-7 p-5 sm:p-6";
+
+export function ErrorCardSkeleton() {
+  return (
+    <article className={CARD_CLASS} aria-busy="true" aria-label="Loading diagnosis">
+      <header className="space-y-2 border-b border-slate-800 p-5 pl-7 sm:p-6 sm:pl-8">
+        <Skeleton tone="dark" className="h-4 w-36" />
+        <Skeleton tone="dark" className="h-8 w-56 max-w-full" />
+        <Skeleton tone="dark" className="h-4 w-24" />
+        <Skeleton tone="dark" className="!mt-5 h-7 w-full" />
+      </header>
+      <div className={BODY_CLASS}>
+        <div className="space-y-2">
+          <Skeleton tone="dark" className="h-4 w-28" />
+          <Skeleton tone="dark" className="h-11 w-full" />
+        </div>
+        <Skeleton tone="dark" className="h-[66px] w-full" />
+        <SuggestedFixes loading />
+      </div>
+    </article>
+  );
 }
 
 export default function ErrorCard({ report }: ErrorCardProps) {
@@ -69,7 +94,7 @@ export default function ErrorCard({ report }: ErrorCardProps) {
   };
 
   return (
-    <article className="mx-auto my-6 max-w-3xl overflow-hidden rounded-lg border border-slate-800 bg-slate-900 text-slate-100 shadow-xl">
+    <article className={CARD_CLASS}>
       <header className={`relative border-b p-5 sm:p-6 ${meta.panelClass}`}>
         <span
           aria-hidden="true"
@@ -89,7 +114,7 @@ export default function ErrorCard({ report }: ErrorCardProps) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded border px-2.5 py-1 text-xs font-semibold uppercase ${severity.text} ${severity.panel}`}>
+            <span className={`rounded border px-2.5 py-1 text-xs font-semibold uppercase ${meta.badgeClass}`}>
               {report.severity}
             </span>
             <button
@@ -114,7 +139,7 @@ export default function ErrorCard({ report }: ErrorCardProps) {
           {report.summary}
         </p>
       </header>
-      <div className="space-y-7 p-5 sm:p-6">
+      <div className={BODY_CLASS}>
         <section aria-labelledby="error-explanation-heading">
           <h3 id="error-explanation-heading" className="text-xs font-bold uppercase tracking-wider text-slate-500">
             What happened

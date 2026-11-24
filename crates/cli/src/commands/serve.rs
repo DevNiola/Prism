@@ -9,7 +9,7 @@ use axum::{
 };
 use clap::Args;
 use futures_util::{SinkExt, StreamExt as _};
-use grat_core::types::config::NetworkConfig;
+use grat_core::types::{config::NetworkConfig, trace::DiagnosticEvent};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::services::ServeDir;
@@ -51,6 +51,7 @@ pub enum TraceStreamMessage {
     TraceCompleted {
         total_nodes: usize,
         duration_ms: u64,
+        diagnostic_events: Vec<DiagnosticEvent>,
     },
     TraceError {
         error: String,
@@ -275,6 +276,7 @@ async fn stream_trace_replay(
     let _ = sender.send(TraceStreamMessage::TraceCompleted {
         total_nodes: node_count,
         duration_ms,
+        diagnostic_events: grat_core::replay::collect_diagnostic_events(&result),
     });
 
     Ok(())

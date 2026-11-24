@@ -16,6 +16,10 @@ interface ResourceProfileProps {
   loading?: boolean;
 }
 
+const BAR_ROW_CLASS = "space-y-1.5";
+const BAR_HEADER_CLASS = "flex min-h-6 items-center justify-between gap-2";
+const BAR_HEIGHT_CLASS = "h-3.5";
+
 function ResourceBar({
   label,
   used,
@@ -41,8 +45,8 @@ function ResourceBar({
         : "bg-emerald-500";
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
+    <div className={BAR_ROW_CLASS}>
+      <div className={BAR_HEADER_CLASS}>
         <div className="flex items-center space-x-2">
           <span className="text-sm font-semibold text-gray-800">{label}</span>
           {isBudgetExceeded && (
@@ -72,7 +76,7 @@ function ResourceBar({
         </div>
       </div>
 
-      <div className="relative w-full bg-gray-100 border border-gray-200 rounded-full h-3.5 overflow-hidden">
+      <div className={`relative w-full bg-gray-100 border border-gray-200 rounded-full overflow-hidden ${BAR_HEIGHT_CLASS}`}>
         {/* Visual threshold guides at 50% and 80% */}
         <div
           className="absolute top-0 bottom-0 left-1/2 w-px bg-gray-300 z-10 opacity-70"
@@ -110,12 +114,12 @@ export function ResourceProfileSkeleton() {
 
       <div className="space-y-6">
         {Array.from({ length: 4 }, (_, index) => (
-          <div key={index}>
-            <div className="flex justify-between mb-2">
+          <div key={index} className={BAR_ROW_CLASS}>
+            <div className={BAR_HEADER_CLASS}>
               <Skeleton className="h-5 w-32" />
-              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-40" />
             </div>
-            <Skeleton className="h-4 w-full rounded-full" />
+            <Skeleton className={`w-full rounded-full ${BAR_HEIGHT_CLASS}`} />
           </div>
         ))}
       </div>

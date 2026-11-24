@@ -51,7 +51,22 @@ pub async fn replay_transaction(
 
     let profile = profiler::generate_profile(&raw_trace, &state_diff)?;
 
-    let diagnostic_events = walk_diagnostic_events(&raw_trace.diagnostic_events)
+    let diagnostic_events = collect_diagnostic_events(&raw_trace);
+
+    Ok(ExecutionTrace {
+        tx_hash: tx_hash.to_string(),
+        ledger_sequence: ledger_state.ledger_sequence,
+        network: network.network.to_string(),
+        invocations: trace_tree,
+        state_diff,
+        resource_profile: profile,
+        diagnostic_events,
+    })
+}
+
+/// Converts recorded sandbox events into the public trace representation.
+pub fn collect_diagnostic_events(trace: &sandbox::SandboxResult) -> Vec<DiagnosticEvent> {
+    walk_diagnostic_events(&trace.diagnostic_events)
         .into_iter()
         .enumerate()
         .map(|(timeline_position, event)| DiagnosticEvent {
@@ -63,15 +78,5 @@ pub async fn replay_transaction(
             )]),
             timeline_position,
         })
-        .collect();
-
-    Ok(ExecutionTrace {
-        tx_hash: tx_hash.to_string(),
-        ledger_sequence: ledger_state.ledger_sequence,
-        network: network.network.to_string(),
-        invocations: trace_tree,
-        state_diff,
-        resource_profile: profile,
-        diagnostic_events,
-    })
+        .collect()
 }

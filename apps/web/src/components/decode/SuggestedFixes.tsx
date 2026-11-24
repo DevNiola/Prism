@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Skeleton from "@/components/shared/Skeleton";
 import type { SuggestedFix } from "@/lib/types";
 
 interface SuggestedFixesProps {
-  fixes: SuggestedFix[];
+  fixes?: SuggestedFix[];
+  loading?: boolean;
 }
 
 function difficultyStyle(difficulty: string): string {
@@ -18,7 +20,10 @@ function difficultyStyle(difficulty: string): string {
   }
 }
 
-export default function SuggestedFixes({ fixes }: SuggestedFixesProps) {
+const FIX_ROW_CLASS = "min-h-28 rounded border border-slate-800 bg-slate-950/70 p-4";
+const FIX_ROW_LAYOUT = "flex flex-wrap items-start justify-between gap-3";
+
+export default function SuggestedFixes({ fixes = [], loading }: SuggestedFixesProps) {
   const [copyStatus, setCopyStatus] = useState<Record<number, string>>({});
 
   async function copyFix(index: number, fix: SuggestedFix) {
@@ -31,7 +36,7 @@ export default function SuggestedFixes({ fixes }: SuggestedFixesProps) {
   }
 
   return (
-    <section aria-labelledby="suggested-fixes-heading">
+    <section aria-labelledby="suggested-fixes-heading" aria-busy={loading || undefined}>
       <div className="mb-3 flex items-end justify-between gap-3">
         <div>
           <h3
@@ -45,18 +50,31 @@ export default function SuggestedFixes({ fixes }: SuggestedFixesProps) {
           </p>
         </div>
         <span className="font-mono text-xs text-slate-500">
-          {fixes.length.toString().padStart(2, "0")}
+          {loading ? <Skeleton tone="dark" className="h-4 w-4" /> : fixes.length.toString().padStart(2, "0")}
         </span>
       </div>
 
-      {fixes.length > 0 ? (
+      {loading ? (
+        <div className={FIX_ROW_CLASS}>
+          <div className={FIX_ROW_LAYOUT}>
+            <div className="flex min-w-0 flex-1 gap-3">
+              <Skeleton tone="dark" className="mt-0.5 size-6 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <Skeleton tone="dark" className="h-6 w-full" />
+                <Skeleton tone="dark" className="mt-3 h-5 w-24" />
+              </div>
+            </div>
+            <Skeleton tone="dark" className="h-[34px] w-[88px] shrink-0" />
+          </div>
+        </div>
+      ) : fixes.length > 0 ? (
         <ol className="space-y-3">
           {fixes.map((fix, index) => (
             <li
               key={`${fix.description}-${index}`}
-              className="rounded border border-slate-800 bg-slate-950/70 p-4"
+              className={FIX_ROW_CLASS}
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className={FIX_ROW_LAYOUT}>
                 <div className="flex min-w-0 flex-1 gap-3">
                   <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded bg-emerald-950 text-xs font-bold text-emerald-300">
                     {index + 1}
@@ -98,7 +116,7 @@ export default function SuggestedFixes({ fixes }: SuggestedFixesProps) {
           ))}
         </ol>
       ) : (
-        <p className="rounded border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-500">
+        <p className="min-h-28 rounded border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-500">
           No suggested fixes are documented for this error.
         </p>
       )}

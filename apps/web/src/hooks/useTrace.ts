@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef } from "react";
 import { useWebSocket, TraceStreamCallbacks } from "./useWebSocket";
 
+import type { DiagnosticEventEntry } from "@/lib/types";
+
 export type TracePhase =
   | "idle"
   | "fetching"
@@ -38,6 +40,7 @@ export interface TraceData {
     write_limit: number;
   };
   state_diff: any[];
+  diagnostic_events?: DiagnosticEventEntry[];
   completed: boolean;
   error?: string;
 }
@@ -172,6 +175,7 @@ export function useTrace(wsUrl?: string) {
         return {
           ...prev,
           completed: true,
+          diagnostic_events: data.diagnostic_events,
         };
       });
       stopTicker();

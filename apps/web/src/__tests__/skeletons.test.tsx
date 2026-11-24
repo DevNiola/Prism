@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import Skeleton, { SkeletonList } from "@/components/shared/Skeleton";
+import SuggestedFixes from "@/components/decode/SuggestedFixes";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import {
   ResourceProfile,
@@ -112,7 +113,40 @@ describe("LoadingSpinner", () => {
   });
 });
 
+describe("SuggestedFixes", () => {
+  it("replaces its placeholder with a fix using the same row dimensions", () => {
+    const { container, rerender } = render(<SuggestedFixes loading />);
+    const busy = container.querySelector('[aria-busy="true"]');
+    const placeholder = busy?.querySelector(".min-h-28");
+    expect(placeholder).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /copy fix/i })).toBeNull();
+
+    rerender(<SuggestedFixes fixes={[{
+      description: "Check the contract permissions",
+      difficulty: "easy",
+      requires_upgrade: false,
+    }]} />);
+
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(0);
+    expect(screen.getByText("Check the contract permissions").closest("li")?.className)
+      .toBe(placeholder?.className);
+  });
+});
+
 describe("ResourceProfile", () => {
+  it("replaces placeholders with bars using the same track and header heights", () => {
+    const { container, rerender } = render(<ResourceProfile loading />);
+    expect(container.querySelectorAll('[class~="h-3.5"]')).toHaveLength(4);
+    expect(container.querySelectorAll(".min-h-6")).toHaveLength(4);
+
+    rerender(<ResourceProfile profile={profile} loading />);
+    expect(container.querySelectorAll('[class~="h-3.5"]')).toHaveLength(4);
+    expect(container.querySelectorAll(".min-h-6")).toHaveLength(4);
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(0);
+  });
+
   it("renders the skeleton while loading without a profile", () => {
     const { container } = render(<ResourceProfile loading />);
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
@@ -141,6 +175,19 @@ describe("ResourceProfile", () => {
 });
 
 describe("DiagnosticEvents", () => {
+  it("replaces placeholders with events inside the same reserved list area", () => {
+    const { container, rerender } = render(<DiagnosticEvents loading />);
+    const placeholder = container.querySelector('[class*="min-h-[14.75rem]"]');
+    expect(placeholder?.children).toHaveLength(3);
+
+    rerender(<DiagnosticEvents events={events} loading />);
+    const list = container.querySelector('[class*="min-h-[14.75rem]"]');
+    expect(list?.className).toBe(placeholder?.className);
+    expect(list?.children).toHaveLength(events.length);
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(0);
+  });
+
   it("renders the skeleton while loading with no events", () => {
     const { container } = render(<DiagnosticEvents loading />);
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();

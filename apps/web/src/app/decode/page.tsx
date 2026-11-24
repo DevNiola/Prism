@@ -15,6 +15,7 @@ import type { DiagnosticReport } from "@/lib/types";
 import { useSessionStore } from "@/store/session";
 import { useNetworkStore } from "@/store/network";
 import EmptyState from "@/components/shared/EmptyState";
+import { ErrorCardSkeleton } from "@/components/decode/ErrorCard";
 
 function DecodePageContent() {
   const [activeTab, setActiveTab] = useState<"diagnose" | "lookup">("diagnose");
@@ -37,6 +38,8 @@ function DecodePageContent() {
     // Only run on initial mount / txHashParam change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [txHashParam]);
+
+  const [decoding, setDecoding] = useState(false);
 
   function handleDecode(decoded: DiagnosticReport | null) {
     setReport(decoded);
@@ -99,8 +102,9 @@ function DecodePageContent() {
         <div className="transition-all duration-300">
           {activeTab === "diagnose" ? (
             <div className="space-y-6">
-              <DecodeForm onDecode={handleDecode} />
-              {!report && (
+              <DecodeForm onDecode={handleDecode} onLoadingChange={setDecoding} />
+              {decoding && <ErrorCardSkeleton />}
+              {!decoding && !report && (
                 <EmptyState
                   title="Ready to decode an error"
                   description="Choose an error category and enter its code above to see a diagnosis and suggested fixes."
@@ -124,7 +128,7 @@ function DecodePageContent() {
                   }
                 />
               )}
-              {report && (
+              {!decoding && report && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <ErrorCard report={report} />
                   {report.transaction_context && (

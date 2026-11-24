@@ -1,6 +1,5 @@
 import Skeleton from "@/components/shared/Skeleton";
 import type { DiagnosticEventEntry } from "@/lib/types";
-import { SeverityBadge, getSeverityMeta } from "@/components/shared/SeverityBadge";
 
 interface DiagnosticEventsProps {
   events?: DiagnosticEventEntry[];
@@ -8,6 +7,9 @@ interface DiagnosticEventsProps {
 }
 
 const EVENT_ROWS = 3;
+const EVENT_LIST_CLASS = "min-h-[14.75rem] space-y-2";
+const EVENT_ROW_CLASS = "min-h-[74px] rounded border border-gray-200 p-3";
+const EVENT_HEADER_CLASS = "flex min-h-6 items-center justify-between gap-2";
 
 function eventTypeStyles(eventType: string): string {
   const norm = eventType.toLowerCase();
@@ -35,17 +37,17 @@ export function DiagnosticEventsSkeleton() {
   return (
     <div className="bg-white rounded-lg shadow p-6" aria-busy="true">
       <h2 className="text-xl font-semibold mb-4">Diagnostic Events</h2>
-      <div className="space-y-2">
+      <div className={EVENT_LIST_CLASS}>
         {Array.from({ length: EVENT_ROWS }, (_, index) => (
-          <div key={index} className="p-3 border border-gray-200 rounded">
-            <div className="flex items-center justify-between">
+          <div key={index} className={EVENT_ROW_CLASS}>
+            <div className={EVENT_HEADER_CLASS}>
               <div className="flex items-center space-x-3">
                 <Skeleton className="h-4 w-8" />
                 <Skeleton className="h-4 w-20" />
               </div>
               <Skeleton className="h-4 w-40" />
             </div>
-            <Skeleton className="mt-2 h-3 w-3/4" />
+            <Skeleton className="mt-2 h-4 w-3/4" />
           </div>
         ))}
       </div>
@@ -66,13 +68,13 @@ export default function DiagnosticEvents({
       <h2 className="text-xl font-semibold mb-4">Diagnostic Events</h2>
 
       {events.length > 0 ? (
-        <div className="space-y-2">
+        <div className={EVENT_LIST_CLASS}>
           {events.map((event) => (
             <div
               key={event.timeline_position}
-              className="p-3 border border-gray-200 rounded"
+              className={EVENT_ROW_CLASS}
             >
-              <div className="flex items-center justify-between">
+              <div className={EVENT_HEADER_CLASS}>
                 <div className="flex items-center space-x-3">
                   <span className="text-xs font-mono text-gray-500">
                     #{event.timeline_position}
@@ -105,7 +107,7 @@ export default function DiagnosticEvents({
           ))}
         </div>
       ) : (
-        <p className="text-gray-500 text-center py-8">
+        <p className={`py-8 text-center text-gray-500 ${EVENT_LIST_CLASS}`}>
           No diagnostic events recorded.
         </p>
       )}
