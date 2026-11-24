@@ -118,14 +118,14 @@ export default function DiagnosticEvents({
           {visibleEvents.map((event, index) => (
             <div
               key={`${event.timeline_position}-${index}`}
-              className="p-3 border border-gray-200 rounded"
+              className="relative p-3 border border-gray-200 rounded"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <span className="text-xs font-mono text-gray-500">
                     {timelineId ? (
                       <a
-                        className="text-violet-700 underline"
+                        className="text-violet-700 underline after:absolute after:inset-0 after:rounded focus-visible:after:ring-2 focus-visible:after:ring-violet-500"
                         href={`#${timelineId}-step-${event.timeline_position}`}
                         aria-label={`Jump to timeline step ${event.timeline_position}`}
                       >
