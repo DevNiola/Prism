@@ -1,32 +1,28 @@
-# =============================================================================
-# apps/server — Multi-stage Dockerfile
-# =============================================================================
-
-# Stage 1: install dependencies
-FROM node:20-alpine AS deps
-RUN npm install -g pnpm@9
+FROM node:24-bookworm-slim AS base
+RUN corepack enable
 WORKDIR /app
+
+FROM base AS deps
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/server/package.json apps/server/
-RUN pnpm install --frozen-lockfile --filter grat-server...
+RUN pnpm --filter grat-server install --frozen-lockfile
 
-# Stage 2: build
-FROM node:20-alpine AS builder
-RUN npm install -g pnpm@9
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
+FROM deps AS build
 COPY apps/server ./apps/server
-COPY package.json pnpm-workspace.yaml ./
-RUN pnpm --filter grat-server run build
+RUN pnpm --filter grat-server build:container
 
-# Stage 3: runtime
-FROM node:20-alpine AS runner
+FROM base AS prod-deps
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY apps/server/package.json apps/server/
+RUN pnpm --filter grat-server install --prod --frozen-lockfile
+
+FROM node:24-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=builder /app/apps/server/dist ./dist
-COPY --from=deps /app/apps/server/node_modules ./node_modules
-COPY --from=builder /app/apps/server/package.json ./package.json
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY --from=prod-deps /app/apps/server/node_modules ./apps/server/node_modules
+COPY --from=build /app/apps/server/dist ./apps/server/dist
 
+USER node
 EXPOSE 3001
-CMD ["node", "dist/index.js"]
+CMD ["node", "apps/server/dist/index.js"]

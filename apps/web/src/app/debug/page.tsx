@@ -1,10 +1,19 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import EmptyState from "@/components/shared/EmptyState";
 import { Breadcrumbs } from "@/components/shared/Breadcrumbs";
 
 export default function DebugPage() {
+  return (
+    <Suspense fallback={null}>
+      <DebugPageContent />
+    </Suspense>
+  );
+}
+
+function DebugPageContent() {
   const searchParams = useSearchParams();
   const network = searchParams.get("network") || "testnet";
   const txHash = searchParams.get("txHash") || "No Transaction";
