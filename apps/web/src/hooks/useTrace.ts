@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from "react";
-import { useWebSocket, TraceStreamCallbacks } from "./useWebSocket";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useWebSocket, type TraceStreamCallbacks } from "./useWebSocket";
+import { useSessionStore } from "@/store/session";
 
 export type TracePhase =
   | "idle"
@@ -80,8 +81,10 @@ export function useTrace(wsUrl?: string) {
   const startTimeRef = useRef<number | null>(null);
   /** Interval ref for the elapsed-time ticker */
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  /** Whether a cancel was requested */
-  const cancelledRef = useRef(false);
+  const activeHash = useRef<string | null>(null);
+  const cadence = useRef({ total: 0, received: 0, firstAt: 0 });
+  const estimateEndsAt = useRef<number | null>(null);
+  const simulationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopTicker = useCallback(() => {
     if (tickerRef.current) {
@@ -98,15 +101,9 @@ export function useTrace(wsUrl?: string) {
         ? Math.round((now - startTimeRef.current) / 1000)
         : 0;
 
-      // Estimate remaining based on elapsed and progress so far
-      let estimatedRemaining: number | null = null;
-      if (percent > 0 && percent < 100 && elapsed > 0) {
-        const totalEstimate = (elapsed / percent) * 100;
-        estimatedRemaining = Math.max(
-          0,
-          Math.round(totalEstimate - elapsed)
-        );
-      }
+      const estimatedRemaining = phase === "replaying" && estimateEndsAt.current !== null
+        ? Math.max(1, Math.ceil((estimateEndsAt.current - now) / 1000))
+        : null;
 
       setProgress({
         phase,
@@ -121,7 +118,8 @@ export function useTrace(wsUrl?: string) {
 
   const callbacks: TraceStreamCallbacks = {
     onTraceStarted: (data) => {
-      if (cancelledRef.current) return;
+      if (activeHash.current !== data.tx_hash) return;
+      cadence.current.total = data.total_nodes ?? 0;
       setTrace({
         tx_hash: data.tx_hash,
         ledger_sequence: data.ledger_sequence,
@@ -133,7 +131,7 @@ export function useTrace(wsUrl?: string) {
       updatePhase("fetching");
     },
     onTraceNode: (data) => {
-      if (cancelledRef.current) return;
+      if (!activeHash.current) return;
       setTrace((prev) => {
         if (!prev) return null;
         return {
@@ -141,10 +139,20 @@ export function useTrace(wsUrl?: string) {
           nodes: [...prev.nodes, data],
         };
       });
+      const sample = cadence.current;
+      const now = Date.now();
+      sample.received++;
+      if (sample.received === 1) sample.firstAt = now;
+      if (sample.received > 1 && sample.total > sample.received && now > sample.firstAt) {
+        const averageInterval = (now - sample.firstAt) / (sample.received - 1);
+        estimateEndsAt.current = now + averageInterval * (sample.total - sample.received);
+      } else {
+        estimateEndsAt.current = null;
+      }
       updatePhase("replaying");
     },
     onResourceUpdate: (data) => {
-      if (cancelledRef.current) return;
+      if (!activeHash.current) return;
       setTrace((prev) => {
         if (!prev) return null;
         return {
@@ -155,7 +163,7 @@ export function useTrace(wsUrl?: string) {
       updatePhase("profiling");
     },
     onStateDiffEntry: (data) => {
-      if (cancelledRef.current) return;
+      if (!activeHash.current) return;
       setTrace((prev) => {
         if (!prev) return null;
         return {
@@ -165,8 +173,9 @@ export function useTrace(wsUrl?: string) {
       });
       updatePhase("decoding");
     },
-    onTraceCompleted: (data) => {
-      if (cancelledRef.current) return;
+    onTraceCompleted: () => {
+      if (!activeHash.current) return;
+      activeHash.current = null;
       setTrace((prev) => {
         if (!prev) return null;
         return {
@@ -179,7 +188,8 @@ export function useTrace(wsUrl?: string) {
       setLoading(false);
     },
     onTraceError: (data) => {
-      if (cancelledRef.current) return;
+      if (!activeHash.current) return;
+      activeHash.current = null;
       setTrace((prev) => {
         if (!prev) return null;
         return {
@@ -198,12 +208,19 @@ export function useTrace(wsUrl?: string) {
     connected,
     error: wsError,
     requestTrace: wsRequestTrace,
+    close: closeSocket,
   } = useWebSocket(wsUrl || "", callbacks);
 
   const requestTrace = useCallback(
-    (txHash: string, network: string) => {
-      cancelledRef.current = false;
+    (txHash: string) => {
+      if (activeHash.current) return;
+      activeHash.current = txHash;
+      cadence.current = { total: 0, received: 0, firstAt: 0 };
+      estimateEndsAt.current = null;
+      setTrace(null);
+      setLoading(true);
       startTimeRef.current = Date.now();
+      updatePhase("fetching");
 
       // Start elapsed ticker
       stopTicker();
@@ -221,24 +238,17 @@ export function useTrace(wsUrl?: string) {
           ) {
             return prev;
           }
-          const estimatedRemaining =
-            prev.percent > 0 && prev.percent < 100
-              ? Math.max(
-                  0,
-                  Math.round((elapsed / prev.percent) * 100 - elapsed)
-                )
-              : null;
+          const estimatedRemaining = prev.phase === "replaying" && estimateEndsAt.current !== null
+            ? Math.max(1, Math.ceil((estimateEndsAt.current - Date.now()) / 1000))
+            : null;
           return { ...prev, elapsed, estimatedRemaining };
         });
       }, 1000);
 
-      if (wsUrl && connected) {
+      if (wsUrl) {
         wsRequestTrace(txHash);
-        updatePhase("fetching");
       } else {
         // Simulate progress phases for non-streaming mode
-        setLoading(true);
-        updatePhase("fetching");
         const phases: TracePhase[] = [
           "fetching",
           "decoding",
@@ -247,35 +257,41 @@ export function useTrace(wsUrl?: string) {
         ];
         let i = 0;
         const advance = () => {
-          if (cancelledRef.current) return;
+          if (!activeHash.current) return;
           if (i < phases.length) {
             updatePhase(phases[i]);
             i++;
-            setTimeout(advance, 800);
+            simulationTimer.current = setTimeout(advance, 800);
           } else {
+            activeHash.current = null;
             stopTicker();
             updatePhase("complete");
             setLoading(false);
           }
         };
-        setTimeout(advance, 400);
+        simulationTimer.current = setTimeout(advance, 400);
       }
     },
-    [wsUrl, connected, wsRequestTrace, updatePhase, stopTicker]
+    [wsUrl, wsRequestTrace, updatePhase, stopTicker]
   );
 
   const cancelTrace = useCallback(() => {
-    cancelledRef.current = true;
+    const txHash = activeHash.current;
+    if (!txHash) return;
+    activeHash.current = null;
+    useSessionStore.getState().recordReplayCancel(txHash);
+    closeSocket();
+    if (simulationTimer.current !== null) clearTimeout(simulationTimer.current);
     stopTicker();
     setLoading(false);
-    setProgress({
-      phase: "cancelled",
-      percent: 0,
-      label: PHASE_LABELS.cancelled,
-      elapsed: 0,
-      estimatedRemaining: null,
-    });
-  }, [stopTicker]);
+    updatePhase("cancelled");
+  }, [closeSocket, stopTicker, updatePhase]);
+
+  useEffect(() => () => {
+    activeHash.current = null;
+    stopTicker();
+    if (simulationTimer.current !== null) clearTimeout(simulationTimer.current);
+  }, [wsUrl, stopTicker]);
 
   return {
     trace,
