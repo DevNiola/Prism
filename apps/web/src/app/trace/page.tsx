@@ -8,7 +8,7 @@ import { ResourceProfile } from "@/components/trace/ResourceProfile";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import Skeleton from "@/components/shared/Skeleton";
 import EmptyState from "@/components/shared/EmptyState";
-import Breadcrumbs from "@/components/shared/Breadcrumbs";
+import ReplayProgressBar from "@/components/trace/ReplayProgressBar";
 import { useToast } from "@/hooks/useToast";
 
 /** Mirrors the Transaction Info card so the page keeps its height while the
@@ -39,10 +39,10 @@ export default function TracePage() {
 
   const wsUrl =
     typeof window !== "undefined"
-      ? `ws://${window.location.hostname}:8080`
+      ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:8080/ws`
       : "";
 
-  const { trace, loading, requestTrace, streaming, streamError } =
+  const { trace, loading, requestTrace, streaming, streamError, progress, cancelTrace, connectionStatus } =
     useTrace(wsUrl);
   const { showToast } = useToast();
 
@@ -121,6 +121,12 @@ export default function TracePage() {
           </div>
         )}
       </form>
+
+      <ReplayProgressBar
+        progress={progress}
+        onCancel={cancelTrace}
+        connectionStatus={connectionStatus}
+      />
 
       {loading && !trace && (
         <div className="space-y-8">

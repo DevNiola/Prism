@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from "react";
-import { useWebSocket, TraceStreamCallbacks } from "./useWebSocket";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useWebSocket, type TraceStreamCallbacks } from "./useWebSocket";
 
 export type TracePhase =
   | "idle"
@@ -122,13 +122,14 @@ export function useTrace(wsUrl?: string) {
   const callbacks: TraceStreamCallbacks = {
     onTraceStarted: (data) => {
       if (cancelledRef.current) return;
-      setTrace({
+      setTrace((previous) => ({
         tx_hash: data.tx_hash,
         ledger_sequence: data.ledger_sequence,
-        nodes: [],
+        nodes: previous?.nodes ?? [],
+        resource_profile: previous?.resource_profile,
         state_diff: [],
         completed: false,
-      });
+      }));
       setLoading(true);
       updatePhase("fetching");
     },
@@ -165,7 +166,7 @@ export function useTrace(wsUrl?: string) {
       });
       updatePhase("decoding");
     },
-    onTraceCompleted: (data) => {
+    onTraceCompleted: () => {
       if (cancelledRef.current) return;
       setTrace((prev) => {
         if (!prev) return null;
@@ -196,12 +197,24 @@ export function useTrace(wsUrl?: string) {
 
   const {
     connected,
+    status: connectionStatus,
+    cancelRequest,
     error: wsError,
     requestTrace: wsRequestTrace,
   } = useWebSocket(wsUrl || "", callbacks);
 
+  useEffect(() => stopTicker, [stopTicker]);
+
+  useEffect(() => {
+    if (connectionStatus === "closed" && wsError) {
+      stopTicker();
+      updatePhase("error");
+      setLoading(false);
+    }
+  }, [connectionStatus, wsError, stopTicker, updatePhase]);
+
   const requestTrace = useCallback(
-    (txHash: string, network: string) => {
+    (txHash: string, _network: string) => {
       cancelledRef.current = false;
       startTimeRef.current = Date.now();
 
@@ -232,12 +245,13 @@ export function useTrace(wsUrl?: string) {
         });
       }, 1000);
 
-      if (wsUrl && connected) {
+      setTrace(null);
+      setLoading(true);
+      if (wsUrl) {
         wsRequestTrace(txHash);
         updatePhase("fetching");
       } else {
         // Simulate progress phases for non-streaming mode
-        setLoading(true);
         updatePhase("fetching");
         const phases: TracePhase[] = [
           "fetching",
@@ -261,11 +275,12 @@ export function useTrace(wsUrl?: string) {
         setTimeout(advance, 400);
       }
     },
-    [wsUrl, connected, wsRequestTrace, updatePhase, stopTicker]
+    [wsUrl, wsRequestTrace, updatePhase, stopTicker]
   );
 
   const cancelTrace = useCallback(() => {
     cancelledRef.current = true;
+    cancelRequest();
     stopTicker();
     setLoading(false);
     setProgress({
@@ -275,7 +290,7 @@ export function useTrace(wsUrl?: string) {
       elapsed: 0,
       estimatedRemaining: null,
     });
-  }, [stopTicker]);
+  }, [cancelRequest, stopTicker]);
 
   return {
     trace,
@@ -284,6 +299,7 @@ export function useTrace(wsUrl?: string) {
     requestTrace,
     cancelTrace,
     streaming: !!wsUrl && connected,
+    connectionStatus,
     streamError: wsError,
   };
 }

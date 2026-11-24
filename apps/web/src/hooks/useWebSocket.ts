@@ -35,71 +35,138 @@ export interface TraceStreamCallbacks {
   onTraceError?: (data: { error: string }) => void;
 }
 
-export function useWebSocket(url: string, callbacks?: TraceStreamCallbacks) {
+export type WebSocketStatus = "connecting" | "open" | "reconnecting" | "closed";
+
+const INITIAL_DELAY_MS = 500;
+const MAX_DELAY_MS = 8000;
+
+export function useWebSocket(
+  url: string,
+  callbacks?: TraceStreamCallbacks,
+  { maxAttempts = 5 }: { maxAttempts?: number } = {},
+) {
   const wsRef = useRef<WebSocket | null>(null);
-  const [connected, setConnected] = useState(false);
+  const callbacksRef = useRef(callbacks);
+  const connectRef = useRef<(() => void) | null>(null);
+  const pendingTrace = useRef<{ tx_hash: string; resume_from?: number } | null>(null);
+  const [status, setStatus] = useState<WebSocketStatus>(url ? "connecting" : "closed");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!url) return;
+    callbacksRef.current = callbacks;
+  }, [callbacks]);
 
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
+  useEffect(() => {
+    setError(null);
+    if (!url) {
+      setStatus("closed");
+      return;
+    }
 
-    ws.onopen = () => {
-      console.log("WebSocket connected");
-      setConnected(true);
-      setError(null);
-    };
+    let attempts = 0;
+    let finished = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-    ws.onmessage = (event) => {
+    function connect() {
+      timer = undefined;
+      let ws: WebSocket;
       try {
-        const message = JSON.parse(event.data);
-
-        switch (message.type) {
-          case "trace_started":
-            callbacks?.onTraceStarted?.(message);
-            break;
-          case "trace_node":
-            callbacks?.onTraceNode?.(message);
-            break;
-          case "resource_update":
-            callbacks?.onResourceUpdate?.(message);
-            break;
-          case "state_diff_entry":
-            callbacks?.onStateDiffEntry?.(message);
-            break;
-          case "trace_completed":
-            callbacks?.onTraceCompleted?.(message);
-            break;
-          case "trace_error":
-            callbacks?.onTraceError?.(message);
-            setError(message.error);
-            break;
-          default:
-            console.warn("Unknown message type:", message.type);
-        }
-      } catch (err) {
-        console.error("Failed to parse WebSocket message:", err);
+        ws = new WebSocket(url);
+      } catch {
+        pendingTrace.current = null;
+        setError("Invalid WebSocket URL");
+        setStatus("closed");
+        return;
       }
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setStatus("open");
+        setError(null);
+        if (pendingTrace.current) ws.send(JSON.stringify(pendingTrace.current));
+      };
+
+      ws.onmessage = (event) => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        try {
+          const message = JSON.parse(event.data);
+          const handlers = callbacksRef.current;
+          switch (message.type) {
+            case "trace_started":
+              handlers?.onTraceStarted?.(message);
+              break;
+            case "trace_node":
+              if (pendingTrace.current && message.path?.length === 1 && Number.isSafeInteger(message.path[0])) {
+                pendingTrace.current.resume_from = message.path[0];
+              }
+              handlers?.onTraceNode?.(message);
+              break;
+            case "resource_update":
+              handlers?.onResourceUpdate?.(message);
+              break;
+            case "state_diff_entry":
+              handlers?.onStateDiffEntry?.(message);
+              break;
+            case "trace_completed":
+              pendingTrace.current = null;
+              finished = true;
+              attempts = 0;
+              handlers?.onTraceCompleted?.(message);
+              break;
+            case "trace_error":
+              pendingTrace.current = null;
+              finished = true;
+              attempts = 0;
+              handlers?.onTraceError?.(message);
+              setError(message.error);
+              break;
+          }
+        } catch (err) {
+          console.error("Failed to handle WebSocket message:", err);
+        }
+      };
+
+      ws.onclose = () => {
+        wsRef.current = null;
+        if (finished || attempts >= maxAttempts) {
+          if (!finished) setError("Trace connection closed. Try starting the replay again.");
+          pendingTrace.current = null;
+          setStatus("closed");
+          return;
+        }
+        const delay = Math.min(INITIAL_DELAY_MS * 2 ** attempts, MAX_DELAY_MS);
+        attempts += 1;
+        setStatus("reconnecting");
+        timer = setTimeout(connect, delay);
+      };
+    }
+
+    connectRef.current = () => {
+      finished = false;
+      if (timer !== undefined || wsRef.current) return;
+      attempts = 0;
+      setError(null);
+      setStatus("connecting");
+      connect();
     };
 
-    ws.onerror = (event) => {
-      console.error("WebSocket error:", event);
-      setError("WebSocket connection error");
-    };
-
-    ws.onclose = () => {
-      console.log("WebSocket disconnected");
-      setConnected(false);
-    };
+    setStatus("connecting");
+    connect();
 
     return () => {
-      ws.close();
+      clearTimeout(timer);
+      connectRef.current = null;
+      pendingTrace.current = null;
+      const ws = wsRef.current;
+      wsRef.current = null;
+      if (ws) {
+        ws.onopen = ws.onmessage = ws.onclose = null;
+        ws.close();
+      }
     };
-  }, [url, callbacks]);
+  }, [url, maxAttempts]);
 
-  const sendMessage = useCallback((message: any) => {
+  const sendMessage = useCallback((message: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {
@@ -107,17 +174,20 @@ export function useWebSocket(url: string, callbacks?: TraceStreamCallbacks) {
     }
   }, []);
 
-  const requestTrace = useCallback(
-    (txHash: string) => {
-      sendMessage({ tx_hash: txHash });
-    },
-    [sendMessage],
-  );
+  const requestTrace = useCallback((txHash: string) => {
+    pendingTrace.current = { tx_hash: txHash };
+    connectRef.current?.();
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      setError(null);
+      sendMessage(pendingTrace.current);
+    }
+  }, [sendMessage]);
 
-  return {
-    connected,
-    error,
-    sendMessage,
-    requestTrace,
-  };
+  const cancelRequest = useCallback(() => {
+    pendingTrace.current = null;
+    // Closing discards updates from the cancelled replay before a new request.
+    wsRef.current?.close();
+  }, []);
+
+  return { connected: status === "open", status, error, sendMessage, requestTrace, cancelRequest };
 }

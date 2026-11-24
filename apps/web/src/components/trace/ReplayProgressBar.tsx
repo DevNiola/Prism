@@ -2,10 +2,20 @@
 
 import type { TracePhase, TraceProgress } from "@/hooks/useTrace";
 
+import type { WebSocketStatus } from "@/hooks/useWebSocket";
+
 interface ReplayProgressBarProps {
+  connectionStatus?: WebSocketStatus;
   progress: TraceProgress;
   onCancel: () => void;
 }
+
+const CONNECTION_LABELS: Record<WebSocketStatus, string> = {
+  connecting: "Connecting to trace stream",
+  open: "Trace stream connected",
+  reconnecting: "Reconnecting to trace stream",
+  closed: "Trace stream closed",
+};
 
 const PHASES: { key: TracePhase; label: string; icon: string }[] = [
   { key: "fetching", label: "Fetching", icon: "⬇️" },
@@ -32,6 +42,7 @@ function formatTime(seconds: number): string {
 export function ReplayProgressBar({
   progress,
   onCancel,
+  connectionStatus,
 }: ReplayProgressBarProps) {
   if (
     progress.phase === "idle" ||
@@ -105,6 +116,10 @@ export function ReplayProgressBar({
         </div>
       </div>
 
+      {connectionStatus && (
+        <p className="text-xs text-slate-400">{CONNECTION_LABELS[connectionStatus]}</p>
+      )}
+
       {/* Progress bar */}
       <div
         className="w-full bg-slate-800 rounded-full h-2 overflow-hidden"
@@ -132,7 +147,7 @@ export function ReplayProgressBar({
         role="list"
         aria-label="Replay phases"
       >
-        {PHASES.map(({ key, label, icon }, index) => {
+        {PHASES.map(({ key, label, icon }) => {
           const phaseIndex = PHASE_ORDER.indexOf(key);
           const isDone = currentPhaseIndex > phaseIndex;
           const isCurrent =
