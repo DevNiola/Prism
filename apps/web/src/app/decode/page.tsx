@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useSessionUrl } from "@/hooks/useSessionUrl";
 import {
   Header,
   Footer,
@@ -10,42 +10,37 @@ import {
   ContractErrorView,
   ContextSummary,
 } from "@/components";
-import Button from "@/components/shared/Button";
 import type { DiagnosticReport } from "@/lib/types";
 import { useSessionStore } from "@/store/session";
-import { useNetworkStore } from "@/store/network";
 import EmptyState from "@/components/shared/EmptyState";
 
 function DecodePageContent() {
-  const [activeTab, setActiveTab] = useState<"diagnose" | "lookup">("diagnose");
-  const [report, setReport] = useState<DiagnosticReport | null>(null);
-
+  const { txHash: txHashParam, network, explicitNetwork, view: activeTab, updateSessionUrl } =
+    useSessionUrl("decode");
   const { addToHistory, history } = useSessionStore();
-  const { network } = useNetworkStore();
+  const [localResult, setLocalResult] = useState<{
+    txHash: string | null;
+    network: typeof network;
+    report: DiagnosticReport | null;
+  } | null>(null);
 
-  const searchParams = useSearchParams();
-  const txHashParam = searchParams.get("txHash");
-
-  // If the user navigated here from the history list, pre-load the last matching report
-  useEffect(() => {
-    if (txHashParam) {
-      const entry = history.find((h) => h.txHash === txHashParam);
-      if (entry) {
-        setReport(entry.report);
-      }
-    }
-    // Only run on initial mount / txHashParam change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [txHashParam]);
+  const cachedEntry = txHashParam
+    ? history.find((entry) => entry.txHash === txHashParam &&
+        (!explicitNetwork || entry.network === explicitNetwork))
+    : undefined;
+  const activeNetwork = cachedEntry?.network ?? network;
+  const report = localResult?.txHash === txHashParam && localResult.network === activeNetwork
+    ? localResult.report
+    : cachedEntry?.report ?? null;
 
   function handleDecode(decoded: DiagnosticReport | null) {
-    setReport(decoded);
+    const txHash = decoded?.transaction_context?.tx_hash || txHashParam;
+    setLocalResult({ txHash, network: activeNetwork, report: decoded });
     if (decoded) {
-      // Use the txHash from the URL param if present; otherwise generate a placeholder key
-      const txHash =
-        txHashParam ??
+      const historyKey = txHash ??
         `${decoded.error_category.toLowerCase()}-${decoded.error_code}-${Date.now()}`;
-      addToHistory(txHash, network, decoded);
+      addToHistory(historyKey, activeNetwork, decoded);
+      if (txHash) updateSessionUrl({ txHash, network: activeNetwork });
     }
   }
 
@@ -70,7 +65,7 @@ function DecodePageContent() {
         {/* Tabs */}
         <div className="flex justify-center border-b border-slate-800 mb-8 max-w-md mx-auto">
           <button
-            onClick={() => setActiveTab("diagnose")}
+            onClick={() => updateSessionUrl({ view: "diagnose", network: activeNetwork })}
             aria-selected={activeTab === "diagnose"}
             role="tab"
             className={`flex-1 pb-3 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 border-b-2 ${
@@ -82,7 +77,7 @@ function DecodePageContent() {
             🔍 Diagnose Error
           </button>
           <button
-            onClick={() => setActiveTab("lookup")}
+            onClick={() => updateSessionUrl({ view: "lookup", network: activeNetwork })}
             aria-selected={activeTab === "lookup"}
             role="tab"
             className={`flex-1 pb-3 text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 border-b-2 ${

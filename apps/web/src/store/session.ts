@@ -3,6 +3,14 @@ import { persist } from "zustand/middleware";
 import type { DiagnosticReport } from "@/lib/types";
 import type { Network } from "@/lib/types";
 
+export type SessionView = "diagnose" | "lookup" | "trace";
+
+export interface SessionLocation {
+  txHash: string | null;
+  network: Network;
+  view: SessionView;
+}
+
 export interface HistoryEntry {
   id: string;
   txHash: string;
@@ -13,12 +21,12 @@ export interface HistoryEntry {
   report: DiagnosticReport;
 }
 
-interface SessionState {
+interface SessionState extends SessionLocation {
   hasHydrated: boolean;
-  txHash: string | null;
   report: DiagnosticReport | null;
   history: HistoryEntry[];
   setHasHydrated: (hasHydrated: boolean) => void;
+  setSessionLocation: (location: SessionLocation) => void;
   setTxHash: (hash: string) => void;
   setReport: (report: DiagnosticReport) => void;
   addToHistory: (
@@ -35,6 +43,14 @@ export const useSessionStore = create<SessionState>()(
     (set) => ({
       hasHydrated: false,
       txHash: null,
+      network: "testnet",
+      view: "diagnose",
+      setSessionLocation: (location) => set((state) => ({
+        ...location,
+        report: state.txHash === location.txHash && state.network === location.network
+          ? state.report
+          : null,
+      })),
       report: null,
       history: [],
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),

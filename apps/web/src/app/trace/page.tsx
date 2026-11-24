@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { parseSessionNetwork, useSessionUrl } from "@/hooks/useSessionUrl";
 import { useTrace } from "@/hooks/useTrace";
 import { ExecutionTimeline } from "@/components/trace/ExecutionTimeline";
 import { StateDiffViewer } from "@/components/trace/StateDiffViewer";
@@ -33,9 +34,10 @@ function TransactionInfoSkeleton() {
   );
 }
 
-export default function TracePage() {
-  const [txHash, setTxHash] = useState("");
-  const [network, setNetwork] = useState("testnet");
+function TracePageContent() {
+  const { txHash: linkedHash, network: linkedNetwork, updateSessionUrl } = useSessionUrl("trace");
+  const [txHash, setTxHash] = useState(linkedHash ?? "");
+  const [network, setNetwork] = useState(linkedNetwork);
 
   const wsUrl =
     typeof window !== "undefined"
@@ -55,14 +57,16 @@ export default function TracePage() {
   }, [showToast, trace?.error]);
 
   useEffect(() => {
-    const hash = new URLSearchParams(window.location.search).get("txHash");
-    if (hash) setTxHash(hash);
-  }, []);
+    setTxHash(linkedHash ?? "");
+    setNetwork(linkedNetwork);
+  }, [linkedHash, linkedNetwork]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (txHash) {
-      requestTrace(txHash, network);
+    const hash = txHash.trim();
+    if (hash) {
+      updateSessionUrl({ txHash: hash, network });
+      requestTrace(hash, network);
     }
   };
 
@@ -92,12 +96,13 @@ export default function TracePage() {
           <select
             id="network"
             value={network}
-            onChange={(e) => setNetwork(e.target.value)}
+            onChange={(e) => setNetwork(parseSessionNetwork(e.target.value) ?? "testnet")}
             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
           >
             <option value="testnet">Testnet</option>
             <option value="mainnet">Mainnet</option>
             <option value="futurenet">Futurenet</option>
+            {network === "custom" && <option value="custom">Custom</option>}
           </select>
         </div>
 
@@ -220,5 +225,13 @@ export default function TracePage() {
         </div>
       )}
     </main>
+  );
+}
+
+export default function TracePage() {
+  return (
+    <Suspense>
+      <TracePageContent />
+    </Suspense>
   );
 }
