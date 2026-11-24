@@ -14,9 +14,11 @@ export interface HistoryEntry {
 }
 
 interface SessionState {
+  hasHydrated: boolean;
   txHash: string | null;
   report: DiagnosticReport | null;
   history: HistoryEntry[];
+  setHasHydrated: (hasHydrated: boolean) => void;
   setTxHash: (hash: string) => void;
   setReport: (report: DiagnosticReport) => void;
   addToHistory: (
@@ -31,9 +33,11 @@ interface SessionState {
 export const useSessionStore = create<SessionState>()(
   persist(
     (set) => ({
+      hasHydrated: false,
       txHash: null,
       report: null,
       history: [],
+      setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
       setTxHash: (hash) => set({ txHash: hash }),
 
@@ -66,6 +70,9 @@ export const useSessionStore = create<SessionState>()(
       name: "prism-session",
       // Only persist history to localStorage; keep active session in memory
       partialize: (state) => ({ history: state.history }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

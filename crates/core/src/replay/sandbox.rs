@@ -7,8 +7,117 @@ use soroban_env_host::budget::Budget;
 use soroban_env_host::e2e_invoke::invoke_host_function_with_trace_hook;
 use soroban_env_host::{LedgerInfo, TraceEvent as HostTraceEvent, TraceHook};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use stellar_xdr::curr::{DiagnosticEvent, Hash as XdrHash, TtlEntry};
+
+/// A ledger state injector that overrides specific ledger keys for "what-if"
+/// replay scenarios.
+///
+/// The injector saves the original values of any keys it overrides, applies
+/// the injected values before replay, and restores the originals after replay
+/// completes (regardless of success or failure).
+#[derive(Debug, Clone, Default)]
+pub struct LedgerStateInjector {
+    /// base64(LedgerKey XDR) -> raw LedgerEntry XDR bytes to inject.
+    overrides: HashMap<String, Vec<u8>>,
+}
+
+impl LedgerStateInjector {
+    /// Create an empty injector.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Override a single ledger entry key with new raw XDR bytes.
+    ///
+    /// The key must be base64-encoded `LedgerKey` XDR, matching the format
+    /// used by [`LedgerState::entries`].
+    pub fn override_entry(&mut self, key: impl Into<String>, value: impl Into<Vec<u8>>) {
+        self.overrides.insert(key.into(), value.into());
+    }
+
+    /// Override multiple entries at once.
+    pub fn override_entries(&mut self, entries: HashMap<String, Vec<u8>>) {
+        self.overrides.extend(entries);
+    }
+
+    /// Returns the number of overridden keys.
+    pub fn len(&self) -> usize {
+        self.overrides.len()
+    }
+
+    /// Returns `true` if no overrides are configured.
+    pub fn is_empty(&self) -> bool {
+        self.overrides.is_empty()
+    }
+
+    /// Apply the injected state to a [`LedgerState`], saving any displaced
+    /// originals so they can be restored later.
+    ///
+    /// Returns a [`StateGuard`] that will restore the original values when
+    /// dropped (or when [`StateGuard::restore`] is called explicitly).
+    pub fn apply(&self, state: &mut LedgerState) -> StateGuard {
+        let saved: HashMap<String, Option<Vec<u8>>> = self
+            .overrides
+            .iter()
+            .map(|(key, new_value)| {
+                let original = state.entries.insert(key.clone(), new_value.clone());
+                (key.clone(), original)
+            })
+            .collect();
+
+        StateGuard {
+            state,
+            saved,
+            restored: false,
+        }
+    }
+}
+
+/// RAII guard that restores the original ledger state when dropped.
+///
+/// Created by [`LedgerStateInjector::apply`]. Call [`restore`](Self::restore)
+/// explicitly, or simply drop the guard to undo the injection.
+pub struct StateGuard<'a> {
+    state: &'a mut LedgerState,
+    saved: HashMap<String, Option<Vec<u8>>>,
+    restored: bool,
+}
+
+impl<'a> StateGuard<'a> {
+    /// Explicitly restore the original ledger state.
+    pub fn restore(mut self) {
+        for (key, original) in &self.saved {
+            match original {
+                Some(value) => {
+                    self.state.entries.insert(key.clone(), value.clone());
+                }
+                None => {
+                    self.state.entries.remove(key);
+                }
+            }
+        }
+        self.restored = true;
+    }
+}
+
+impl<'a> Drop for StateGuard<'a> {
+    fn drop(&mut self) {
+        if !self.restored {
+            for (key, original) in &self.saved {
+                match original {
+                    Some(value) => {
+                        self.state.entries.insert(key.clone(), value.clone());
+                    }
+                    None => {
+                        self.state.entries.remove(key);
+                    }
+                }
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TraceEvent {
@@ -197,6 +306,33 @@ pub async fn execute_with_tracing(state: &LedgerState, tx_hash: &str, trace_id: 
         total_memory,
         diagnostic_events,
     })
+}
+
+/// Replay a transaction with injected ledger state, restoring the original
+/// state after replay completes (even on error).
+///
+/// This is the primary entry point for "what-if" scenarios: the caller
+/// provides a [`LedgerStateInjector`] that overrides specific ledger keys
+/// before the sandbox runs, and the original values are restored when the
+/// returned guard is dropped.
+///
+/// # Example
+/// ```ignore
+/// let mut injector = LedgerStateInjector::new();
+/// injector.override_entry("base64:LedgerKey", new_entry_xdr);
+/// let result = execute_with_tracing_injected(&mut state, &tx_hash, trace_id, &injector).await?;
+/// // state.entries is automatically restored here
+/// ```
+pub async fn execute_with_tracing_injected(
+    state: &mut LedgerState,
+    tx_hash: &str,
+    trace_id: TraceId,
+    injector: &LedgerStateInjector,
+) -> GratResult<SandboxResult> {
+    let _guard = injector.apply(state);
+    let result = execute_with_tracing(state, tx_hash, trace_id).await;
+    // Guard is dropped here, restoring original state.
+    result
 }
 
 fn encode_ttl_entry(key_b64: &str, live_until_ledger_seq: u32) -> GratResult<Vec<u8>> {

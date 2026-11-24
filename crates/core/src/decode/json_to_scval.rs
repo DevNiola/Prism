@@ -254,6 +254,67 @@ fn parse_contract_instance(
 mod tests {
     use super::*;
     use crate::decode::scval_to_json;
+    use proptest::prelude::*;
+
+    fn json_value_strategy() -> impl Strategy<Value = Value> {
+        let leaf = prop_oneof![
+            Just(Value::Null),
+            any::<bool>().prop_map(Value::Bool),
+            any::<i64>().prop_map(|value| Value::Number(value.into())),
+            any::<u64>().prop_map(|value| Value::Number(value.into())),
+            "[a-z]{0,32}".prop_map(|value| Value::String(format!("text:{value}"))),
+        ];
+
+        leaf.prop_recursive(8, 256, 8, |inner| {
+            prop_oneof![
+                prop::collection::vec(inner.clone(), 0..5).prop_map(Value::Array),
+                prop::collection::vec(("[a-z]{1,12}", inner), 0..5).prop_map(|entries| {
+                    Value::Object(
+                        entries
+                            .into_iter()
+                            .map(|(key, value)| (format!("field:{key}"), value))
+                            .collect(),
+                    )
+                }),
+            ]
+        })
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            cases: 1_024,
+            ..ProptestConfig::default()
+        })]
+
+        #[test]
+        fn generated_json_roundtrips(value in json_value_strategy()) {
+            let scval = json_to_scval(&value).expect("generated JSON should convert to ScVal");
+            let roundtrip = scval_to_json(&scval, None);
+
+            prop_assert_eq!(roundtrip, value);
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_json_edge_cases() {
+        let cases = [
+            Value::String(String::new()),
+            serde_json::json!(i64::MIN),
+            serde_json::json!(i64::MAX),
+            serde_json::json!(u64::MAX),
+            serde_json::json!({
+                "outer": [
+                    {"inner": [null, true, -1, "nested"]},
+                    []
+                ]
+            }),
+        ];
+
+        for value in cases {
+            let scval = json_to_scval(&value).expect("edge-case JSON should convert to ScVal");
+            assert_eq!(scval_to_json(&scval, None), value);
+        }
+    }
 
     #[test]
     fn test_roundtrip_primitives() {

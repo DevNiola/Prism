@@ -1,0 +1,44 @@
+{
+  "status": "FAILED",
+  "hash": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+  "ledger": 51001,
+  "resultXdr": "AAAAAAAAAGT/////AAAAAQAAAAAAAAAB////9AAAAAA=",
+  "diagnosticEvents": [
+    {
+      "type": "auth",
+      "data": {
+        "type": "Smart Wallet",
+        "address": "CABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC",
+        "required": true,
+        "provided": false
+      }
+    }
+  ],
+  "auth_entries": [
+    {
+      "auth_type": "Smart Wallet",
+      "address": "CABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC",
+      "contract_id": "CABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC"
+    }
+  ],
+  "soroban_meta": {
+    "v": 1,
+    "auth": [
+      {
+        "root_invocation": {
+          "contract_id": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+          "function_name": "transfer"
+        },
+        "credentials": {
+          "type": "SorobanCredentialsTypeEnum.SOROBAN_CREDENTIALS_ADDRESS",
+          "address": {
+            "type": "ScAddress.Contract",
+            "contract_id": "CABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC"
+          },
+          "nonce": 2,
+          "signature_expiration_ledger": 51101
+        }
+      }
+    ]
+  }
+}

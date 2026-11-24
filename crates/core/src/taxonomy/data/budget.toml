@@ -191,3 +191,42 @@ description = "Add resource metering logs to your CI pipeline to catch contracts
 difficulty = "medium"
 requires_upgrade = false
 
+[[errors]]
+id = "host.budget.memory_limit_exceeded"
+category = "budget"
+code = 50
+name = "MemoryLimitExceeded"
+severity = "Error"
+since_protocol = 20
+summary = "Memory Limit Exceeded: the transaction exceeded its allocated memory_bytes resource limit."
+detailed_explanation = """
+The Soroban runtime enforces a strict memory limit per transaction. When the total memory \
+allocated by the host and contract execution exceeds the declared memory_bytes limit in the \
+transaction resources, execution halts immediately with error code 50.
+"""
+related_errors = [
+    "host.budget.insufficient_memory",
+    "host.budget.limit_exceeded.cpu",
+]
+source_file = "soroban-env-host/src/budget.rs"
+documentation_url = "https://soroban.stellar.org/docs/fundamentals/fees-and-metering"
+
+[[errors.common_causes]]
+description = "The contract allocated large vectors, maps, bytes, or intermediate values exceeding memory_bytes"
+likelihood = "high"
+
+[[errors.common_causes]]
+description = "The transaction was submitted with a memory_bytes resource limit lower than required at runtime"
+likelihood = "high"
+
+[[errors.suggested_fixes]]
+description = "Increase memory_bytes in the transaction resources before submitting the transaction"
+difficulty = "easy"
+requires_upgrade = false
+
+[[errors.suggested_fixes]]
+description = "Reduce in-memory allocations or split large data payloads across smaller contract invocations"
+difficulty = "medium"
+requires_upgrade = true
+
+
