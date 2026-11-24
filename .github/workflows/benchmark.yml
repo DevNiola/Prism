@@ -1,6 +1,13 @@
 name: Decode Benchmarks
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/core/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/benchmark.yml"
   pull_request:
     branches: [main]
     paths:
@@ -14,14 +21,14 @@ on:
 
 jobs:
   benchmark:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
       CARGO_TARGET_DIR: ${{ runner.temp }}/cargo-target
     steps:
-      - name: Check out pull request
+      - name: Check out benchmark revision
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -35,24 +42,34 @@ jobs:
           workspaces: crates/core -> target
           shared-key: decode-benchmarks
 
-      - name: Prepare base revision with benchmark harness
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          git worktree add "$RUNNER_TEMP/baseline" "$BASE_SHA"
-          cp Cargo.lock "$RUNNER_TEMP/baseline/Cargo.lock"
-          cp crates/core/Cargo.toml "$RUNNER_TEMP/baseline/crates/core/Cargo.toml"
-          mkdir -p "$RUNNER_TEMP/baseline/crates/core/benches"
-          cp crates/core/benches/decode_pipeline.rs "$RUNNER_TEMP/baseline/crates/core/benches/decode_pipeline.rs"
+      - name: Restore Criterion baseline for the base commit
+        id: baseline
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CARGO_TARGET_DIR }}/criterion
+          key: decode-baseline-v1-${{ runner.os }}-${{ runner.arch }}-${{ github.event.pull_request.base.sha || github.sha }}
 
-      - name: Benchmark base revision
-        run: cargo bench --manifest-path "$RUNNER_TEMP/baseline/crates/core/Cargo.toml" --bench decode_pipeline -- --save-baseline main
+      - name: Benchmark main revision
+        if: steps.baseline.outputs.cache-hit != 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/baseline" "$BASE_SHA"
+          cargo bench --manifest-path "$RUNNER_TEMP/baseline/Cargo.toml" -p grat-core --bench decode_pipeline -- --save-baseline main
+
+      - name: Cache main baseline
+        if: github.event_name == 'push' && steps.baseline.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CARGO_TARGET_DIR }}/criterion
+          key: ${{ steps.baseline.outputs.cache-primary-key }}
 
       - name: Benchmark pull request
-        run: cargo bench -p grat-core --bench decode_pipeline -- --baseline main
+        if: github.event_name == 'pull_request'
+        run: cargo bench -p grat-core --bench decode_pipeline -- --save-baseline pr
 
       - name: Compare results and enforce regression limit
-        id: compare
+        if: github.event_name == 'pull_request'
         run: |
           python3 - <<'PY'
           import json
@@ -66,7 +83,7 @@ jobs:
           compared = 0
 
           for baseline_file in sorted(root.rglob("main/estimates.json")):
-              candidate_file = baseline_file.parent.parent / "new" / "estimates.json"
+              candidate_file = baseline_file.parent.parent / "pr" / "estimates.json"
               if not candidate_file.is_file():
                   continue
               baseline = json.loads(baseline_file.read_text())["mean"]["point_estimate"]
@@ -100,7 +117,7 @@ jobs:
           PY
 
       - name: Upload benchmark report
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
@@ -113,7 +130,7 @@ jobs:
     if: >-
       always() && (
         (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
-        (github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0] != null)
+        (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request')
       )
     runs-on: ubuntu-latest
     permissions:
@@ -122,6 +139,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Download benchmark report
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: benchmark-results
@@ -135,16 +153,30 @@ jobs:
         with:
           script: |
             const fs = require('node:fs');
-            const pullRequest = context.payload.pull_request ?? context.payload.workflow_run.pull_requests[0];
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+            let pullRequest = context.payload.pull_request;
+            if (run) {
+              if (!run.head_repository || run.head_repository.full_name === `${owner}/${repo}`) return;
+              const candidates = await github.paginate(github.rest.pulls.list, {
+                owner, repo, state: 'open', base: 'main',
+                head: `${run.head_repository.owner.login}:${run.head_branch}`
+              });
+              pullRequest = candidates.find((pr) => pr.head.sha === run.head_sha);
+            }
+            if (!pullRequest) return;
             const reportPath = 'benchmark-results/benchmark-report.md';
             const report = fs.existsSync(reportPath)
               ? fs.readFileSync(reportPath, 'utf8')
               : 'The benchmark job did not produce a report. Check its workflow run for build or benchmark errors.';
             const marker = '<!-- prism-decode-benchmark -->';
             const body = `${marker}\n${report}`;
-            const { owner, repo } = context.repo;
-            const comments = await github.rest.issues.listComments({ owner, repo, issue_number: pullRequest.number, per_page: 100 });
-            const previous = comments.data.find((comment) => comment.body.includes(marker));
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: pullRequest.number
+            });
+            const previous = comments.find((comment) =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker)
+            );
             if (previous) {
               await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
             } else {
