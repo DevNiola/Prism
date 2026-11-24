@@ -17,3 +17,10 @@ The Grat VS Code extension intercepts Soroban errors in your test output and pro
 ## Installation
 
 Search for **Grat** in the VS Code Marketplace and click Install.
+
+## Release Channels
+
+- **Stable** builds are published when a stable GitHub release is tagged and published. This is the default Marketplace install.
+- **Pre-release** builds are published from pushes to `main`. Open Grat's Extensions view and choose **Switch to Pre-Release Version** from the extension's gear menu. Use **Switch to Release Version** to return to stable.
+
+The Marketplace uses numeric versions. Pre-release builds use the next odd minor version and the workflow run number as the patch. Their CI artifact name includes `-pre.<commit SHA>` so you can match a VSIX to its source. For future stable releases, update the extension manifest to an unused version on an even minor before publishing.

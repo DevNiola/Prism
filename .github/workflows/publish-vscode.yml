@@ -1,16 +1,25 @@
 name: Publish VS Code Extension
 
-# Triggers on published GitHub releases (e.g. v1.2.3 tags).
+# Stable builds come from published releases; pre-releases come from main.
 # Set the VSCE_PAT repository secret with a personal access token that has the
 # "Marketplace (Manage)" scope from https://dev.azure.com.
 on:
+  push:
+    branches: [main]
   release:
     types: [published]
+
+permissions:
+  contents: read
 
 jobs:
   publish:
     name: Build and Publish VS Code Extension
+    if: github.repository == 'DevNiola/Prism' && (github.event_name == 'push' || !github.event.release.prerelease)
     runs-on: ubuntu-latest
+    concurrency:
+      group: vscode-marketplace-${{ github.event_name }}
+      cancel-in-progress: false
 
     steps:
       - name: Checkout repository
@@ -23,8 +32,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
-        with:
-          version: 9
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -37,21 +44,42 @@ jobs:
         run: npm install -g @vscode/vsce
 
       - name: Package extension (.vsix)
+        id: package
         working-directory: extensions/vscode
-        run: vsce package
-        # Produces a .vsix file, e.g. grat-vscode-0.1.0.vsix
+        run: |
+          flags=()
+          version="$(node -p 'require("./package.json").version')"
+          artifact="vscode-extension"
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            version="$(node - <<'JS'
+          const [major, minor] = require('./package.json').version.split('.').map(Number);
+          const nextOddMinor = minor + (minor % 2 === 0 ? 1 : 2);
+          console.log(`${major}.${nextOddMinor}.${process.env.GITHUB_RUN_NUMBER}`);
+          JS
+            )"
+            npm pkg set "version=$version"
+            flags+=(--pre-release)
+            artifact="vscode-extension-pre.${GITHUB_SHA}"
+          fi
+          vsix="grat-vscode-${version}.vsix"
+          vsce package --no-dependencies "${flags[@]}" --out "$vsix"
+          printf 'vsix=%s\nartifact=%s\n' "$vsix" "$artifact" >> "$GITHUB_OUTPUT"
 
       - name: Upload .vsix artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vscode-extension
-          path: extensions/vscode/*.vsix
+          name: ${{ steps.package.outputs.artifact }}
+          path: extensions/vscode/${{ steps.package.outputs.vsix }}
           retention-days: 30
 
       - name: Publish to VS Code Marketplace
         working-directory: extensions/vscode
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: vsce publish --pat "$VSCE_PAT"
-        # Requires VSCE_PAT to be stored as a GitHub Actions secret.
-        # See: https://code.visualstudio.com/api/working-with-extensions/publishing-extension
+          VSIX: ${{ steps.package.outputs.vsix }}
+        run: |
+          flags=()
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            flags+=(--pre-release)
+          fi
+          vsce publish "${flags[@]}" --packagePath "$VSIX" --pat "$VSCE_PAT"
