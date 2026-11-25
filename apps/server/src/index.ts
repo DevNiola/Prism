@@ -5,6 +5,12 @@ import { sessionRoutes } from "./routes/session";
 import { aiRoutes } from "./routes/ai";
 import { config } from "./config";
 import { SessionStore } from "./session-store";
+import { assertAuthConfig } from "./middleware/auth";
+
+// ---------------------------------------------------------------------------
+// Production safety checks — fail fast before accepting any traffic.
+// ---------------------------------------------------------------------------
+assertAuthConfig();
 
 const server = Fastify({ logger: true });
 

@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { SessionStore, TraceSnapshot } from "../session-store";
+import { requireAuth, signJwt, REFRESHED_TOKEN_HEADER } from "../middleware/auth";
+import type { SessionStore, TraceSnapshot } from "../session-store";
 
 // ---------------------------------------------------------------------------
 // Request / response schemas
@@ -85,6 +87,7 @@ export async function sessionRoutes(app: FastifyInstance) {
   // POST /api/session
   // CLI registers a new debug session and receives back a sessionId +
   // secret token that it must include on subsequent authenticated calls.
+  // Also issues a signed JWT for use on protected endpoints.
   // ------------------------------------------------------------------
   app.post<{
     Body: { txHash: string; network: string; wsUrl: string };
@@ -93,10 +96,15 @@ export async function sessionRoutes(app: FastifyInstance) {
 
     const meta = await store.create({ txHash, network, wsUrl });
 
+    // Issue a JWT bound to this session.  The CLI uses it as a Bearer token
+    // on PATCH /snapshot, POST /heartbeat, and DELETE /:sessionId.
+    const jwt = signJwt(meta.sessionId, { txHash, network });
+
     // Return the full meta to the CLI (token is only revealed on creation).
     return reply.status(201).send({
       sessionId: meta.sessionId,
       token: meta.token,
+      jwt,
       wsUrl: meta.wsUrl,
       createdAt: meta.createdAt,
     });
@@ -146,7 +154,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     Body: { snapshot: TraceSnapshot };
   }>(
     "/session/:sessionId/snapshot",
-    { schema: updateSnapshotSchema },
+    { schema: updateSnapshotSchema, preHandler: requireAuth },
     async (request, reply) => {
       const { sessionId } = request.params;
       const { snapshot } = request.body;
@@ -185,7 +193,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     Params: { sessionId: string };
   }>(
     "/session/:sessionId/heartbeat",
-    { schema: sessionIdParamSchema },
+    { schema: sessionIdParamSchema, preHandler: requireAuth },
     async (request, reply) => {
       const { sessionId } = request.params;
 
@@ -222,7 +230,7 @@ export async function sessionRoutes(app: FastifyInstance) {
     Params: { sessionId: string };
   }>(
     "/session/:sessionId",
-    { schema: sessionIdParamSchema },
+    { schema: sessionIdParamSchema, preHandler: requireAuth },
     async (request, reply) => {
       const { sessionId } = request.params;
 
@@ -247,6 +255,46 @@ export async function sessionRoutes(app: FastifyInstance) {
       }
 
       return reply.status(204).send();
+    },
+  );
+
+  // ------------------------------------------------------------------
+  // POST /api/session/:sessionId/refresh
+  // Explicit token refresh endpoint.  The client presents a valid (non-
+  // expired) JWT and receives a new one with a full expiry window.  The
+  // sliding-window auto-refresh in requireAuth handles the common case;
+  // this endpoint is for clients that want to proactively extend their
+  // session.
+  // Requires: Authorization: Bearer <jwt>
+  // ------------------------------------------------------------------
+  app.post<{
+    Params: { sessionId: string };
+  }>(
+    "/session/:sessionId/refresh",
+    { schema: sessionIdParamSchema, preHandler: requireAuth },
+    async (request, reply) => {
+      const { sessionId } = request.params;
+
+      const session = await store.get(sessionId);
+      if (!session) {
+        return reply.status(404).send({
+          status: "not_found",
+          message: `Session '${sessionId}' does not exist or has expired.`,
+        });
+      }
+
+      // requireAuth already set X-Refreshed-Token if the sliding window
+      // triggered.  For an explicit refresh we always issue a fresh token.
+      const freshJwt = signJwt(sessionId, {
+        txHash: session.txHash,
+        network: session.network,
+      });
+
+      return reply.send({
+        status: "ok",
+        jwt: freshJwt,
+        [REFRESHED_TOKEN_HEADER]: freshJwt,
+      });
     },
   );
 }

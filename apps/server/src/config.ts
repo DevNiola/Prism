@@ -3,6 +3,32 @@ export const config = {
   redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
   gratBinaryPath: process.env.GRAT_BINARY || "grat",
 
+  // Session authentication
+  auth: {
+    /**
+     * Secret used to sign and verify HS256 JWTs.
+     * Must be set in production — the startup guard enforces this.
+     */
+    jwtSecret: process.env.JWT_SECRET || "dev-secret-change-me",
+    /**
+     * When true, JWT validation on protected routes is skipped.
+     * Allowed only in non-production environments.
+     */
+    disableSessionAuth: process.env.DISABLE_SESSION_AUTH === "true",
+    /**
+     * How long (seconds) an issued JWT remains valid.
+     * Default: 1 hour.
+     */
+    jwtExpirySeconds: Number(process.env.JWT_EXPIRY_SECONDS) || 3_600,
+    /**
+     * Sliding-window refresh threshold (seconds).  A token is eligible for
+     * refresh when fewer than this many seconds remain before it expires.
+     * Default: 15 minutes.
+     */
+    jwtRefreshThresholdSeconds:
+      Number(process.env.JWT_REFRESH_THRESHOLD_SECONDS) || 900,
+  },
+
   // AI provider
   ai: {
     apiKey: process.env.AI_API_KEY || "",
