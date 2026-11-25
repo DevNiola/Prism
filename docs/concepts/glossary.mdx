@@ -1,0 +1,45 @@
+---
+title: "Soroban Glossary"
+description: "Definitions for key Soroban and Prism concepts."
+icon: "book"
+---
+
+A quick reference for the core terms you will encounter while working with Soroban smart contracts and Prism's diagnostic tooling.
+
+## Footprint
+
+The set of ledger entries a transaction declares it will read or write. Soroban requires all accessed entries to be declared upfront in the footprint so the network can parallelize transaction execution. If a contract tries to access an entry that was not included in the footprint, the transaction fails immediately.
+
+## Budget
+
+The computational resource limits enforced per transaction — CPU instructions and memory bytes. Each Soroban host function call consumes budget. Transactions that exceed their budget are aborted. Prism surfaces budget consumption in the trace view so you can identify which calls are most expensive and optimize accordingly.
+
+## Host Functions
+
+Low-level operations provided by the Soroban host environment that smart contracts call to interact with ledger state, cryptography, and other system services. Host functions are the boundary between contract code (running in a sandboxed WebAssembly VM) and the broader Stellar host. Examples include storage reads/writes, address utilities, and cryptographic primitives.
+
+## ScVal (Stellar Contract Value)
+
+The binary-encoded value type used to pass arguments to and receive return values from Soroban contracts. All contract inputs, outputs, and event data are serialized as ScVal using XDR. Prism decodes ScVal into human-readable JSON so you can inspect contract calls without handling raw binary data yourself.
+
+## Host Objects
+
+Managed objects — vectors, maps, addresses, byte arrays, and similar compound types — that live in the host environment's memory and are referenced by contracts through opaque numeric handles. Because host objects are managed by the host rather than the contract's own linear memory, they can be shared efficiently across host function calls without copying.
+
+## Auth Entries
+
+Authorisation records attached to a transaction that grant permission for contracts to perform privileged actions on behalf of an account or another contract. Each auth entry carries a signature (or is pre-authorised by a contract) and specifies exactly which invocation it covers, preventing replay and over-authorisation.
+
+## Diagnostic Events
+
+Structured log entries emitted by the Soroban host during contract execution. Unlike user-defined contract events, diagnostic events are generated automatically by the host to record internal state transitions, budget consumption checkpoints, and host function calls. Prism surfaces these in the trace view to show the internal event stream and help diagnose unexpected behaviour.
+
+## Ledger Sequence
+
+A monotonically increasing counter that identifies the current ledger (block) on the Stellar network. Used for time-lock conditions, TTL (time-to-live) calculations on ledger entries, and historical replay in Prism. When you replay a transaction with Prism, the ledger sequence is set to the original value so the contract sees the same temporal context it did at execution time.
+
+## See Also
+
+- [Error Taxonomy](/concepts/error-taxonomy) — the catalog of known Soroban error codes and their meanings
+- [Execution Replay](/concepts/execution-replay) — how Prism re-runs transactions against historical ledger state
+- [Breakpoint Controller](/architecture/breakpoint-controller) — the architecture behind Prism's step-through debugging
