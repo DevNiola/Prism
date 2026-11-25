@@ -1,3 +1,20 @@
+/**
+ * Distributed request deduplication backed by Redis.
+ *
+ * ## Cross-replica behaviour (issue #403)
+ *
+ * With multiple server replicas each replica calls `tryAcquire` on the same
+ * Redis key (via SET NX PX).  Redis guarantees that at most one replica wins
+ * the atomic SET NX — that replica is the leader and must do the work then
+ * call `publishResult`.  Every other replica sees `acquired: false` and must
+ * call `waitForResult` to coalesce on the leader's response.  Because both
+ * the dedup lock key and the result key live in Redis, the behaviour is
+ * identical regardless of which physical pod handles each request.
+ *
+ * Key layout
+ *   grat:dedup:<fingerprint>   – lock key (TTL = dedupWindowMs)
+ *   grat:result:<fingerprint>  – result key (TTL = dedupWindowMs + 2 s)
+ */
 import { createHash, randomUUID } from "node:crypto";
 import { acquireLock, cacheGet, cacheSet } from "../redis";
 import { config } from "../config";
