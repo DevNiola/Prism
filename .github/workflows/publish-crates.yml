@@ -9,8 +9,11 @@ on:
   release:
     types: [published]
 
+# id-token: write is requested for future OIDC-linked crates.io publishing
+# once crates.io supports it. For now CARGO_REGISTRY_TOKEN is still required.
 permissions:
-  contents: read
+  contents: write   # write access lets us attach the digest file to the release
+  id-token: write
 
 jobs:
   dry-run:
@@ -38,6 +41,9 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install jq (for verify script)
+        run: sudo apt-get install -y jq
+
       - name: Publish grat-core
         run: cargo publish -p grat-core
         env:
@@ -45,6 +51,13 @@ jobs:
 
       - name: Verify grat-core publication
         run: bash scripts/verify-crate-published.sh grat-core
+
+      - name: Compute grat-core package digest
+        run: |
+          cargo package -p grat-core --no-verify
+          PKG=$(find target/package -name 'grat-core-*.crate' | head -1)
+          sha256sum "$PKG" | tee /tmp/grat-core.sha256
+          echo "::notice title=grat-core SHA256::$(cat /tmp/grat-core.sha256)"
 
       - name: Publish grat-cli
         run: cargo publish -p grat-cli
@@ -54,6 +67,13 @@ jobs:
       - name: Verify grat-cli publication
         run: bash scripts/verify-crate-published.sh grat-cli
 
+      - name: Compute grat-cli package digest
+        run: |
+          cargo package -p grat-cli --no-verify
+          PKG=$(find target/package -name 'grat-cli-*.crate' | head -1)
+          sha256sum "$PKG" | tee /tmp/grat-cli.sha256
+          echo "::notice title=grat-cli SHA256::$(cat /tmp/grat-cli.sha256)"
+
       - name: Publish grat-wasm
         run: cargo publish -p grat-wasm
         env:
@@ -61,3 +81,20 @@ jobs:
 
       - name: Verify grat-wasm publication
         run: bash scripts/verify-crate-published.sh grat-wasm
+
+      - name: Compute grat-wasm package digest
+        run: |
+          cargo package -p grat-wasm --no-verify
+          PKG=$(find target/package -name 'grat-wasm-*.crate' | head -1)
+          sha256sum "$PKG" | tee /tmp/grat-wasm.sha256
+          echo "::notice title=grat-wasm SHA256::$(cat /tmp/grat-wasm.sha256)"
+
+      - name: Attach SHA256 digests to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat /tmp/grat-core.sha256 /tmp/grat-cli.sha256 /tmp/grat-wasm.sha256 > /tmp/crate-sha256sums.txt
+          gh release upload "${{ github.ref_name }}" /tmp/crate-sha256sums.txt \
+            --repo "${{ github.repository }}" \
+            --clobber
+          echo "SHA256 digest file attached to release ${{ github.ref_name }}"
