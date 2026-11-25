@@ -4,7 +4,7 @@ export { default as NetworkSwitcher } from "./layout/NetworkSwitcher";
 
 export { default as DecodeForm } from "./decode/DecodeForm";
 export { default as ErrorCard } from "./decode/ErrorCard";
-export { default as ContractErrorView } from "./decode/ContractErrorView";
+export { default as ContractErrorView, ContractErrorInfoPanel } from "./decode/ContractErrorView";
 export { default as ContextSummary } from "./decode/ContextSummary";
 export { default as SuggestedFixes } from "./decode/SuggestedFixes";
 

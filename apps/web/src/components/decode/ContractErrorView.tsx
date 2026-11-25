@@ -4,6 +4,141 @@ import { useState, useEffect } from "react";
 import contractTaxonomy from "../../lib/contract-taxonomy.json";
 import { initWasm } from "@/lib/wasm";
 import ErrorBoundary from "../shared/ErrorBoundary";
+import { useNetworkStore } from "@/store/network";
+import type { ContractErrorInfo, Network } from "@/lib/types";
+
+function networkToExpertNetwork(network: Network): string {
+  if (network === "custom") return "testnet";
+  return network;
+}
+
+export function ContractErrorInfoPanel({ info }: { info: ContractErrorInfo }) {
+  const { network } = useNetworkStore();
+  const [copied, setCopied] = useState(false);
+
+  const explorerUrl = `https://stellar.expert/explorer/${networkToExpertNetwork(network)}/contract/${info.contract_id}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(info.contract_id).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const hasDetails = Boolean(info.error_name || info.doc_comment);
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl max-w-3xl mx-auto my-4 text-slate-100">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base font-bold tracking-tight text-violet-400">
+          Contract Error Info
+        </h3>
+        <span className="text-xs px-2.5 py-1 rounded-full bg-red-950/40 border border-red-900/50 text-red-400 font-medium">
+          Code {info.error_code}
+        </span>
+      </div>
+
+      <div className="mb-3">
+        <span className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+          Contract ID
+        </span>
+        <div className="flex items-center gap-2">
+          <a
+            href={explorerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-sm text-violet-300 hover:text-violet-100 underline underline-offset-2 break-all transition-colors"
+          >
+            {info.contract_id}
+          </a>
+          <button
+            onClick={handleCopy}
+            aria-label="Copy contract ID"
+            title={copied ? "Copied!" : "Copy contract ID"}
+            className="shrink-0 p-1.5 rounded-md text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500"
+          >
+            {copied ? (
+              /* checkmark icon */
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-4 h-4 text-emerald-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              /* clipboard icon */
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="9" y="2" width="6" height="4" rx="1" ry="1" />
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              </svg>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {hasDetails && (
+        <details className="mt-3 group">
+          <summary className="cursor-pointer text-xs font-semibold text-slate-400 uppercase tracking-wider select-none list-none flex items-center gap-1 hover:text-slate-200 transition-colors">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-3.5 h-3.5 transition-transform group-open:rotate-90"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            Error Details
+          </summary>
+
+          <div className="mt-3 space-y-3 pl-1">
+            {info.error_name && (
+              <div>
+                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                  Error Name
+                </span>
+                <span className="font-mono text-sm text-slate-200">
+                  {info.error_name}
+                </span>
+              </div>
+            )}
+            {info.doc_comment && (
+              <div>
+                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
+                  Documentation
+                </span>
+                <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+                  {info.doc_comment}
+                </p>
+              </div>
+            )}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
 
 interface TaxonomyEntry {
   code: number;
