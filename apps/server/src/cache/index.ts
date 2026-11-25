@@ -10,4 +10,5 @@ export {
   getCacheStats,
   getHitMissRatio,
   resetCacheStats,
+  getOrFetchWithLock,
 } from "./manager";
