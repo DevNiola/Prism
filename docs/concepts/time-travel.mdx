@@ -1,27 +1,129 @@
 ---
-title: "Tier 3: Time-Travel"
-description: "Interactive debugging and non-destructive simulation."
+title: "Time-Travel Debugging"
+description: "Understand breakpoints, step-through execution, and what-if re-simulation in Prism."
 icon: "clock-rotate-left"
 ---
 
-Tier 3 is the ultimate investigation path, turning Grat into a full interactive debugger for the Stellar network.
+Prism lets you replay any Soroban transaction from history and pause it mid-execution — like a debugger for on-chain code. Instead of staring at a failed transaction hash and guessing what went wrong, you can wind the clock back to the exact moment of failure and watch it happen step by step.
 
-## Interactive Debugging
+Once paused, you can inspect every piece of state that the contract could see at that moment: remaining CPU budget, storage values, auth context, call depth. You can also fork the execution with different inputs — different arguments, different ledger state, different resource limits — and see how the outcome changes, all without touching the live network.
 
-Set breakpoints on:
+## Breakpoints
 
-- **Function Entry/Exit**: Stop when a specific contract function is called.
-- **Storage Access**: Break when a specific ledger key is read or written.
-- **Budget Thresholds**: Trigger a break when CPU or memory usage exceeds a limit.
+A breakpoint tells Prism where to pause during the replay. There are three types:
 
-Once a breakpoint is hit, you can step through execution one host call at a time.
+### Function Entry / Exit
 
-## What-If Mode
+Pause when a named contract function is called or when it returns. This is the most common type — if you suspect `transfer` is behaving incorrectly, set a breakpoint on its entry and Prism will halt the moment it is invoked.
 
-The What-If engine lets you modify inputs and re-simulate:
+```
+break on entry  → fn transfer(from, to, amount)
+break on exit   → fn transfer returns
+```
 
-- **Modified Arguments**: "Would it have worked if I passed 10 instead of 5?"
-- **State Patching**: "What if the balance was already 100 XLM?"
-- **Resource Limits**: "How much budget would I need for this to succeed?"
+### Storage Access
 
-Grat runs both the original and modified execution and shows you a side-by-side diff of where they diverge.
+Pause when a specific ledger key is read or written. This is useful when you need to know exactly when and how a piece of state changes hands.
+
+```
+break on read   → key: Balance(GABC…)
+break on write  → key: Allowance(GABC…, GDEF…)
+```
+
+### Budget Thresholds
+
+Pause when CPU usage exceeds a given instruction count or when memory usage crosses a byte limit. Use this to catch runaway loops before they exhaust the budget.
+
+```
+break when cpu  > 1,000,000 instructions
+break when mem  > 512,000 bytes
+```
+
+## Stepping
+
+Once execution is paused at a breakpoint, you control how it advances using three step commands:
+
+### Step Into
+
+Descend into the next cross-contract call. If the current host call is about to invoke a sub-contract, **Step Into** follows it there. Use this when a sub-call is the suspect and you want to debug inside it.
+
+### Step Over
+
+Advance to the next host call at the current depth, letting any sub-calls execute to completion without pausing inside them. Use this when you trust the sub-contract and only care about the caller's logic.
+
+### Step Out
+
+Run until the current contract function returns, then pause at the call site in the caller. Use this when you have seen enough of the current function and want to pop back up to the outer scope.
+
+## The Step Lifecycle
+
+The diagram below shows how a replay moves between states as breakpoints are hit and step commands are issued.
+
+```
+Transaction replayed
+      │
+      ▼
+┌─────────────┐
+│  Running    │◄──────────────────┐
+└──────┬──────┘                   │
+       │ breakpoint hit           │ step command issued
+       ▼                          │
+┌─────────────┐           ┌───────┴──────┐
+│   Paused    │──────────►│  Stepping    │
+└──────┬──────┘           └──────────────┘
+       │ Continue / RunToEnd
+       ▼
+┌─────────────┐
+│  Completed  │
+└─────────────┘
+```
+
+A replay starts in **Running** and transitions to **Paused** whenever a breakpoint condition is satisfied. From **Paused** you can issue a step command (which moves through **Stepping** back to **Running**), or you can continue to run straight to **Completed**.
+
+## State at a Pause
+
+Whenever execution is paused — whether by a breakpoint or a step command — Prism exposes a full snapshot of the execution context. You can inspect:
+
+- **Current contract and function name** — which contract is executing and which function is on the stack.
+- **Call depth** — how many frames deep you are in the cross-contract call chain.
+- **Remaining CPU instructions and memory** — how much of the budget has been consumed and how much is left.
+- **Visible storage entries** — every ledger key/value pair that the current contract has read or written so far, shown as `key → value`.
+- **Active auth context** — which signers have been recorded as authorizing which invocations up to this point.
+
+This snapshot is read-only and purely observational; it has no effect on the network.
+
+## What-If Re-simulation
+
+What-If mode lets you pose hypothetical questions about a transaction without having to broadcast anything.
+
+From any pause point, you can modify:
+
+- **Arguments** — "Would it have succeeded if I passed `amount = 10` instead of `amount = 5`?"
+- **Ledger state** — "What if the account balance was already 100 XLM before this call?"
+- **Resource limits** — "How much CPU budget would I need for this transaction to complete?"
+
+Prism forks the replay from the current pause point, runs both the original and the modified execution in parallel, and presents a side-by-side diff that highlights exactly where the two traces diverge — the first host call that returns a different value, the first storage write that lands on a different key, or the first budget check that flips from pass to fail.
+
+Everything happens inside a sandboxed simulation. Nothing is submitted to the network, no ledger state is modified, and no fees are charged.
+
+## CLI Commands
+
+| Command | Description |
+|---|---|
+| [`prism trace`](/cli/trace) | Replay a transaction and stream host-call events to your terminal. Supports `--break-on` flags for all three breakpoint types. |
+| [`prism whatif`](/cli/whatif) | Fork a replay with modified inputs and print the divergence diff. |
+
+## Web Debug Page
+
+The web UI at [/debug](/debug) provides a point-and-click interface for everything described above. It combines four panels into a single workspace:
+
+- **BreakpointManager** — add, edit, and remove breakpoints visually.
+- **StepControls** — Step Into / Over / Out buttons, plus Continue and Run to End.
+- **StateInspector** — live view of the execution snapshot at the current pause point.
+- **WhatIfEditor** — form-based editor for argument and state overrides, with the divergence diff rendered inline.
+
+## See Also
+
+- [Breakpoint Controller architecture](/architecture/breakpoint-controller)
+- [What-If Engine architecture](/architecture/what-if-engine)
+- [Execution Replay concept](/concepts/execution-replay)
