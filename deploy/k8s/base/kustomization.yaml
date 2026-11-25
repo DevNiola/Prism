@@ -9,3 +9,5 @@ resources:
   - server.yaml
   - redis.yaml
   - ingress.yaml
+  - pdb.yaml
+  - hpa.yaml

@@ -9,6 +9,11 @@ patches:
       kind: Ingress
       name: prism
     path: ingress-patch.yaml
+  - path: patches/hpa.yaml
+    target:
+      group: autoscaling
+      version: v2
+      kind: HorizontalPodAutoscaler
 images:
   - name: ghcr.io/devniola/prism-web
     newName: ghcr.io/devniola/prism-web
