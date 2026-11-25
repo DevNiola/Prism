@@ -9,6 +9,7 @@ type ServerConfig = {
   sorobanRpcUrl: string;
   gratBinaryPath: string;
   logLevel: string;
+  corsOrigins: string[];
   ai: {
     apiKey: string;
     apiBaseUrl: string;
@@ -113,6 +114,47 @@ function urlValue(name: string, fallback: string, protocols: string[]): string {
 
 const isProduction = environment.NODE_ENV === "production";
 
+function parseCorsOrigins(name: string): string[] {
+  const raw = environment[name]?.trim();
+  if (!raw) {
+    if (isProduction) {
+      throw new Error(
+        `Missing required environment variable ${name} in production. ` +
+          "Set it to a comma-separated list of allowed origins (e.g. https://app.example.com).",
+      );
+    }
+    // Development: allow all origins by default
+    return ["*"];
+  }
+
+  return raw.split(",").map((origin, idx) => {
+    const trimmed = origin.trim();
+    if (trimmed === "*") {
+      if (isProduction) {
+        throw new Error(
+          `${name}[${idx}]: wildcard origin "*" is not allowed in production.`,
+        );
+      }
+      return trimmed;
+    }
+    try {
+      const url = new URL(trimmed);
+      if (!["http:", "https:"].includes(url.protocol)) {
+        throw new Error(
+          `${name}[${idx}]: "${trimmed}" must use http or https protocol.`,
+        );
+      }
+      // Return origin without trailing slash
+      return url.origin;
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith(name)) throw err;
+      throw new Error(
+        `${name}[${idx}]: "${trimmed}" is not a valid URL.`,
+      );
+    }
+  });
+}
+
 export const config: ServerConfig = {
   port: numberValue("PORT", 3001, { integer: true, min: 1, max: 65535 }),
   redisUrl: isProduction
@@ -124,6 +166,7 @@ export const config: ServerConfig = {
     ["http:", "https:"],
   ),
   gratBinaryPath: stringValue("GRAT_BINARY", "grat"),
+  corsOrigins: parseCorsOrigins("CORS_ORIGINS"),
   jwtSecret: stringValue("JWT_SECRET", "prism-default-jwt-secret-session-auth"),
   disableSessionAuth: environment.DISABLE_SESSION_AUTH === "true",
   gracefulShutdownTimeoutMs: numberValue("SHUTDOWN_TIMEOUT_MS", 30_000, { integer: true, min: 1000 }),

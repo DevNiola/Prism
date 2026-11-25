@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import { randomUUID } from "node:crypto";
 import { replayRoutes } from "./routes/replay";
 import { healthRoutes } from "./routes/health";
@@ -82,6 +83,31 @@ server.addHook("onClose", async () => {
 // ---------------------------------------------------------------------------
 // CORS Middleware
 // ---------------------------------------------------------------------------
+// Origins are driven by CORS_ORIGINS (comma-separated URLs).
+// In production, wildcard "*" is rejected at config load time, so only
+// explicitly listed origins are reflected back to browsers.
+// ---------------------------------------------------------------------------
+const allowAll = config.corsOrigins.length === 1 && config.corsOrigins[0] === "*";
+
+server.register(cors, {
+  origin: allowAll
+    ? true
+    : (origin, cb) => {
+        // Allow requests with no Origin header (server-to-server, curl, etc.)
+        if (!origin) {
+          cb(null, true);
+          return;
+        }
+        if (config.corsOrigins.includes(origin)) {
+          cb(null, true);
+        } else {
+          cb(new Error(`Origin "${origin}" is not allowed by CORS policy`), false);
+        }
+      },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+});
+
 server.register(healthRoutes);
 server.register(replayRoutes, { prefix: "/api" });
 server.register(sessionRoutes, { prefix: "/api" });

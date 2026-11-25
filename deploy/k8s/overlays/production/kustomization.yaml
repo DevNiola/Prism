@@ -9,6 +9,12 @@ patches:
       kind: Ingress
       name: prism
     path: ingress-patch.yaml
+  - path: patches/cors-origins.yaml
+    target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: prism-server
 images:
   - name: ghcr.io/devniola/prism-web
     newName: ghcr.io/devniola/prism-web

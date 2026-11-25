@@ -1,0 +1,15 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prism-server
+spec:
+  template:
+    spec:
+      containers:
+        - name: server
+          env:
+            - name: CORS_ORIGINS
+              valueFrom:
+                secretKeyRef:
+                  name: prism-secrets
+                  key: CORS_ORIGINS
