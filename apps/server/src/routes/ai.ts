@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { explainError } from "../ai";
-import { getBudgetStatus } from "../budget";
+import { explainError, explainErrorStream } from "../ai";
+import { getBudgetStatus, assertBudgetAvailableForKey, recordUsageForKey } from "../budget";
 import { BudgetExceededError, ConcurrencyLimitError } from "../budget";
 import { invalidateByTxHash, clearAll } from "../cache";
 import { MAX_AI_INPUT_LENGTH, sanitizeUserInput } from "../ai/prompts";
@@ -39,6 +39,11 @@ export async function aiRoutes(app: FastifyInstance) {
       });
     }
 
+    // Extract API key from request headers
+    const apiKey =
+      (request.headers["x-api-key"] as string | undefined) ||
+      (request.headers["authorization"] as string | undefined);
+
     try {
       const reportJson = JSON.stringify(report, (_key, value: unknown) =>
         typeof value === "string" ? sanitizeUserInput(value) : value,
@@ -55,7 +60,18 @@ export async function aiRoutes(app: FastifyInstance) {
         });
       }
 
+      // Enforce per-key budget if an API key is present
+      if (apiKey) {
+        await assertBudgetAvailableForKey(apiKey);
+      }
+
       const explanation = await explainError(sanitizedInput, tx_hash, network);
+
+      // Record per-key usage after a successful response
+      if (apiKey) {
+        await recordUsageForKey(apiKey, explanation.tokens_used);
+      }
+
       request.log.info(
         { tx_hash, network, sanitized_input: sanitizedInput, response: explanation },
         "AI explain response generated",
@@ -63,6 +79,7 @@ export async function aiRoutes(app: FastifyInstance) {
       return explanation;
     } catch (err) {
       if (err instanceof BudgetExceededError) {
+        reply.header("Retry-After", String(err.retryAfterSeconds));
         return reply.status(429).send({
           error: err.message,
           hourly_remaining: err.hourlyRemaining,
@@ -83,6 +100,91 @@ export async function aiRoutes(app: FastifyInstance) {
       });
     }
   });
+
+  /**
+   * GET /api/ai/explain/stream
+   *
+   * Streams an AI-generated explanation as Server-Sent Events.
+   * Query params: report (JSON string), tx_hash, network.
+   *
+   * Each chunk is sent as `data: <chunk>\n\n`.
+   * The stream ends with `data: [DONE]\n\n`.
+   * Budget or concurrency errors are sent as a structured `data:` error event.
+   */
+  app.get<{ Querystring: { report: string; tx_hash: string; network: string } }>(
+    "/ai/explain/stream",
+    async (request, reply) => {
+      const { report, tx_hash, network } = request.query;
+
+      if (!report || !tx_hash || !network) {
+        return reply.status(400).send({
+          error: "Missing required query params: report, tx_hash, network",
+        });
+      }
+
+      const sanitizedInput = sanitizeUserInput(report);
+      if (sanitizedInput.length > MAX_AI_INPUT_LENGTH) {
+        return reply.status(413).send({
+          error: `AI input exceeds the ${MAX_AI_INPUT_LENGTH}-character limit.`,
+        });
+      }
+
+      // Wire up a cancellation signal tied to client disconnect
+      const abortController = new AbortController();
+      request.raw.on("close", () => abortController.abort());
+
+      // Take over the socket — Fastify must not touch it after this point
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      });
+
+      try {
+        const stream = explainErrorStream(
+          sanitizedInput,
+          tx_hash,
+          network,
+          abortController.signal,
+        );
+
+        for await (const chunk of stream) {
+          if (abortController.signal.aborted) break;
+          reply.raw.write(`data: ${chunk}\n\n`);
+        }
+
+        if (!abortController.signal.aborted) {
+          reply.raw.write("data: [DONE]\n\n");
+        }
+      } catch (err) {
+        if (err instanceof BudgetExceededError) {
+          const payload = JSON.stringify({
+            error: err.message,
+            code: "BUDGET_EXCEEDED",
+            hourly_remaining: err.hourlyRemaining,
+            daily_remaining: err.dailyRemaining,
+            reset_at: err.resetAt.toISOString(),
+          });
+          reply.raw.write(`data: ${payload}\n\n`);
+        } else if (err instanceof ConcurrencyLimitError) {
+          const payload = JSON.stringify({
+            error: err.message,
+            code: "CONCURRENCY_LIMIT",
+            concurrent_active: err.currentActive,
+            concurrent_limit: err.limit,
+          });
+          reply.raw.write(`data: ${payload}\n\n`);
+        } else {
+          request.log.error(err, "AI explain/stream request failed");
+          const payload = JSON.stringify({ error: "Internal server error" });
+          reply.raw.write(`data: ${payload}\n\n`);
+        }
+      } finally {
+        reply.raw.end();
+      }
+    },
+  );
 
   /**
    * GET /api/ai/budget
