@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import type { SuggestedFix } from "@/lib/types";
+import { useToast } from "@/hooks/useToast";
+import { useSessionStore } from "@/store/session";
+import type { FixDifficultyFilter } from "@/store/session";
 
 interface SuggestedFixesProps {
   fixes: SuggestedFix[];
@@ -18,13 +21,36 @@ function difficultyStyle(difficulty: string): string {
   }
 }
 
+const FILTER_OPTIONS: { label: string; value: FixDifficultyFilter }[] = [
+  { label: "All", value: "all" },
+  { label: "Easy", value: "easy" },
+  { label: "Medium", value: "medium" },
+  { label: "Hard", value: "hard" },
+];
+
 export default function SuggestedFixes({ fixes }: SuggestedFixesProps) {
   const [copyStatus, setCopyStatus] = useState<Record<number, string>>({});
+  const { showToast } = useToast();
+  const fixDifficultyFilter = useSessionStore((s) => s.fixDifficultyFilter);
+  const setFixDifficultyFilter = useSessionStore(
+    (s) => s.setFixDifficultyFilter
+  );
+
+  const filteredFixes =
+    fixDifficultyFilter === "all"
+      ? fixes
+      : fixes.filter(
+          (fix) =>
+            fix.difficulty.toLowerCase() === fixDifficultyFilter.toLowerCase()
+        );
 
   async function copyFix(index: number, fix: SuggestedFix) {
+    const text =
+      fix.description + (fix.example ? "\n\n" + fix.example : "");
     try {
-      await navigator.clipboard.writeText(fix.example ?? fix.description);
+      await navigator.clipboard.writeText(text);
       setCopyStatus((current) => ({ ...current, [index]: "Copied" }));
+      showToast("Fix copied to clipboard", "success");
     } catch {
       setCopyStatus((current) => ({ ...current, [index]: "Copy failed" }));
     }
@@ -49,9 +75,32 @@ export default function SuggestedFixes({ fixes }: SuggestedFixesProps) {
         </span>
       </div>
 
-      {fixes.length > 0 ? (
+      {/* Difficulty filter bar */}
+      <div
+        className="mb-4 flex flex-wrap gap-1"
+        role="group"
+        aria-label="Filter fixes by difficulty"
+      >
+        {FILTER_OPTIONS.map(({ label, value }) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setFixDifficultyFilter(value)}
+            aria-pressed={fixDifficultyFilter === value}
+            className={`rounded border px-3 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-600 ${
+              fixDifficultyFilter === value
+                ? "border-emerald-600 bg-emerald-900/60 text-emerald-300"
+                : "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:text-slate-200"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {filteredFixes.length > 0 ? (
         <ol className="space-y-3">
-          {fixes.map((fix, index) => (
+          {filteredFixes.map((fix, index) => (
             <li
               key={`${fix.description}-${index}`}
               className="rounded border border-slate-800 bg-slate-950/70 p-4"
@@ -90,7 +139,9 @@ export default function SuggestedFixes({ fixes }: SuggestedFixesProps) {
                   aria-label={`Copy fix ${index + 1} to clipboard`}
                   className="inline-flex shrink-0 items-center gap-2 rounded border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:border-emerald-700 hover:text-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-600"
                 >
-                  <span aria-hidden="true">{copyStatus[index] === "Copied" ? "✓" : "⧉"}</span>
+                  <span aria-hidden="true">
+                    {copyStatus[index] === "Copied" ? "✓" : "⧉"}
+                  </span>
                   {copyStatus[index] ?? "Copy fix"}
                 </button>
               </div>
@@ -99,7 +150,9 @@ export default function SuggestedFixes({ fixes }: SuggestedFixesProps) {
         </ol>
       ) : (
         <p className="rounded border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm text-slate-500">
-          No suggested fixes are documented for this error.
+          {fixes.length > 0
+            ? "No fixes match the selected difficulty filter."
+            : "No suggested fixes are documented for this error."}
         </p>
       )}
     </section>

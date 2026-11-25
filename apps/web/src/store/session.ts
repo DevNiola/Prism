@@ -13,11 +13,14 @@ export interface HistoryEntry {
   report: DiagnosticReport;
 }
 
+export type FixDifficultyFilter = "all" | "easy" | "medium" | "hard";
+
 interface SessionState {
   hasHydrated: boolean;
   txHash: string | null;
   report: DiagnosticReport | null;
   history: HistoryEntry[];
+  fixDifficultyFilter: FixDifficultyFilter;
   setHasHydrated: (hasHydrated: boolean) => void;
   setTxHash: (hash: string) => void;
   setReport: (report: DiagnosticReport) => void;
@@ -28,6 +31,7 @@ interface SessionState {
   ) => void;
   clearHistory: () => void;
   clear: () => void;
+  setFixDifficultyFilter: (filter: FixDifficultyFilter) => void;
 }
 
 export const useSessionStore = create<SessionState>()(
@@ -37,6 +41,7 @@ export const useSessionStore = create<SessionState>()(
       txHash: null,
       report: null,
       history: [],
+      fixDifficultyFilter: "all" as FixDifficultyFilter,
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
       setTxHash: (hash) => set({ txHash: hash }),
@@ -65,11 +70,16 @@ export const useSessionStore = create<SessionState>()(
       clearHistory: () => set({ history: [] }),
 
       clear: () => set({ txHash: null, report: null }),
+
+      setFixDifficultyFilter: (filter) => set({ fixDifficultyFilter: filter }),
     }),
     {
       name: "prism-session",
-      // Only persist history to localStorage; keep active session in memory
-      partialize: (state) => ({ history: state.history }),
+      // Persist history and fix difficulty filter to localStorage; keep active session in memory
+      partialize: (state) => ({
+        history: state.history,
+        fixDifficultyFilter: state.fixDifficultyFilter,
+      }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },
