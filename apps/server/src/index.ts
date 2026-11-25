@@ -8,6 +8,7 @@ import { cacheRoutes } from "./routes/cache";
 import { config, assertValidConfig } from "./config";
 import { SessionStore } from "./session-store";
 import { shutdownWorker } from "./workers/replay.worker";
+import { shutdownTraceStream } from "./ws/trace-stream";
 
 // Validate configuration on startup
 assertValidConfig(config);
@@ -116,10 +117,13 @@ async function handleGracefulShutdown(signal: string) {
   }, timeoutMs);
 
   try {
-    // 1. Drain and close replay worker queue
+    // 1. Broadcast shutdown to WS clients and close the WebSocket server
+    await shutdownTraceStream(500);
+
+    // 2. Drain and close replay worker queue
     await shutdownWorker(timeoutMs);
 
-    // 2. Stop accepting new HTTP requests and close Fastify
+    // 3. Stop accepting new HTTP requests and close Fastify
     await server.close();
 
     clearTimeout(forceTimer);

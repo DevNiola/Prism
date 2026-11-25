@@ -19,10 +19,14 @@ interface AuthenticatedWebSocket extends WebSocket {
   sessionId?: string;
 }
 
+let wss: WebSocketServer | null = null;
+const activeConnections = new Set<WebSocket>();
+
 export function createTraceStream(port: number) {
-  const wss = new WebSocketServer({ port });
+  wss = new WebSocketServer({ port });
 
   wss.on("connection", (ws: WebSocket) => {
+    activeConnections.add(ws);
     logger.info("New trace stream client connected");
 
     ws.on("message", (data: Buffer) => {
@@ -47,6 +51,7 @@ export function createTraceStream(port: number) {
     });
 
     ws.on("close", () => {
+      activeConnections.delete(ws);
       logger.info("Trace stream client disconnected");
     });
 
@@ -57,4 +62,48 @@ export function createTraceStream(port: number) {
 
   logger.info(`Trace stream WebSocket server listening on port ${port}`, { port });
   return wss;
+}
+
+/**
+ * Gracefully shuts down the trace-stream WebSocket server:
+ * 1. Broadcasts a server_shutdown message to all open clients.
+ * 2. Calls wss.close() to stop accepting new connections.
+ * 3. Waits drainMs for clients to close voluntarily.
+ * 4. Force-terminates any remaining open connections.
+ */
+export async function shutdownTraceStream(drainMs: number = 500): Promise<void> {
+  if (!wss) {
+    return;
+  }
+
+  const shutdownMessage = JSON.stringify({
+    type: "trace_error",
+    reason: "server_shutdown",
+    message: "Server is shutting down",
+  });
+
+  for (const ws of activeConnections) {
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(shutdownMessage);
+      } catch (err) {
+        logger.warn("Failed to send shutdown message to client", { error: String(err) });
+      }
+    }
+  }
+
+  await new Promise<void>((resolve) => {
+    wss!.close(() => resolve());
+  });
+
+  await new Promise<void>((resolve) => setTimeout(resolve, drainMs));
+
+  for (const ws of activeConnections) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.terminate();
+    }
+  }
+
+  activeConnections.clear();
+  logger.info("Trace stream WebSocket server shut down");
 }
