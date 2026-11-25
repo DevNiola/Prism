@@ -29,6 +29,12 @@ spec:
                 name: prism-config
             - secretRef:
                 name: prism-secrets
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: prism-secrets
+                  key: REDIS_PASSWORD
           resources:
             requests:
               cpu: 250m

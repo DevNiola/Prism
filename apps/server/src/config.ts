@@ -111,13 +111,33 @@ function urlValue(name: string, fallback: string, protocols: string[]): string {
   return validateUrl(name, stringValue(name, fallback), protocols);
 }
 
+/**
+ * Build the Redis connection URL.
+ *
+ * REDIS_URL is the base URL (no credentials).  If REDIS_PASSWORD is also
+ * set, its value is embedded into the URL as the password component so that
+ * all Redis clients (ioredis, BullMQ) authenticate automatically.
+ */
+function buildRedisUrl(): string {
+  const baseUrl = isProduction
+    ? validateUrl("REDIS_URL", requiredString("REDIS_URL"), ["redis:", "rediss:"])
+    : urlValue("REDIS_URL", "redis://localhost:6379", ["redis:", "rediss:"]);
+
+  const password = environment.REDIS_PASSWORD?.trim();
+  if (!password) {
+    return baseUrl;
+  }
+
+  const parsed = new URL(baseUrl);
+  parsed.password = encodeURIComponent(password);
+  return parsed.toString();
+}
+
 const isProduction = environment.NODE_ENV === "production";
 
 export const config: ServerConfig = {
   port: numberValue("PORT", 3001, { integer: true, min: 1, max: 65535 }),
-  redisUrl: isProduction
-    ? validateUrl("REDIS_URL", requiredString("REDIS_URL"), ["redis:", "rediss:"])
-    : urlValue("REDIS_URL", "redis://localhost:6379", ["redis:", "rediss:"]),
+  redisUrl: buildRedisUrl(),
   sorobanRpcUrl: urlValue(
     "SOROBAN_RPC_URL",
     "https://soroban-testnet.stellar.org",
