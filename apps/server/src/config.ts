@@ -26,4 +26,17 @@ export const config = {
     profileTtl: Number(process.env.CACHE_PROFILE_TTL) || 3_600, // 1h
     dedupWindowMs: Number(process.env.DEDUP_WINDOW_MS) || 10_000, // 10s
   },
+
+  // Replay worker
+  replay: {
+    /**
+     * Hard timeout for a single replay run (ms).  Aligned with AI_TIMEOUT_MS
+     * so the replay and its subsequent AI explanation share the same deadline.
+     * Override independently with REPLAY_TIMEOUT_MS.
+     */
+    timeoutMs:
+      Number(process.env.REPLAY_TIMEOUT_MS) ||
+      Number(process.env.AI_TIMEOUT_MS) ||
+      30_000,
+  },
 };
