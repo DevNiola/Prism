@@ -439,6 +439,270 @@ fn test_mock_rpc_response_structure_for_contract_error() {
     assert!(!mock_rpc_response["result"]["contractId"].is_null());
 }
 
+// ── multi_op_failure fixture tests ──────────────────────────────────────────
+
+#[test]
+fn test_multi_op_failure_fixture_loads_correctly() {
+    let fixture = load_fixture("multi_op_failure.json");
+    assert_eq!(fixture["status"], "FAILED");
+    assert_eq!(fixture["ledger"], 50400);
+    assert!(!fixture["hash"].as_str().unwrap_or("").is_empty());
+}
+
+#[test]
+fn test_multi_op_failure_has_multiple_diagnostic_events() {
+    let fixture = load_fixture("multi_op_failure.json");
+    let events = fixture["diagnosticEvents"]
+        .as_array()
+        .expect("diagnosticEvents must be an array");
+    assert!(
+        events.len() >= 2,
+        "multi_op_failure should have at least 2 diagnostic events, got {}",
+        events.len()
+    );
+}
+
+#[test]
+fn test_multi_op_failure_first_operation_succeeded() {
+    let fixture = load_fixture("multi_op_failure.json");
+    let events = fixture["diagnosticEvents"]
+        .as_array()
+        .expect("diagnosticEvents array");
+    let first = &events[0];
+    assert_eq!(first["type"], "invoke", "first event should be an invoke");
+    assert_eq!(
+        first["data"]["status"], "success",
+        "first operation should have succeeded"
+    );
+    assert_eq!(
+        first["data"]["operation_index"].as_u64().unwrap(),
+        0,
+        "first operation is at index 0"
+    );
+}
+
+#[test]
+fn test_multi_op_failure_second_operation_is_failing() {
+    let fixture = load_fixture("multi_op_failure.json");
+    let events = fixture["diagnosticEvents"]
+        .as_array()
+        .expect("diagnosticEvents array");
+    let failing = &events[1];
+    assert_eq!(
+        failing["type"], "budget",
+        "failing event type should be budget"
+    );
+    let op_index = failing["data"]["operation_index"]
+        .as_u64()
+        .expect("operation_index");
+    assert_eq!(
+        op_index, 1,
+        "failing operation must be at index 1 (not the first operation)"
+    );
+    let used = failing["data"]["used"].as_u64().expect("used");
+    let limit = failing["data"]["limit"].as_u64().expect("limit");
+    assert!(
+        used > limit,
+        "multi_op_failure: cpu used ({used}) should exceed limit ({limit})"
+    );
+}
+
+#[test]
+fn test_multi_op_failure_operation_count() {
+    let fixture = load_fixture("multi_op_failure.json");
+    let count = fixture["operationCount"]
+        .as_u64()
+        .expect("operationCount field must be present");
+    assert_eq!(count, 3, "fixture should declare 3 operations");
+}
+
+#[test]
+fn test_multi_op_report_operation_index_points_to_failing_op() {
+    // Simulate the report the decoder produces for the second operation (index 1)
+    // in a 3-operation transaction; operation_index == 1 and is_first_failure == true.
+    let report_json = serde_json::json!({
+        "error_category": "Budget",
+        "error_code": 1,
+        "error_name": "CpuLimitExceeded",
+        "summary": "Operation 2/3 (InvokeHostFunction) failed [FIRST FAILING OPERATION]",
+        "detailed_explanation": "This is the first failing operation that triggered the transaction failure.",
+        "severity": "error",
+        "root_causes": [],
+        "suggested_fixes": [],
+        "related_errors": [],
+        "learn_more": "https://developers.stellar.org/docs/learn/smart-contracts/errors",
+        "operation_index": 1,
+        "operation_count": 3,
+        "is_first_failure": true
+    });
+
+    let operation_index = report_json["operation_index"]
+        .as_u64()
+        .expect("operation_index");
+    let operation_count = report_json["operation_count"]
+        .as_u64()
+        .expect("operation_count");
+    let is_first_failure = report_json["is_first_failure"]
+        .as_bool()
+        .expect("is_first_failure");
+
+    assert_eq!(
+        operation_index, 1,
+        "operation_index should point to the second operation (index 1)"
+    );
+    assert_eq!(operation_count, 3);
+    assert!(
+        is_first_failure,
+        "is_first_failure must be true for the first failing operation"
+    );
+    assert!(
+        report_json["summary"]
+            .as_str()
+            .unwrap()
+            .contains("FIRST FAILING OPERATION"),
+        "summary should contain 'FIRST FAILING OPERATION'"
+    );
+}
+
+#[test]
+fn test_multi_op_non_failing_ops_have_is_first_failure_false() {
+    // The successful op before the failure and the not-attempted op after both
+    // must carry is_first_failure = false.
+    let successful_report = serde_json::json!({
+        "error_category": "ClassicStellar",
+        "error_code": 0,
+        "error_name": "Success",
+        "summary": "Operation 1/3 (Inflation) succeeded",
+        "detailed_explanation": "",
+        "severity": "info",
+        "root_causes": [],
+        "suggested_fixes": [],
+        "related_errors": [],
+        "learn_more": "https://developers.stellar.org/docs/learn/smart-contracts/errors",
+        "operation_index": 0,
+        "operation_count": 3,
+        "is_first_failure": false
+    });
+    let not_attempted_report = serde_json::json!({
+        "error_category": "ClassicStellar",
+        "error_code": 0,
+        "error_name": "OpNotAttempted",
+        "summary": "Operation 3/3 (Inflation) was not executed",
+        "detailed_explanation": "The transaction failed before this operation was executed.",
+        "severity": "error",
+        "root_causes": [],
+        "suggested_fixes": [],
+        "related_errors": [],
+        "learn_more": "https://developers.stellar.org/docs/learn/smart-contracts/errors",
+        "operation_index": 2,
+        "operation_count": 3,
+        "is_first_failure": false
+    });
+
+    assert!(
+        !successful_report["is_first_failure"].as_bool().unwrap(),
+        "the successful op should not be flagged as first failure"
+    );
+    assert!(
+        !not_attempted_report["is_first_failure"].as_bool().unwrap(),
+        "the not-attempted op should not be flagged as first failure"
+    );
+    assert_eq!(
+        not_attempted_report["operation_index"].as_u64().unwrap(),
+        2
+    );
+}
+
+#[test]
+fn test_multi_op_all_operations_walked_even_after_first_failure() {
+    // The decoder must produce a report for every operation, not stop at
+    // the first failure.
+    let all_reports = vec![
+        serde_json::json!({
+            "error_category": "ClassicStellar",
+            "error_code": 0,
+            "error_name": "Success",
+            "summary": "Operation 1/3 succeeded",
+            "detailed_explanation": "",
+            "severity": "info",
+            "root_causes": [],
+            "suggested_fixes": [],
+            "related_errors": [],
+            "learn_more": "https://developers.stellar.org/docs/learn/smart-contracts/errors",
+            "operation_index": 0,
+            "operation_count": 3,
+            "is_first_failure": false
+        }),
+        serde_json::json!({
+            "error_category": "Budget",
+            "error_code": 1,
+            "error_name": "CpuLimitExceeded",
+            "summary": "Operation 2/3 (InvokeHostFunction) failed [FIRST FAILING OPERATION]",
+            "detailed_explanation": "This is the first failing operation that triggered the transaction failure.",
+            "severity": "error",
+            "root_causes": [],
+            "suggested_fixes": [],
+            "related_errors": [],
+            "learn_more": "https://developers.stellar.org/docs/learn/smart-contracts/errors",
+            "operation_index": 1,
+            "operation_count": 3,
+            "is_first_failure": true
+        }),
+        serde_json::json!({
+            "error_category": "ClassicStellar",
+            "error_code": 0,
+            "error_name": "OpNotAttempted",
+            "summary": "Operation 3/3 (Inflation) was not executed",
+            "detailed_explanation": "The transaction failed before this operation was executed.",
+            "severity": "error",
+            "root_causes": [],
+            "suggested_fixes": [],
+            "related_errors": [],
+            "learn_more": "https://developers.stellar.org/docs/learn/smart-contracts/errors",
+            "operation_index": 2,
+            "operation_count": 3,
+            "is_first_failure": false
+        }),
+    ];
+
+    assert_eq!(
+        all_reports.len(),
+        3,
+        "decoder must produce a report for every operation, got {}",
+        all_reports.len()
+    );
+
+    // Exactly one report must be flagged as the first failure.
+    let first_failure_count = all_reports
+        .iter()
+        .filter(|r| r["is_first_failure"].as_bool().unwrap_or(false))
+        .count();
+    assert_eq!(
+        first_failure_count, 1,
+        "exactly one operation should be flagged as first failure"
+    );
+
+    // That failure must be at operation_index 1 (non-first position).
+    let first_failure = all_reports
+        .iter()
+        .find(|r| r["is_first_failure"].as_bool().unwrap_or(false))
+        .unwrap();
+    assert_eq!(
+        first_failure["operation_index"].as_u64().unwrap(),
+        1,
+        "the first failure must be at index 1, not 0"
+    );
+
+    // All reports must agree on the total operation count.
+    for report in &all_reports {
+        assert_eq!(
+            report["operation_count"].as_u64().unwrap(),
+            3,
+            "every report should carry the same operation_count"
+        );
+    }
+}
+
 #[test]
 fn test_decode_host_error_code_50_memory_limit_exceeded() {
     let tx_data = serde_json::json!({
