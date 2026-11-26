@@ -1,8 +1,8 @@
-import Skeleton from "@/components/shared/Skeleton";
-
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import StepControls from "@/components/debug/StepControls";
+import Skeleton from "@/components/shared/Skeleton";
 
 interface ExecutionTimelineProps {
   nodes: any[];
@@ -47,12 +47,26 @@ export function ExecutionTimelineSkeleton() {
 
 export function ExecutionTimeline({
   nodes,
-  currentStep = 0,
+  currentStep: controlledStep,
   transitionDurationMs = 200,
   onSelectStep,
   resourceProfile,
   loading,
 }: ExecutionTimelineProps) {
+  const [selectedStep, setSelectedStep] = useState(0);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const lastStep = nodes.length - 1;
+  const currentStep = Math.min(controlledStep ?? selectedStep, Math.max(lastStep, 0));
+
+  const selectStep = (step: number) => {
+    if (controlledStep === undefined) setSelectedStep(step);
+    onSelectStep?.(step);
+  };
+
+  const depth = nodes[currentStep]?.path?.length ?? 0;
+  const over = nodes.findIndex((node, index) => index > currentStep && (node.path?.length ?? 0) <= depth);
+  const out = nodes.findIndex((node, index) => index > currentStep && (node.path?.length ?? 0) < depth);
+
   const activeItemRef = useRef<HTMLDivElement | null>(null);
   // On small screens the user can switch which pane is visible
   const [activePane, setActivePane] = useState<"timeline" | "detail">(
@@ -85,8 +99,7 @@ export function ExecutionTimeline({
   const activeNode = nodes[currentStep];
 
   return (
-    <div className="bg-white rounded-lg shadow p-4 md:p-6 w-full overflow-hidden">
-      {/* Header */}
+    <div ref={timelineRef} tabIndex={nodes.length ? 0 : undefined} className="bg-white rounded-lg shadow p-4 md:p-6 w-full overflow-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <h2 className="text-xl font-semibold">Execution Timeline</h2>
         {(isApproachingReadLimit || isApproachingWriteLimit) && (
@@ -96,6 +109,19 @@ export function ExecutionTimeline({
           </span>
         )}
       </div>
+
+      {/* Step controls (keyboard shortcuts: Over / Into / Out / Continue) */}
+      {nodes.length > 0 && (
+        <div className="mb-4">
+          <StepControls
+            scopeRef={timelineRef}
+            onStepOver={over >= 0 ? () => selectStep(over) : undefined}
+            onStepInto={currentStep < lastStep ? () => selectStep(currentStep + 1) : undefined}
+            onStepOut={out >= 0 ? () => selectStep(out) : undefined}
+            onContinue={currentStep < lastStep ? () => selectStep(lastStep) : undefined}
+          />
+        </div>
+      )}
 
       {/* Mobile pane switcher — hidden on sm+ where both panes show */}
       {nodes.length > 0 && (

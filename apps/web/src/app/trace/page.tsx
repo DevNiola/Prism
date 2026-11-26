@@ -213,6 +213,7 @@ export default function TracePage() {
           <ResourceProfile profile={trace.resource_profile} loading={loading} />
 
           <ExecutionTimeline
+            key={trace.tx_hash}
             nodes={trace.nodes}
             resourceProfile={trace.resource_profile}
             loading={loading}
