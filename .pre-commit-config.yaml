@@ -1,0 +1,49 @@
+# .pre-commit-config.yaml
+# Hooks mirror the checks run in .github/workflows/rust-ci.yml and ci.yml
+# so local commits stay in sync with CI.
+#
+# Install: pip install pre-commit && pre-commit install
+# Run all hooks manually: pre-commit run --all-files
+
+repos:
+  # ---------------------------------------------------------------------------
+  # General file hygiene
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+
+  # ---------------------------------------------------------------------------
+  # Rust — mirrors rust-ci.yml
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt --check
+        language: system
+        entry: cargo fmt --all -- --check
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy (deny warnings)
+        language: system
+        entry: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        types: [rust]
+        pass_filenames: false
+
+  # ---------------------------------------------------------------------------
+  # TypeScript / Node — mirrors the pnpm lint step in ci.yml
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: pnpm-lint
+        name: pnpm lint
+        language: system
+        entry: pnpm lint
+        types_or: [ts, tsx, javascript, jsx]
+        pass_filenames: false
