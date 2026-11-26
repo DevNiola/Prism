@@ -5,17 +5,67 @@ use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
-/// Base delay for exponential backoff. With the formula `BASE_DELAY_MS × 2^attempt`,
-/// this yields 1 s, 2 s, 4 s for retry attempts 1, 2, 3 respectively.
-const BASE_DELAY_MS: u64 = 500;
-
-const MAX_DELAY_MS: u64 = 10_000;
-
 const LEDGER_ENTRIES_CHUNK_SIZE: usize = 100;
 
-fn backoff_duration(attempt: u32) -> Duration {
-    let ms = BASE_DELAY_MS.saturating_mul(2u64.saturating_pow(attempt));
-    Duration::from_millis(ms.min(MAX_DELAY_MS))
+/// Configuration for RPC retry behaviour.
+#[derive(Debug, Clone)]
+pub struct RetryConfig {
+    /// Maximum number of retry attempts (not counting the initial attempt).
+    pub max_retries: u32,
+    /// Base delay in milliseconds for exponential backoff.
+    pub base_delay_ms: u64,
+    /// Maximum delay cap in milliseconds.
+    pub max_delay_ms: u64,
+    /// Jitter factor (0.0 = no jitter, 1.0 = full jitter up to the calculated delay).
+    pub jitter_factor: f64,
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            max_retries: 3,
+            base_delay_ms: 500,
+            max_delay_ms: 10_000,
+            jitter_factor: 0.25,
+        }
+    }
+}
+
+/// Compute an exponential backoff duration with optional jitter.
+///
+/// The base delay is `config.base_delay_ms × 2^attempt`, capped at
+/// `config.max_delay_ms`.  A pseudo-random fraction derived from the current
+/// wall-clock nanoseconds is then multiplied by `config.jitter_factor` and
+/// added on top, so that concurrent callers do not all retry at the same
+/// instant.  Set `jitter_factor` to `0.0` for fully deterministic delays.
+fn backoff_duration_with_jitter(attempt: u32, config: &RetryConfig) -> Duration {
+    let base = config
+        .base_delay_ms
+        .saturating_mul(2u64.saturating_pow(attempt))
+        .min(config.max_delay_ms);
+
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos();
+    let r = (nanos as f64) / (u32::MAX as f64);
+    let jitter = (base as f64 * config.jitter_factor * r) as u64;
+
+    Duration::from_millis(base + jitter)
+}
+
+/// Returns `true` for errors that are safe to retry.
+///
+/// - [`GratError::NetworkTimeout`] and [`GratError::RpcError`] are transient
+///   and should be retried.
+/// - [`GratError::JsonRpc`] represents a protocol-level error returned by the
+///   server (the request was understood but invalid), so retrying it would
+///   produce the same result — it is **not** retryable.
+fn is_retryable_error(err: &GratError) -> bool {
+    matches!(
+        err,
+        GratError::NetworkTimeout { .. } | GratError::RpcError(_)
+    )
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,8 +137,8 @@ impl SimulateTransactionResponse {
 #[derive(Debug, Clone)]
 pub struct SorobanRpcClient {
     client: reqwest::Client,
-
     rpc_url: String,
+    retry_config: RetryConfig,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -131,7 +181,14 @@ impl SorobanRpcClient {
         Self {
             client,
             rpc_url: config.rpc_url.clone(),
+            retry_config: RetryConfig::default(),
         }
+    }
+
+    /// Override the default retry configuration.
+    pub fn with_retry_config(mut self, config: RetryConfig) -> Self {
+        self.retry_config = config;
+        self
     }
 
     pub fn with_timeout(mut self, timeout_secs: u64) -> Self {
@@ -232,12 +289,11 @@ impl SorobanRpcClient {
     ) -> GratResult<T> {
         let request = JsonRpcRequest::new(1, method, params);
 
-        const MAX_RETRIES: u32 = 3;
         let mut last_error: Option<GratError> = None;
 
-        for attempt in 0..=MAX_RETRIES {
+        for attempt in 0..=self.retry_config.max_retries {
             if attempt > 0 {
-                let delay = backoff_duration(attempt);
+                let delay = backoff_duration_with_jitter(attempt, &self.retry_config);
                 tracing::debug!(
                     method,
                     attempt,
@@ -450,25 +506,103 @@ mod tests {
 
     #[test]
     fn backoff_increases_exponentially() {
-        // BASE_DELAY_MS (500) × 2^attempt → 1 s, 2 s, 4 s, 8 s …
-        assert_eq!(backoff_duration(1), Duration::from_millis(1_000));
-        assert_eq!(backoff_duration(2), Duration::from_millis(2_000));
-        assert_eq!(backoff_duration(3), Duration::from_millis(4_000));
-        assert_eq!(backoff_duration(4), Duration::from_millis(8_000));
-        assert_eq!(backoff_duration(5), Duration::from_millis(MAX_DELAY_MS));
-        assert_eq!(backoff_duration(6), Duration::from_millis(MAX_DELAY_MS));
+        // With jitter_factor=0.0 the result is fully deterministic.
+        // base_delay_ms (500) × 2^attempt → 1 s, 2 s, 4 s, 8 s …
+        let cfg = RetryConfig {
+            max_retries: 3,
+            base_delay_ms: 500,
+            max_delay_ms: 10_000,
+            jitter_factor: 0.0,
+        };
+        assert_eq!(
+            backoff_duration_with_jitter(1, &cfg),
+            Duration::from_millis(1_000)
+        );
+        assert_eq!(
+            backoff_duration_with_jitter(2, &cfg),
+            Duration::from_millis(2_000)
+        );
+        assert_eq!(
+            backoff_duration_with_jitter(3, &cfg),
+            Duration::from_millis(4_000)
+        );
+        assert_eq!(
+            backoff_duration_with_jitter(4, &cfg),
+            Duration::from_millis(8_000)
+        );
+        assert_eq!(
+            backoff_duration_with_jitter(5, &cfg),
+            Duration::from_millis(10_000)
+        );
+        assert_eq!(
+            backoff_duration_with_jitter(6, &cfg),
+            Duration::from_millis(10_000)
+        );
     }
 
     #[test]
     fn backoff_is_capped_at_max_delay() {
-        assert_eq!(backoff_duration(7), Duration::from_millis(MAX_DELAY_MS));
-
-        assert_eq!(backoff_duration(63), Duration::from_millis(MAX_DELAY_MS));
+        let cfg = RetryConfig {
+            max_retries: 3,
+            base_delay_ms: 500,
+            max_delay_ms: 10_000,
+            jitter_factor: 0.0,
+        };
+        assert_eq!(
+            backoff_duration_with_jitter(7, &cfg),
+            Duration::from_millis(10_000)
+        );
+        assert_eq!(
+            backoff_duration_with_jitter(63, &cfg),
+            Duration::from_millis(10_000)
+        );
     }
 
     #[test]
     fn backoff_attempt_zero_returns_base_delay() {
-        assert_eq!(backoff_duration(0), Duration::from_millis(BASE_DELAY_MS));
+        let cfg = RetryConfig {
+            max_retries: 3,
+            base_delay_ms: 500,
+            max_delay_ms: 10_000,
+            jitter_factor: 0.0,
+        };
+        assert_eq!(
+            backoff_duration_with_jitter(0, &cfg),
+            Duration::from_millis(500)
+        );
+    }
+
+    #[test]
+    fn backoff_jitter_stays_within_bounds() {
+        let cfg = RetryConfig {
+            max_retries: 3,
+            base_delay_ms: 500,
+            max_delay_ms: 10_000,
+            jitter_factor: 0.25,
+        };
+        // With 25 % jitter on a 1 000 ms base the result must be in [1 000, 1 250).
+        for _ in 0..20 {
+            let d = backoff_duration_with_jitter(1, &cfg);
+            assert!(
+                d >= Duration::from_millis(1_000) && d < Duration::from_millis(1_250),
+                "jitter out of range: {d:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn is_retryable_classifies_errors_correctly() {
+        assert!(is_retryable_error(&GratError::RpcError("transient".into())));
+        assert!(is_retryable_error(&GratError::NetworkTimeout {
+            method: "test".into(),
+            timeout_secs: 30,
+        }));
+        assert!(!is_retryable_error(&GratError::JsonRpc(
+            crate::error::JsonRpcError {
+                code: -32000,
+                message: "not found".into(),
+            }
+        )));
     }
 
     #[test]

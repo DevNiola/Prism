@@ -4,13 +4,27 @@ use std::time::{Duration, Instant};
 
 /// Base delay for exponential backoff. With the formula `BASE_DELAY_MS × 2^attempt`,
 /// this yields 1 s, 2 s, 4 s for retry attempts 1, 2, 3 respectively.
+/// Backoff includes ±25% jitter to spread out concurrent retries.
 const BASE_DELAY_MS: u64 = 500;
 
 const MAX_DELAY_MS: u64 = 10_000;
 
+/// Jitter factor applied to the computed backoff delay (25 %).
+const JITTER_FACTOR: f64 = 0.25;
+
 fn backoff_duration(attempt: u32) -> Duration {
-    let ms = BASE_DELAY_MS.saturating_mul(2u64.saturating_pow(attempt));
-    Duration::from_millis(ms.min(MAX_DELAY_MS))
+    let base = BASE_DELAY_MS
+        .saturating_mul(2u64.saturating_pow(attempt))
+        .min(MAX_DELAY_MS);
+
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos();
+    let r = (nanos as f64) / (u32::MAX as f64);
+    let jitter = (base as f64 * JITTER_FACTOR * r) as u64;
+
+    Duration::from_millis(base + jitter)
 }
 
 #[derive(Debug, Serialize)]
