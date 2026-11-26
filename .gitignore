@@ -50,3 +50,5 @@ npm-debug.log*
 pnpm-debug.log*
 .cache/
 *.vsix
+
+/apps/web/public/wasm/

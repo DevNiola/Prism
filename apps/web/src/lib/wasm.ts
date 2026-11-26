@@ -216,3 +216,43 @@ export async function decodeError(txResultXdr: string): Promise<unknown> {
   await initWasm();
   return { status: "not_yet_implemented", txResultXdr };
 }
+
+export const stellarXdrTypes = [
+  "TransactionEnvelope",
+  "TransactionResult",
+  "TransactionMeta",
+  "DiagnosticEvent",
+  "ScVal",
+] as const;
+
+export type StellarXdrType = (typeof stellarXdrTypes)[number];
+
+export function readXdrBase64(source: string): string {
+  const base64 = source.replace(/\s/g, "");
+  if (!base64 || base64.length > Math.ceil((4 * 1024 * 1024) / 3) * 4) {
+    throw new Error("Enter a base64 value of up to 4 MiB of XDR.");
+  }
+  try {
+    return atob(base64);
+  } catch {
+    throw new Error("Invalid base64 XDR.");
+  }
+}
+
+export async function prettyPrintXdr(
+  source: string,
+  type: StellarXdrType,
+): Promise<string> {
+  const bytes = Uint8Array.from(readXdrBase64(source), (byte) => byte.charCodeAt(0));
+  const wasm = (await initWasm()) as {
+    decode_xdr?: (type: StellarXdrType, bytes: Uint8Array) => string;
+  };
+  if (!wasm.decode_xdr) {
+    throw new WasmLoadError("The WebAssembly XDR decoder is unavailable.");
+  }
+  try {
+    return wasm.decode_xdr(type, bytes);
+  } catch {
+    throw new Error(`Unable to decode the XDR as ${type}.`);
+  }
+}
