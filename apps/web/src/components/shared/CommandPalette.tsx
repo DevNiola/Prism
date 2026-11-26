@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useNetworkStore } from "@/store/network";
 import type { Network } from "@/lib/types";
+import { triggerTourReplay } from "@/components/shared/OnboardingTour";
 
 type Theme = "dark" | "light";
 
@@ -112,6 +113,16 @@ export default function CommandPalette() {
           setTheme(nextTheme);
           localStorage.setItem("prism-theme", nextTheme);
           document.documentElement.dataset.theme = nextTheme;
+        },
+      },
+      {
+        id: "tour",
+        title: "Restart onboarding tour",
+        detail: "Re-run the getting-started walkthrough",
+        keywords: "tour onboarding help walkthrough guide",
+        run: () => {
+          setOpen(false);
+          triggerTourReplay();
         },
       },
       {
