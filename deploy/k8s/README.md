@@ -24,3 +24,21 @@ replace the Secret through your cluster's secret-management tooling. The
 included value is empty and enables deployments that do not use AI features.
 Redis data is stored in an 8 GiB persistent volume; the cluster must provide a
 default StorageClass or the claim must be configured with a `storageClassName`.
+
+## Staging rollout
+
+Build and publish a server image that includes `/v1/health/ready` and `/metrics`.
+Update the staging image tag to that immutable build before applying the
+overlay.
+
+```sh
+kubectl apply -k deploy/k8s/overlays/staging
+kubectl -n prism-staging rollout status deployment/prism-server --timeout=10m
+```
+
+Staging adds one replacement pod at a time and keeps both existing replicas
+available until a replacement has been ready for 30 seconds. Each replacement
+checks dependency readiness and the Prometheus uptime sample through localhost.
+A rollout that stops making progress is marked failed after 10 minutes. Use
+`kubectl -n prism-staging rollout undo deployment/prism-server` to restore the
+previous revision if needed.

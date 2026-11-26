@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prism-server
+spec:
+  minReadySeconds: 30
+  progressDeadlineSeconds: 600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    spec:
+      containers:
+        - name: server
+          readinessProbe:
+            $patch: replace
+            exec:
+              command:
+                - node
+                - -e
+                - |
+                  const origin = "http://127.0.0.1:3001";
+                  async function get(path) {
+                    const response = await fetch(origin + path, { signal: AbortSignal.timeout(6500) });
+                    if (!response.ok) throw new Error(path + " returned " + response.status);
+                    return response;
+                  }
+                  async function analyze() {
+                    const [ready, metrics] = await Promise.all([
+                      get("/v1/health/ready"),
+                      get("/metrics"),
+                    ]);
+                    if ((await ready.json()).status !== "ok") throw new Error("Server is not ready");
+                    if (!/^process_uptime_seconds [0-9]+(?:\.[0-9]+)?$/m.test(await metrics.text())) {
+                      throw new Error("Prometheus uptime sample is missing");
+                    }
+                  }
+                  analyze().catch((error) => {
+                    console.error(error);
+                    process.exit(1);
+                  });
+            periodSeconds: 10
+            timeoutSeconds: 8
+            failureThreshold: 1
