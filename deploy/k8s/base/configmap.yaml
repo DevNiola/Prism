@@ -4,4 +4,7 @@ metadata:
   name: prism-config
 data:
   PORT: "3001"
-  REDIS_URL: redis://redis:6379
+  REDIS_URL: redis://prism-redis:6379
+  # Override CORS_ORIGINS in production overlay or via Secret.
+  # In production NODE_ENV=production, an empty value will cause startup to fail.
+  CORS_ORIGINS: ""
