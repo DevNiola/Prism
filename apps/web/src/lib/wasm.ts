@@ -92,6 +92,7 @@ export function validateScVal(
     case "void":
       return trimmed === "" ? null : "Expected an empty value for void.";
   }
+  return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

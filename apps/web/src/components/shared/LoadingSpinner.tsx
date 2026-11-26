@@ -17,7 +17,7 @@ export default function LoadingSpinner({
   size = 24,
 }: LoadingSpinnerProps) {
   return (
-    <span role="status" aria-label={label} className={`inline-flex ${className}`}>
+    <span role="status" aria-label={label} className={`inline-flex spinner ${className}`.trim()}>
       <svg
         aria-hidden="true"
         className="animate-spin text-violet-400"
