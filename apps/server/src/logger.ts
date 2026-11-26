@@ -10,6 +10,51 @@ const LEVEL_WEIGHTS: Record<LogLevel, number> = {
   fatal: 50,
 };
 
+/**
+ * Header and field names that must never appear in log output.
+ * Matching is case-insensitive and covers both HTTP header keys and
+ * arbitrary metadata field names (e.g. `ai_api_key` passed in a meta object).
+ */
+export const REDACTED_KEYS = [
+  "authorization",
+  "cookie",
+  "set-cookie",
+  "ai_api_key",
+  "jwt_secret",
+  "token",
+  "x-api-key",
+  "x-auth-token",
+  "password",
+  "secret",
+];
+
+const REDACTED_PLACEHOLDER = "[REDACTED]";
+
+/**
+ * Recursively walk `value` and replace any object key whose name appears in
+ * REDACTED_KEYS with REDACTED_PLACEHOLDER.  Returns a new object; the
+ * original is never mutated.
+ */
+export function redactSensitiveFields(value: unknown): unknown {
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(redactSensitiveFields);
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (REDACTED_KEYS.includes(k.toLowerCase())) {
+      result[k] = REDACTED_PLACEHOLDER;
+    } else {
+      result[k] = redactSensitiveFields(v);
+    }
+  }
+  return result;
+}
+
 export class StructuredLogger {
   private currentLevel: LogLevel;
 
@@ -40,7 +85,7 @@ export class StructuredLogger {
       level,
       time: new Date().toISOString(),
       msg: message,
-      ...meta,
+      ...(redactSensitiveFields(meta) as Record<string, unknown>),
     };
 
     const serialized = JSON.stringify(entry);
