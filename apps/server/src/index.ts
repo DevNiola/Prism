@@ -85,6 +85,15 @@ server.addHook("onClose", async () => {
 // ---------------------------------------------------------------------------
 registerErrorHandler(server);
 
+server.get("/api/budget-thresholds", async (_request, reply) => {
+  return reply
+    .header("Access-Control-Allow-Origin", "*")
+    .send({
+      cpu: config.budget.cpuWarningThresholdPercent,
+      memory: config.budget.memoryWarningThresholdPercent,
+    });
+});
+
 server.register(healthRoutes);
 server.register(replayRoutes, { prefix: "/api" });
 server.register(sessionRoutes, { prefix: "/api" });

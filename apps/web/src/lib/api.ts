@@ -2,6 +2,17 @@ const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
   (process.env.NODE_ENV === "development" ? "http://localhost:3001" : "");
 
+export interface BudgetThresholds {
+  cpu: number;
+  memory: number;
+}
+
+export async function getBudgetThresholds(signal: AbortSignal): Promise<BudgetThresholds> {
+  const response = await fetch(`${API_BASE}/api/budget-thresholds`, { signal });
+  if (!response.ok) throw new Error("Unable to load budget thresholds");
+  return response.json();
+}
+
 export async function requestReplay(txHash: string, network: string) {
   const res = await fetch(`${API_BASE}/v1/api/replay`, {
     method: "POST",
