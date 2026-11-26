@@ -1,19 +1,46 @@
 ---
 title: "VS Code Extension"
 sidebarTitle: "VS Code"
-description: "Bring Grat diagnostics directly into your editor."
+description: "Decode failed Soroban transactions from the VS Code Command Palette."
 icon: "code"
 ---
 
-The Grat VS Code extension intercepts Soroban errors in your test output and provides inline diagnostics.
+The Grat extension runs the `grat` CLI and opens the transaction report in VS Code. It requires VS Code 1.95 or later and a `grat` executable on the extension host's `PATH`. For Remote SSH, dev containers, or WSL, make the executable available in the remote environment. See the [CLI quickstart](../quickstart).
 
-## Key Features
+## Run the extension from source
 
-- **Inline Annotations**: Decoded errors appear directly next to the failing test line.
-- **Hover Tooltips**: Hover over an error code to see the plain-English explanation and suggested fixes.
-- **Quick Fixes**: Automatically apply code changes for common errors.
-- **"Debug This TX"**: A code lens that appears next to transaction hashes in logs, opening the Grat Web App or CLI debugger.
+From the repository root, use Node.js 20 or later and pnpm 9 to build the extension and open it in an Extension Development Host:
 
-## Installation
+```bash
+pnpm install
+pnpm --filter grat-vscode build
+code --extensionDevelopmentPath="$PWD/extensions/vscode"
+```
 
-Search for **Grat** in the VS Code Marketplace and click Install.
+## Decode a transaction
+
+1. Open the Command Palette with **Ctrl+Shift+P** (**Cmd+Shift+P** on macOS).
+2. Select **Grat: Decode Transaction Error**.
+3. Paste a failed testnet transaction hash and press **Enter**. Press **Esc** to dismiss the prompt.
+
+![The Grat transaction input prompt in the VS Code Extension Development Host](../images/vscode/decode-prompt.png)
+
+VS Code shows a progress notification while the CLI runs. On success, the extension opens an untitled, editable JSON document beside the active editor. The prompt also mentions XDR. To decode raw XDR, run `grat decode --raw` in the terminal with the XDR value, since the extension passes its input as a transaction hash.
+
+## Editor providers and diagnostics panel
+
+| Feature | Current behavior |
+| --- | --- |
+| Diagnostics | Registers a collection named `grat`. The collection receives no entries when decoding a transaction. |
+| Quick Fix | Registers a Rust code action provider that returns an empty list. |
+| Code Lens | Registers a Rust CodeLens provider that returns an empty list. |
+| Hover | Registers a Rust hover provider that returns no tooltip. |
+| Diagnostics panel | Declares the `grat.diagnostics` view type. Transaction reports open in the JSON editor. |
+
+## CLI bridge and troubleshooting
+
+The extension launches `grat` directly with `decode`, the input with surrounding whitespace removed, and `--output json`. The CLI defaults to testnet. To select a different network, run the CLI in a terminal with `--network`. The extension expects one JSON value on stdout and displays the process error or a JSON parsing error as a VS Code notification.
+
+![VS Code notification showing spawn grat ENOENT when the CLI is missing from PATH](../images/vscode/decode-error.png)
+
+For `spawn grat ENOENT`, check that `grat --version` works in the extension host's environment, then restart VS Code so it inherits the updated `PATH`. For other errors, rerun the decode command with `--output json` in a terminal to inspect the CLI response.
