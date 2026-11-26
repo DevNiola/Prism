@@ -20,6 +20,10 @@ on:
       - "package.json"
       - ".github/workflows/ts-ci.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   ts-ci:
     name: TypeScript Checks

@@ -6,6 +6,11 @@ on:
     branches: ["main", "master"]
 env:
   CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   rust_checks:
     name: Rust Checks
