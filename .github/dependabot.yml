@@ -1,20 +1,30 @@
 version: 2
 
 updates:
+  # -------------------------------------------------------------------------
   # Cargo (Rust) dependencies
+  # -------------------------------------------------------------------------
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 10
+    # Group all minor and patch version updates into a single PR per week.
+    # Security updates are intentionally excluded (applies-to: version-updates)
+    # so they open their own PRs immediately and are not delayed by grouping.
     groups:
       rust-minor-patch:
+        applies-to: version-updates
         update-types:
           - "minor"
           - "patch"
+    # Allow Dependabot to auto-merge grouped patch/minor PRs once CI passes.
+    auto-merge: true
 
-  # npm dependencies for the web app
+  # -------------------------------------------------------------------------
+  # npm — web app
+  # -------------------------------------------------------------------------
   - package-ecosystem: "npm"
     directory: "/apps/web"
     schedule:
@@ -23,11 +33,15 @@ updates:
     open-pull-requests-limit: 10
     groups:
       npm-web-minor-patch:
+        applies-to: version-updates
         update-types:
           - "minor"
           - "patch"
+    auto-merge: true
 
-  # npm dependencies for the server
+  # -------------------------------------------------------------------------
+  # npm — server
+  # -------------------------------------------------------------------------
   - package-ecosystem: "npm"
     directory: "/apps/server"
     schedule:
@@ -36,11 +50,15 @@ updates:
     open-pull-requests-limit: 10
     groups:
       npm-server-minor-patch:
+        applies-to: version-updates
         update-types:
           - "minor"
           - "patch"
+    auto-merge: true
 
-  # npm dependencies for the VS Code extension
+  # -------------------------------------------------------------------------
+  # npm — VS Code extension
+  # -------------------------------------------------------------------------
   - package-ecosystem: "npm"
     directory: "/extensions/vscode"
     schedule:
@@ -49,11 +67,15 @@ updates:
     open-pull-requests-limit: 10
     groups:
       npm-vscode-minor-patch:
+        applies-to: version-updates
         update-types:
           - "minor"
           - "patch"
+    auto-merge: true
 
-  # GitHub Actions dependencies
+  # -------------------------------------------------------------------------
+  # GitHub Actions
+  # -------------------------------------------------------------------------
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -62,6 +84,8 @@ updates:
     open-pull-requests-limit: 10
     groups:
       github-actions-minor-patch:
+        applies-to: version-updates
         update-types:
           - "minor"
           - "patch"
+    auto-merge: true
