@@ -9,14 +9,32 @@ security groups, DNS validation records, and CloudWatch log groups.
 
 - Terraform 1.6 or newer.
 - AWS CLI credentials with permissions to manage VPC, ECS, IAM, ElastiCache,
-  ACM, Route53, CloudWatch Logs, and load balancers.
+  ACM, Route53, CloudWatch Logs, S3, DynamoDB, and load balancers.
 - A Route53 hosted zone for a domain you control.
 - Docker and an ECR repository for each application.
 - An AWS account with sufficient quota for Fargate, NAT gateways, and Redis.
 
 Terraform state contains the Redis authentication token and can also contain
-the optional AI API key. Use an encrypted, access-controlled remote state
-backend in production; do not commit `terraform.tfvars` or state files.
+the optional AI API key. State is stored remotely in S3 with DynamoDB locking
+so it is never committed to the repository and concurrent applies are safe.
+
+## 0. Bootstrap the remote state backend (once per environment)
+
+Before the first `terraform init`, create the S3 bucket and DynamoDB lock table:
+
+```sh
+export TF_STATE_BUCKET="prism-tfstate-${AWS_ACCOUNT_ID}-${AWS_REGION}"
+export TF_LOCK_TABLE="prism-tf-locks"
+export AWS_REGION="us-east-1"
+
+./scripts/bootstrap-backend.sh
+```
+
+The script creates the bucket with versioning and AES256 encryption enabled,
+blocks all public access, and creates a pay-per-request DynamoDB table.
+Run it once; it is safe to run again (AWS returns an error for existing
+resources, which the script does not suppress — verify they already exist
+before re-running).
 
 ## 1. Build and publish application images
 
@@ -61,6 +79,7 @@ Create a `terraform.tfvars` file in this directory (it is ignored by Git):
 
 ```hcl
 aws_region        = "us-east-1"
+environment       = "production"
 domain_name       = "prism.example.com"
 route53_zone_id   = "Z0123456789EXAMPLE"
 server_image      = "123456789012.dkr.ecr.us-east-1.amazonaws.com/prism-server:latest"
@@ -71,14 +90,32 @@ redis_auth_token  = "replace-with-16-or-more-random-letters"
 
 Generate a strong alphanumeric Redis token (at least 16 characters). The
 configuration marks secret variables as sensitive, but Terraform state still
-contains their values.
+contains their values — that is why state is kept in encrypted S3 and never
+committed to this repository.
 
-## 3. Deploy
+## 3. Initialise with the remote backend
 
-Run from this directory:
+Pass backend configuration at init time (values are not stored in the repo):
+
+```sh
+terraform init \
+  -backend-config="bucket=${TF_STATE_BUCKET}" \
+  -backend-config="key=prism/terraform.tfstate" \
+  -backend-config="region=${AWS_REGION}" \
+  -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
+  -backend-config="encrypt=true"
+```
+
+For local development without remote state (no S3 bucket needed), omit the
+`-backend-config` flags and Terraform will use a local backend:
 
 ```sh
 terraform init
+```
+
+## 4. Deploy
+
+```sh
 terraform validate
 terraform plan
 terraform apply
@@ -98,3 +135,15 @@ deployment, run `terraform destroy`.
 The NAT gateway and load balancer incur ongoing charges; ElastiCache is
 configured as a two-node, multi-AZ Redis replication group. Logs are retained
 for 30 days. Review AWS quotas, pricing, and the Terraform plan before applying.
+
+## State file security
+
+- State lives in `s3://${TF_STATE_BUCKET}/prism/terraform.tfstate` — never in
+  this repository.
+- The bucket has versioning enabled so previous state can be recovered.
+- AES256 server-side encryption is enforced.
+- All public access to the bucket is blocked.
+- DynamoDB locking prevents concurrent `terraform apply` runs from corrupting
+  state.
+- Do not commit `terraform.tfvars`, `*.tfstate`, or `*.tfstate.*` files — they
+  are covered by `.gitignore`.
