@@ -2,6 +2,8 @@
 
 The `crates/wasm` crate compiles the Prism (Grat) core engine to WebAssembly so the web application can decode Soroban transaction errors entirely in the browser — no server round-trip required.
 
+For a complete build and third-party embedding walkthrough, see the [integration guide](guides/integration.mdx).
+
 ---
 
 ## How It Works
