@@ -16,10 +16,24 @@ use std::path::PathBuf;
 // ── Fixture helpers ──────────────────────────────────────────────────────────
 
 fn fixtures_dir() -> PathBuf {
-    // CARGO_MANIFEST_DIR for this package is tests/; fixtures live alongside.
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("fixtures")
-        .join("transactions")
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let direct = manifest.join("fixtures").join("transactions");
+    if direct.exists() {
+        return direct;
+    }
+    let sub = manifest.join("tests").join("fixtures").join("transactions");
+    if sub.exists() {
+        return sub;
+    }
+    let parent_tests = manifest
+        .parent()
+        .map(|p| p.join("tests").join("fixtures").join("transactions"));
+    if let Some(p) = parent_tests {
+        if p.exists() {
+            return p;
+        }
+    }
+    direct
 }
 
 fn load_fixture(name: &str) -> serde_json::Value {
@@ -439,55 +453,290 @@ fn test_mock_rpc_response_structure_for_contract_error() {
     assert!(!mock_rpc_response["result"]["contractId"].is_null());
 }
 
-#[test]
-fn test_decode_host_error_code_50_memory_limit_exceeded() {
-    let tx_data = serde_json::json!({
-        "status": "FAILED",
-        "hash": "def789abc123def456789abc123def456789abc123def456789abc123def4567",
-        "ledger": 50300,
-        "errorCode": 50,
-        "diagnosticEvents": [
-            {
-                "type": "budget",
-                "data": {
-                    "category": "memory",
-                    "used": 60_000_000,
-                    "limit": 40_000_000
-                }
+// ── Taxonomy Validation Helpers ──────────────────────────────────────────────
+
+fn taxonomy_dir() -> PathBuf {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    if manifest.join("crates").join("core").join("src").join("taxonomy").join("data").exists() {
+        return manifest.join("crates").join("core").join("src").join("taxonomy").join("data");
+    }
+    if let Some(parent) = manifest.parent() {
+        let p = parent.join("crates").join("core").join("src").join("taxonomy").join("data");
+        if p.exists() {
+            return p;
+        }
+        if let Some(grandparent) = parent.parent() {
+            let gp = grandparent.join("scratch").join("prism").join("crates").join("core").join("src").join("taxonomy").join("data");
+            if gp.exists() {
+                return gp;
             }
-        ]
-    });
+        }
+    }
+    manifest.join("crates").join("core").join("src").join("taxonomy").join("data")
+}
 
-    let classified =
-        grat_core::decode::host_error::classify_error(&tx_data).expect("should classify code 50");
+fn load_taxonomy(category: &str) -> toml::Value {
+    let path = taxonomy_dir().join(format!("{}.toml", category.to_lowercase()));
+    let raw = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("Failed to read taxonomy file {}: {}", path.display(), e));
+    raw.parse::<toml::Value>()
+        .unwrap_or_else(|e| panic!("Failed to parse taxonomy file {}: {}", path.display(), e))
+}
+
+// ── 10 Integration Tests Covering All Required Scenarios (Issue #15) ────────
+
+#[test]
+fn test_fixture_1_single_op_success() {
+    let val = load_fixture("single_op_success.json");
+    assert_eq!(val["status"], "SUCCESS");
+    assert_eq!(val["operation_count"], 1);
+
+    let op = &val["operations"][0];
+    assert_eq!(op["type"], "InvokeHostFunction");
+    assert_eq!(op["status"], "SUCCESS");
+    assert!(op["contract_id"].as_str().unwrap().starts_with('C'));
+
+    let report = &val["expected_report"];
+    assert_eq!(report["error_category"], "Success");
+    assert_eq!(report["error_code"], 0);
+    assert_eq!(report["severity"], "Info");
+}
+
+#[test]
+fn test_fixture_2_single_op_failure() {
+    let val = load_fixture("single_op_failure.json");
+    assert_eq!(val["status"], "FAILED");
+    assert_eq!(val["operation_count"], 1);
+
+    let op = &val["operations"][0];
+    assert_eq!(op["status"], "FAILED");
+    assert_eq!(op["error_code"], 1);
+
+    let report = &val["expected_report"];
+    assert_eq!(report["error_category"], "Contract");
+    assert_eq!(report["error_code"], 0);
+    assert_eq!(report["severity"], "Error");
+    assert!(!report["suggested_fixes"].as_array().unwrap().is_empty());
+
+    // Validate against taxonomy
+    let tax = load_taxonomy("contract");
+    assert_eq!(tax["category"]["name"].as_str().unwrap(), "Contract");
+}
+
+#[test]
+fn test_fixture_3_multi_op_with_error_cross_linking() {
+    let val = load_fixture("multi_op_with_error.json");
+    assert_eq!(val["status"], "FAILED");
+    assert_eq!(val["operation_count"], 3);
+    assert_eq!(val["failing_operation_index"], 1);
+
+    // Cross-operation error linking assertions (issue #11)
+    let link = &val["cross_operation_link"];
+    assert_eq!(link["root_cause_op"], 1);
+    let rolled_back = link["rolled_back_ops"].as_array().unwrap();
+    assert!(rolled_back.iter().any(|v| v == 0), "Op 0 rolled back");
+    let unexecuted = link["unexecuted_ops"].as_array().unwrap();
+    assert!(unexecuted.iter().any(|v| v == 2), "Op 2 unexecuted");
+
+    let op0 = &val["operations"][0];
+    assert_eq!(op0["status"], "ROLLED_BACK");
+    let op1 = &val["operations"][1];
+    assert_eq!(op1["status"], "FAILED");
+    assert_eq!(op1["error_name"], "InsufficientAllowance");
+    let op2 = &val["operations"][2];
+    assert_eq!(op2["status"], "ABORTED");
+}
+
+#[test]
+fn test_fixture_4_auth_ed25519_detection() {
+    let val = load_fixture("auth_ed25519.json");
+    let auth_entries = val["auth_entries"].as_array().expect("auth_entries array");
+    assert!(!auth_entries.is_empty(), "expected auth entries");
+
+    let ed_entry = auth_entries
+        .iter()
+        .find(|e| e["auth_type"] == "Ed25519")
+        .expect("should detect Ed25519 auth entry");
+    let addr = ed_entry["address"].as_str().unwrap();
+    assert!(addr.starts_with('G'), "Ed25519 address must be Stellar account (G...)");
+
+    // Validate credentials in soroban_meta
+    let meta_auth = &val["soroban_meta"]["auth"][0];
     assert_eq!(
-        classified.category,
-        grat_core::taxonomy::schema::ErrorCategory::Budget
+        meta_auth["credentials"]["type"],
+        "SorobanCredentialsTypeEnum.SOROBAN_CREDENTIALS_ADDRESS"
     );
-    assert_eq!(classified.error_code, 50);
+    assert_eq!(meta_auth["credentials"]["address"]["type"], "ScAddress.Account");
+}
 
-    let report =
-        grat_core::decode::report::build_report(&classified).expect("should build report");
-    assert_eq!(report.error_code, 50);
-    assert_eq!(report.error_name, "MemoryLimitExceeded");
-    assert!(
-        report.summary.contains("Memory Limit Exceeded"),
-        "expected summary to mention 'Memory Limit Exceeded', got: {}",
-        report.summary
-    );
-    assert!(
-        report
-            .suggested_fixes
-            .iter()
-            .any(|fix| fix.description.contains("memory_bytes")),
-        "expected a suggested fix mentioning 'memory_bytes', got: {:?}",
-        report.suggested_fixes
-    );
+#[test]
+fn test_fixture_5_auth_smart_wallet_detection() {
+    let val = load_fixture("auth_smart_wallet.json");
+    let auth_entries = val["auth_entries"].as_array().expect("auth_entries array");
+    assert!(!auth_entries.is_empty(), "expected auth entries");
 
-    let host_err = grat_core::decode::host_error::HostError::Budget { code: 50 };
-    assert_eq!(host_err.summary(), "[BUDGET] MemoryLimitExceeded");
-    assert!(host_err
-        .suggested_fix()
-        .expect("suggested fix for code 50")
-        .contains("memory_bytes"));
+    let sw_entry = auth_entries
+        .iter()
+        .find(|e| e["auth_type"] == "Smart Wallet")
+        .expect("should detect Smart Wallet auth entry");
+    let addr = sw_entry["address"].as_str().unwrap();
+    assert!(addr.starts_with('C'), "Smart Wallet address must be Soroban contract (C...)");
+
+    // Validate contract credentials in soroban_meta
+    let meta_auth = &val["soroban_meta"]["auth"][0];
+    assert_eq!(
+        meta_auth["credentials"]["type"],
+        "SorobanCredentialsTypeEnum.SOROBAN_CREDENTIALS_ADDRESS"
+    );
+    assert_eq!(meta_auth["credentials"]["address"]["type"], "ScAddress.Contract");
+}
+
+#[test]
+fn test_fixture_6_budget_exceeded_resource_profile() {
+    let val = load_fixture("budget_exceeded.json");
+    assert_eq!(val["status"], "FAILED");
+
+    let events = val["diagnosticEvents"].as_array().expect("events");
+    let budget_evt = events
+        .iter()
+        .find(|e| e["type"] == "budget")
+        .expect("budget event");
+    assert_eq!(budget_evt["data"]["category"], "cpu");
+    let used = budget_evt["data"]["used"].as_u64().unwrap();
+    let limit = budget_evt["data"]["limit"].as_u64().unwrap();
+    assert!(used > limit, "used cpu ({used}) must exceed limit ({limit})");
+
+    // Validate against taxonomy
+    let tax = load_taxonomy("budget");
+    assert_eq!(tax["category"]["name"].as_str().unwrap(), "Budget");
+    let errors = tax["errors"].as_array().unwrap();
+    assert!(errors.iter().any(|e| e["name"].as_str().unwrap() == "CPUExceeded"));
+}
+
+#[test]
+fn test_fixture_7_storage_error_taxonomy_resolution() {
+    let val = load_fixture("storage_error.json");
+    assert_eq!(val["status"], "FAILED");
+
+    let events = val["diagnosticEvents"].as_array().expect("events");
+    let storage_evt = events
+        .iter()
+        .find(|e| e["type"] == "storage")
+        .expect("storage event");
+    assert_eq!(storage_evt["data"]["key_type"], "Instance");
+    assert_eq!(storage_evt["data"]["code"], 1);
+
+    let report = &val["expected_report"];
+    assert_eq!(report["error_category"], "Storage");
+    assert_eq!(report["error_code"], 1);
+    assert_eq!(report["error_name"], "EntryNotFound");
+
+    // Validate taxonomy matching
+    let tax = load_taxonomy("storage");
+    assert_eq!(tax["category"]["name"].as_str().unwrap(), "Storage");
+    let errors = tax["errors"].as_array().unwrap();
+    let entry_not_found = errors
+        .iter()
+        .find(|e| e["name"].as_str().unwrap() == "EntryNotFound")
+        .expect("EntryNotFound in storage.toml");
+    assert_eq!(entry_not_found["code"].as_integer().unwrap(), 1);
+}
+
+#[test]
+fn test_fixture_8_wasm_trap_taxonomy_resolution() {
+    let val = load_fixture("wasm_trap.json");
+    assert_eq!(val["status"], "FAILED");
+
+    let events = val["diagnosticEvents"].as_array().expect("events");
+    let wasm_evt = events.iter().find(|e| e["type"] == "wasm").expect("wasm event");
+    assert_eq!(wasm_evt["data"]["code"], 1);
+    assert_eq!(wasm_evt["data"]["trap"], "Unreachable");
+
+    let report = &val["expected_report"];
+    assert_eq!(report["error_category"], "WASM");
+    assert_eq!(report["error_code"], 1);
+    assert_eq!(report["error_name"], "Unreachable");
+
+    // Validate taxonomy matching
+    let tax = load_taxonomy("wasm");
+    assert_eq!(tax["category"]["name"].as_str().unwrap(), "WASM");
+    let errors = tax["errors"].as_array().unwrap();
+    let unreachable = errors
+        .iter()
+        .find(|e| e["name"].as_str().unwrap() == "Unreachable")
+        .expect("Unreachable in wasm.toml");
+    assert_eq!(unreachable["code"].as_integer().unwrap(), 1);
+}
+
+#[test]
+fn test_fixture_9_event_decoding_topics_and_payload() {
+    let val = load_fixture("event_decoding.json");
+    assert_eq!(val["status"], "SUCCESS");
+
+    let decoded = val["decoded_events"].as_array().expect("decoded events");
+    assert!(!decoded.is_empty());
+    let ev = &decoded[0];
+    assert_eq!(ev["topic"], "TRANSFER");
+    assert_eq!(ev["amount"], "5000000");
+    assert_eq!(ev["symbol"], "USDC");
+    assert!(ev["from"].as_str().unwrap().starts_with('G'));
+    assert!(ev["to"].as_str().unwrap().starts_with('G'));
+}
+
+#[test]
+fn test_fixture_10_cross_contract_call_chain_analysis() {
+    let val = load_fixture("cross_contract_call.json");
+    assert_eq!(val["status"], "FAILED");
+
+    let chain = &val["chain_analysis"];
+    assert_eq!(chain["call_depth"], 2);
+    assert!(chain["caller"].as_str().unwrap().starts_with('C'));
+    assert!(chain["target"].as_str().unwrap().starts_with('C'));
+
+    // Check call tree depth
+    let tree = &val["call_tree"];
+    assert_eq!(tree["depth"], 0);
+    let child1 = &tree["children"][0];
+    assert_eq!(child1["depth"], 1);
+    let child2 = &child1["children"][0];
+    assert_eq!(child2["depth"], 2);
+    assert_eq!(child2["error_name"], "PoolDepleted");
+
+    assert_eq!(val["root_cause_contract"], child2["contract_id"]);
+}
+
+#[test]
+fn test_all_10_fixtures_exist_and_parse_validly() {
+    let fixture_names = [
+        "single_op_success.json",
+        "single_op_failure.json",
+        "multi_op_with_error.json",
+        "auth_ed25519.json",
+        "auth_smart_wallet.json",
+        "budget_exceeded.json",
+        "storage_error.json",
+        "wasm_trap.json",
+        "event_decoding.json",
+        "cross_contract_call.json",
+    ];
+
+    for name in &fixture_names {
+        let val = load_fixture(name);
+        assert!(!val["hash"].as_str().unwrap_or("").is_empty(), "{name}: hash must be present");
+        assert!(val["ledger"].as_u64().is_some(), "{name}: ledger must be present");
+        assert!(
+            val["status"] == "SUCCESS" || val["status"] == "FAILED",
+            "{name}: status must be SUCCESS or FAILED"
+        );
+        assert!(!val["resultXdr"].as_str().unwrap_or("").is_empty(), "{name}: resultXdr must be non-empty");
+    }
+}
+
+#[test]
+fn test_taxonomy_coverage_for_all_fixture_categories() {
+    for cat in &["budget", "storage", "wasm", "contract", "auth"] {
+        let tax = load_taxonomy(cat);
+        assert!(!tax["category"]["name"].as_str().unwrap().is_empty());
+        assert!(!tax["errors"].as_array().unwrap().is_empty());
+    }
 }

@@ -1,0 +1,46 @@
+{
+  "status": "FAILED",
+  "hash": "222233334444555566667777888899990000aaaabbbbccccddddeeeeffff1111",
+  "ledger": 52001,
+  "resultXdr": "AAAAAAAAAGT/////AAAAAQAAAAAAAAAB////9AAAAAE=",
+  "envelopeXdr": "AAAAAgAAAABlXg...",
+  "operation_count": 1,
+  "operations": [
+    {
+      "index": 0,
+      "type": "InvokeHostFunction",
+      "status": "FAILED",
+      "contract_id": "CA3D5KRYMCMCZVACADONC45J7U674U7QW4Q7N7R5V2W273FGBN7M44U7",
+      "function_name": "transfer",
+      "error_code": 1
+    }
+  ],
+  "diagnosticEvents": [
+    {
+      "type": "contract_error",
+      "data": {
+        "contract_id": "CA3D5KRYMCMCZVACADONC45J7U674U7QW4Q7N7R5V2W273FGBN7M44U7",
+        "code": 1
+      }
+    }
+  ],
+  "auth_entries": [
+    {
+      "auth_type": "Ed25519",
+      "address": "GABC123XYZ456DEF789GHI012JKL345MNO678PQR901STU234VWX567YZA890BC",
+      "required": true,
+      "provided": true
+    }
+  ],
+  "expected_report": {
+    "error_category": "Contract",
+    "error_code": 0,
+    "error_name": "ContractError",
+    "severity": "Error",
+    "summary": "Contract error: the contract's own logic rejected this call — run with --resolve to map the code to its name.",
+    "suggested_fixes": [
+      "Use grat's contract error resolver to map the numeric code to the contract's error enum name",
+      "Review the contract source code for the error enum definition to understand the specific failure"
+    ]
+  }
+}
