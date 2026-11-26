@@ -261,6 +261,25 @@ export async function setExpiry(key: string, ttlSeconds: number): Promise<void> 
   }
 }
 
+export async function getExpiry(key: string): Promise<number> {
+  if (getCircuitBreakerState() === "OPEN") {
+    const entry = inMemoryStore.get(key);
+    if (!entry || !entry.expiresAt) return -1;
+    return Math.max(0, Math.ceil((entry.expiresAt - Date.now()) / 1000));
+  }
+
+  try {
+    const ttl = await getRedis().ttl(key);
+    recordSuccess();
+    return ttl;
+  } catch (err) {
+    recordFailure(err);
+    const entry = inMemoryStore.get(key);
+    if (!entry || !entry.expiresAt) return -1;
+    return Math.max(0, Math.ceil((entry.expiresAt - Date.now()) / 1000));
+  }
+}
+
 export async function scanKeys(pattern: string): Promise<string[]> {
   if (getCircuitBreakerState() === "OPEN") {
     const regex = new RegExp("^" + pattern.replace(/\*/g, ".*") + "$");

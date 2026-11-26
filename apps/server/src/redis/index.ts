@@ -10,5 +10,6 @@ export {
   decrBy,
   getNumber,
   setExpiry,
+  getExpiry,
   scanKeys,
 } from "./client";

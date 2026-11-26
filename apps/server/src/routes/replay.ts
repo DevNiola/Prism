@@ -24,7 +24,7 @@ export async function replayRoutes(app: FastifyInstance) {
     return { status: "queued" };
   });
 
-  app.get("/replay/:jobId", async (request, reply) => {
+  app.get("/replay/:jobId", { preHandler: [replayRateLimiter] }, async (request, reply) => {
     const { jobId } = request.params as { jobId: string };
     const job = await replayQueue.getJob(jobId);
 
