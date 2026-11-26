@@ -81,10 +81,12 @@ export function SeverityBadge({
   severity,
   className = "",
   showIcon = true,
+  label,
 }: {
   severity: SeverityType;
   className?: string;
   showIcon?: boolean;
+  label?: string;
 }) {
   const meta = getSeverityMeta(severity);
   const Icon = meta.Icon;
@@ -94,7 +96,7 @@ export function SeverityBadge({
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${meta.badgeClass} ${className}`}
     >
       {showIcon && <Icon className="w-3.5 h-3.5 flex-shrink-0" />}
-      <span className="capitalize">{meta.label}</span>
+      <span className="capitalize">{label ?? meta.label}</span>
     </span>
   );
 }
