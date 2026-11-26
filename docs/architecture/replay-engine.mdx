@@ -7,7 +7,7 @@ The Replay Engine powers Tier 2 and Tier 3 diagnostics.
 
 ## Historical State
 
-It uses the **History Archive Client** to fetch compressed ledger snapshots. These are decompressed and loaded into a local state database.
+Replay first uses Soroban RPC to locate the transaction and its ledger. It uses RPC ledger entries on the hot path and the history archive client on the cold path to reconstruct ledger state.
 
 ## Instrumented Sandbox
 
@@ -19,4 +19,4 @@ Grat uses a modified `soroban-env-host` that:
 
 ## Execution Timeline
 
-As events are emitted, the engine assembles them into a hierarchical tree representing the full invocation chain.
+The engine builds a hierarchical invocation tree from the sandbox output and computes state changes. The profiler uses sandbox data and the state diff to produce resource measurements. The execution trace includes the invocation tree, state diff, resource profile and diagnostic events. Tier 3 debugging uses that trace for stepping and inspection.

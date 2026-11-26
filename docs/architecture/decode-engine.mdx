@@ -7,10 +7,10 @@ The Decode Engine is the core of Tier 1 diagnostics.
 
 ## Process
 
-1. **Extraction**: It takes a `TransactionResult` and extracts the specific error variant.
+1. **Extraction**: For a transaction hash, it fetches the transaction from Soroban RPC and extracts the failure from result XDR and available diagnostic events.
 2. **Classification**: Categorizes the error (e.g., `HostError`, `ContractError`).
 3. **Enrichment**: Maps the code to the [Error Taxonomy](/concepts/error-taxonomy).
-4. **Resolution**: Fetches and parses WASM custom sections to resolve custom contract errors.
+4. **Resolution**: When contract WASM is available, it reads the spec to resolve contract error codes. The engine combines the result with taxonomy metadata in a diagnostic report.
 
 ## Performance
 

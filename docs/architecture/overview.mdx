@@ -35,6 +35,42 @@ graph TD
     CoreEngine --> Infra
 ```
 
+## Diagnostic Data Flow
+
+```mermaid
+flowchart TD
+    RPC["Soroban RPC"]
+    Archive["History archives"]
+    subgraph Tier1["Tier 1 · Decode"]
+        Decode["Extract and classify the error from transaction XDR"]
+        Enrich["Look up taxonomy and resolve contract spec when available"]
+        Report["Diagnostic report"]
+        Decode --> Enrich --> Report
+    end
+    subgraph Tier2["Tier 2 · Replay"]
+        State["Replay engine reconstructs ledger state"]
+        Sandbox["Instrumented Soroban sandbox"]
+        Profiler["Resource profiler"]
+        Tree["Invocation tree and state changes"]
+        Trace["Execution trace"]
+        State --> Sandbox
+        Sandbox --> Profiler --> Trace
+        Sandbox --> Tree --> Trace
+    end
+    subgraph Tier3["Tier 3 · Debug"]
+        Debug["Inspect and step through the replay trace"]
+    end
+    RPC --> Decode
+    RPC --> State
+    Archive --> State
+    Trace --> Debug
+```
+
+The [Decode Engine](/architecture/decode-engine) uses transaction results and
+diagnostic events to explain failures. The [Replay Engine](/architecture/replay-engine)
+reconstructs state and runs the transaction in an instrumented host, producing
+the trace the debugger consumes.
+
 ## Layers
 
 - **Interfaces**: Consume the core logic to provide user-facing experiences.
