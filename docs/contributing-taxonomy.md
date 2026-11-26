@@ -1,38 +1,9 @@
 # Contributing to the Error Taxonomy
 
-The error taxonomy is a community-contributable database of every known Soroban host error. It's the easiest way to contribute to Grat — no Rust knowledge required!
+Taxonomy data lives in [`crates/core/src/taxonomy/data/`](../crates/core/src/taxonomy/data/), with one TOML file per error category. Follow the [taxonomy contribution guide](guides/contributing-taxonomy.mdx) for the field reference, validation rules, and pull request checklist.
 
-## File Location
+After adding or updating an entry, run the linter from the repository root:
 
-Taxonomy files are in `crates/core/src/taxonomy/data/`, one file per error category:
-
-- `budget.toml`, `storage.toml`, `auth.toml`, `context.toml`, `value.toml`
-- `object.toml`, `crypto.toml`, `contract.toml`, `wasm.toml`, `events.toml`
-
-## How to Contribute
-
-1. Find the TOML file for the error category
-2. Add or improve an entry (see Entry Format below)
-3. Submit a PR
-
-## Entry Format
-
-```toml
-[[errors]]
-id = "host.category.error_name"
-category = "category"
-code = 0
-name = "ErrorName"
-severity = "Error"
-summary = "One-sentence description."
-detailed_explanation = """Multi-paragraph explanation."""
-
-[[errors.common_causes]]
-description = "Root cause description"
-likelihood = "high"  # high | medium | low
-
-[[errors.suggested_fixes]]
-description = "Fix description"
-difficulty = "easy"  # easy | medium | hard
-requires_upgrade = false
+```bash
+bash scripts/lint_taxonomy.sh
 ```

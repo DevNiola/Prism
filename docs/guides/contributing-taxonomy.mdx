@@ -1,27 +1,67 @@
 ---
-title: "Contributing to Taxonomy"
-description: "Helping every Soroban developer with better error messages."
+title: "Contributing to the Error Taxonomy"
+description: "Add and validate Soroban error explanations and fixes."
 ---
 
-The Error Taxonomy Database is community-driven. Adding your knowledge helps everyone.
+The taxonomy bundled with the CLI is built from category files in `crates/core/src/taxonomy/data/`. Each file contains a `[category]` table with three strings (`name`, `description`, and `source_module`) and an array of `[[errors]]` entries.
 
-## Entry Structure
+## Entry schema
 
-Each taxonomy entry in the TOML files follows this structure:
+The examples come from the `CPUExceeded` entry in [budget.toml](https://github.com/DevNiola/Prism/blob/main/crates/core/src/taxonomy/data/budget.toml). Omitted values show optional fields that this entry leaves out. A `u32` is a TOML integer between 0 and 4,294,967,295.
 
-```toml
-[Error.Contract.3]
-name = "InsufficientBalance"
-summary = "The account does not have enough funds."
-explanation = """
-This error occurs when a transfer or burn operation is attempted
-for an amount greater than the account's available balance.
-"""
-fix = "Check the balance using the `balance` function before transferring."
+| Field | Type | Budget example |
+| --- | --- | --- |
+| `id` | String | `"host.budget.limit_exceeded.cpu"` |
+| `category` | Lowercase enum | `"budget"` |
+| `code` | `u32` | `0` |
+| `name` | String | `"CPUExceeded"` |
+| `severity` | String | `"Error"` |
+| `since_protocol` | Optional `u32` | `20` |
+| `deprecated_protocol` | Optional `u32` | Omitted |
+| `summary` | String | `"The transaction exceeded its CPU instruction budget."` |
+| `detailed_explanation` | String | Begins with “The Soroban runtime enforces strict CPU instruction limits per transaction.” |
+| `common_causes` | Array of cause tables, defaults to empty | A cause about unbounded loops, with likelihood `"high"` |
+| `suggested_fixes` | Array of fix tables, defaults to empty | Increase the CPU limit, with difficulty `"easy"` and `requires_upgrade = false` |
+| `related_errors` | Array of ID strings, defaults to empty | `["host.budget.insufficient_memory"]` |
+| `source_file` | Optional string | `"soroban-env-host/src/budget.rs"` |
+| `source_line` | Optional `u32` | Omitted |
+| `documentation_url` | Optional string | `"https://soroban.stellar.org/docs/fundamentals/fees-and-metering"` |
+
+Allowed categories are `budget`, `storage`, `auth`, `context`, `value`, `object`, `crypto`, `contract`, `wasm`, and `events`.
+
+| Table | Field | Type | Budget example |
+| --- | --- | --- | --- |
+| `[[errors.common_causes]]` | `description` | String | Unbounded or large loops processing collections |
+| `[[errors.common_causes]]` | `likelihood` | String | `"high"` |
+| `[[errors.suggested_fixes]]` | `description` | String | Increase the CPU instruction limit in the transaction's resource declaration |
+| `[[errors.suggested_fixes]]` | `difficulty` | String | `"easy"` |
+| `[[errors.suggested_fixes]]` | `requires_upgrade` | Boolean | `false` |
+| `[[errors.suggested_fixes]]` | `example` | Optional string | Omitted |
+| `[[errors.suggested_fixes]]` | `id` | Optional string | Omitted |
+| `[[errors.suggested_fixes]]` | `remedy_code` | Optional string | Omitted |
+
+## Linter rules
+
+From the repository root, run:
+
+```bash
+bash scripts/lint_taxonomy.sh
 ```
 
-## How to Contribute
+The script runs `taxonomy_linter` against the taxonomy data directory. It exits successfully when validation passes and reports the source file and line for schema and validation errors when available.
 
-1. Fork the Grat repository.
-2. Add your entry to the relevant category file in `taxonomy/`.
-3. Open a Pull Request with a short description of the error you encountered.
+- TOML must match the schema. Unknown keys, missing required fields, invalid types, and invalid category names fail parsing.
+- IDs and names must be nonempty after trimming whitespace. Category descriptions, summaries, detailed explanations, and cause and fix descriptions must be at least 15 bytes after trimming.
+- Severity must be exactly `Error`, `Warning`, `Info`, or `Fatal`.
+- If present, `since_protocol` must be greater than zero. When both protocol fields are present, `deprecated_protocol` must be greater than or equal to `since_protocol`.
+- A supplied `documentation_url` must parse as a URL.
+- Each `(category, code)` pair must be unique across files. Every ID in `related_errors` must exist in the loaded data.
+
+## New entry checklist
+
+- [ ] Find the matching category file and confirm the code and protocol version against the upstream host source.
+- [ ] Add a `[[errors]]` entry with a stable, unique ID and an unused code for that category.
+- [ ] Describe what failed, list likely causes, and suggest concrete fixes. Specify whether each fix requires an upgrade.
+- [ ] Add source references and related IDs where available.
+- [ ] Run `bash scripts/lint_taxonomy.sh` and resolve any errors.
+- [ ] Open a pull request describing the error and include a source reference or example where possible.
