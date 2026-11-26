@@ -275,10 +275,72 @@ impl DiskCache {
         }
     }
 
-    /// Flushes any buffered writes to disk. Sled batches and lazily flushes
-    /// writes for performance, so callers that need durability guarantees
-    /// (e.g. before a restart) should await this explicitly.
-    pub async fn flush(&self) -> GratResult<()> {
+    /// Synchronous `get` used by [`AsyncCache`] via `spawn_blocking`.
+    pub fn get_sync<V>(&self, key: &str) -> GratResult<Option<V>>
+    where
+        V: serde::de::DeserializeOwned + Send,
+    {
+        let lookup_key = key.as_bytes().to_vec();
+        let raw = self
+            .db
+            .get(&lookup_key)
+            .map_err(|e| GratError::CacheError(format!("Sled get failed: {e}")))?;
+
+        let Some(bytes) = raw else {
+            return Ok(None);
+        };
+
+        let value: V = match bincode::deserialize::<TtlEntry>(&bytes) {
+            Ok(ttl_entry) => {
+                if let Some(exp) = ttl_entry.expires_at {
+                    if Self::now_secs() >= exp {
+                        return Ok(None);
+                    }
+                }
+                bincode::deserialize(&ttl_entry.value).map_err(|e| {
+                    GratError::CacheDeserializationError {
+                        key: key.to_owned(),
+                        reason: e.to_string(),
+                    }
+                })?
+            }
+            Err(_) => bincode::deserialize(&bytes).map_err(|e| {
+                GratError::CacheDeserializationError {
+                    key: key.to_owned(),
+                    reason: e.to_string(),
+                }
+            })?,
+        };
+
+        Ok(Some(value))
+    }
+
+    /// Synchronous `put` used by [`AsyncCache`] via `spawn_blocking`.
+    pub fn put_sync<V>(&self, key: &str, value: &V) -> GratResult<()>
+    where
+        V: serde::Serialize,
+    {
+        let encoded = bincode::serialize(value).map_err(|e| GratError::CacheSerializationError {
+            key: key.to_owned(),
+            reason: e.to_string(),
+        })?;
+
+        let entry = TtlEntry {
+            value: encoded,
+            expires_at: None,
+        };
+        let entry_bytes = bincode::serialize(&entry).map_err(|e| GratError::CacheSerializationError {
+            key: key.to_owned(),
+            reason: e.to_string(),
+        })?;
+
+        self.db
+            .insert(key.as_bytes(), entry_bytes)
+            .map_err(|e| GratError::CacheError(format!("Sled insert failed: {e}")))?;
+        Ok(())
+    }
+
+
         self.db
             .flush_async()
             .await
@@ -550,31 +612,226 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_ttl_entry_expires_and_is_not_returned() {
+    async fn test_ttl_expired_entry_is_not_returned_on_get() {
+        // Uses a past expiry timestamp written directly into sled to avoid
+        // sleeping in the test. We serialize a TtlEntry whose expires_at is
+        // already in the past, then verify that get() returns None.
         let dir = tempfile::tempdir().unwrap();
         let cache = DiskCache::new(dir.path()).unwrap();
 
-        // Write an entry with a 1-second TTL.
-        cache
-            .put_with_ttl("ephemeral", &42u32, None, Some(Duration::from_secs(1)))
-            .await
-            .unwrap();
+        // Build an already-expired TtlEntry manually.
+        let inner = bincode::serialize(&42u32).unwrap();
+        let expired_entry = TtlEntry {
+            value: inner,
+            expires_at: Some(1), // Unix second 1 — far in the past
+        };
+        let entry_bytes = bincode::serialize(&expired_entry).unwrap();
+        cache.db.insert("stale_key", entry_bytes).unwrap();
 
-        // Immediately it should be present.
+        // get() must treat the entry as expired and return None.
+        let result: Option<u32> = cache.get("stale_key", None).await.unwrap();
+        assert_eq!(result, None, "expired entry must not be returned");
+    }
+
+    #[tokio::test]
+    async fn test_ttl_entry_still_live_is_returned() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DiskCache::new(dir.path()).unwrap();
+
+        // Write an entry that expires very far in the future.
+        let inner = bincode::serialize(&123u32).unwrap();
+        let future_ts = DiskCache::now_secs().saturating_add(10_000);
+        let live_entry = TtlEntry {
+            value: inner,
+            expires_at: Some(future_ts),
+        };
+        let entry_bytes = bincode::serialize(&live_entry).unwrap();
+        cache.db.insert("live_key", entry_bytes).unwrap();
+
+        let result: Option<u32> = cache.get("live_key", None).await.unwrap();
+        assert_eq!(result, Some(123), "live entry must still be returned");
+    }
+
+    #[tokio::test]
+    async fn test_no_ttl_entry_is_always_returned() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DiskCache::new(dir.path()).unwrap();
+
+        cache.put_with_ttl("permanent", &99u32, None, None).await.unwrap();
+        let result: Option<u32> = cache.get("permanent", None).await.unwrap();
+        assert_eq!(result, Some(99), "entry with no TTL must always be returned");
+    }
+
+    #[tokio::test]
+    async fn test_sweep_expired_removes_only_expired_entries_no_sleep() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DiskCache::new(dir.path()).unwrap();
+
+        // Insert one already-expired entry and one live entry directly.
+        let inner_expired = bincode::serialize(&1u32).unwrap();
+        let entry_expired = TtlEntry { value: inner_expired, expires_at: Some(1) };
+        cache.db.insert("expired", bincode::serialize(&entry_expired).unwrap()).unwrap();
+
+        let inner_live = bincode::serialize(&2u32).unwrap();
+        let future_ts = DiskCache::now_secs().saturating_add(10_000);
+        let entry_live = TtlEntry { value: inner_live, expires_at: Some(future_ts) };
+        cache.db.insert("live", bincode::serialize(&entry_live).unwrap()).unwrap();
+
+        let evicted = cache.sweep_expired().await.unwrap();
+        assert_eq!(evicted, 1, "only the expired entry should be swept");
+
+        assert_eq!(cache.get::<u32>("expired", None).await.unwrap(), None);
+        assert_eq!(cache.get::<u32>("live", None).await.unwrap(), Some(2));
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_independent_keys_no_corruption() {
+        // Multiple tasks each write and immediately read their own key.
+        // All reads must succeed with the correct value.
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DiskCache::new(dir.path()).unwrap();
+
+        let tasks = 50u32;
+        let mut handles = Vec::new();
+
+        for i in 0..tasks {
+            let c = cache.clone();
+            handles.push(tokio::spawn(async move {
+                let key = format!("concurrent-key-{i}");
+                c.put(&key, &i, None).await.unwrap();
+                let fetched: Option<u32> = c.get(&key, None).await.unwrap();
+                assert_eq!(fetched, Some(i), "key {key} returned wrong value");
+            }));
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_mixed_readers_and_writers_no_corruption() {
+        // Writers update a shared key while readers observe it.
+        // The read value must always be a value that was written (not garbage).
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DiskCache::new(dir.path()).unwrap();
+
+        // Pre-seed the shared key.
+        cache.put("shared", &0u32, None).await.unwrap();
+
+        let mut handles = Vec::new();
+
+        // 10 writers
+        for i in 1u32..=10 {
+            let c = cache.clone();
+            handles.push(tokio::spawn(async move {
+                c.put("shared", &i, None).await.unwrap();
+            }));
+        }
+
+        // 10 concurrent readers
+        for _ in 0..10 {
+            let c = cache.clone();
+            handles.push(tokio::spawn(async move {
+                // May observe any value written so far — just must not error.
+                let result: Option<u32> = c.get("shared", None).await.unwrap();
+                assert!(result.is_some(), "shared key must always be readable");
+            }));
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_single_flight_behavior_via_get_or_compute() {
+        // AsyncCache::get_or_compute must compute the value only once and serve
+        // subsequent calls from cache without calling the factory again.
+        use super::super::async_cache::AsyncCache;
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc;
+
+        let dir = tempfile::tempdir().unwrap();
+        let disk = DiskCache::new(dir.path()).unwrap();
+        let async_cache = AsyncCache::new(disk);
+
+        let compute_count = Arc::new(AtomicU32::new(0));
+
+        for _ in 0..5 {
+            let count = Arc::clone(&compute_count);
+            let val = async_cache
+                .get_or_compute("singleton", || async move {
+                    count.fetch_add(1, Ordering::Relaxed);
+                    Ok("computed".to_string())
+                })
+                .await
+                .unwrap();
+            assert_eq!(val, "computed");
+        }
+
+        // The factory must have been invoked exactly once.
         assert_eq!(
-            cache.get::<u32>("ephemeral", None).await.unwrap(),
-            Some(42)
-        );
-
-        // Wait for it to expire.
-        tokio::time::sleep(Duration::from_secs(2)).await;
-
-        // After expiry, get should return None (expired entry evicted lazily).
-        assert_eq!(
-            cache.get::<u32>("ephemeral", None).await.unwrap(),
-            None
+            compute_count.load(Ordering::Relaxed),
+            1,
+            "compute function must be called only once (single-flight)"
         );
     }
+
+    #[tokio::test]
+    async fn test_async_cache_metrics_track_hits_and_misses() {
+        use super::super::async_cache::AsyncCache;
+        use std::sync::atomic::Ordering;
+
+        let dir = tempfile::tempdir().unwrap();
+        let disk = DiskCache::new(dir.path()).unwrap();
+        let async_cache = AsyncCache::new(disk);
+
+        // Initial state: miss
+        let _: Option<String> = async_cache.get("absent").await.unwrap();
+        assert_eq!(async_cache.metrics().total_misses.load(Ordering::Relaxed), 1);
+        assert_eq!(async_cache.metrics().total_hits.load(Ordering::Relaxed), 0);
+
+        // Write then read: hit
+        async_cache.put("key", "value".to_string()).await.unwrap();
+        let _: Option<String> = async_cache.get("key").await.unwrap();
+        assert_eq!(async_cache.metrics().total_hits.load(Ordering::Relaxed), 1);
+
+        // Durations must have been recorded
+        assert!(async_cache.metrics().total_read_duration_micros.load(Ordering::Relaxed) > 0);
+        assert!(async_cache.metrics().total_write_duration_micros.load(Ordering::Relaxed) > 0);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_ttl_writes_no_data_loss() {
+        // Multiple tasks write TTL-bearing entries for distinct keys; every
+        // key must be readable immediately after all tasks complete.
+        let dir = tempfile::tempdir().unwrap();
+        let cache = DiskCache::new(dir.path()).unwrap();
+        let n = 30u32;
+
+        let mut handles = Vec::new();
+        for i in 0..n {
+            let c = cache.clone();
+            handles.push(tokio::spawn(async move {
+                let key = format!("ttl-key-{i}");
+                c.put_with_ttl(&key, &i, None, Some(std::time::Duration::from_secs(60)))
+                    .await
+                    .unwrap();
+            }));
+        }
+        for h in handles {
+            h.await.unwrap();
+        }
+
+        // All entries must still be present (they won't expire for 60 s).
+        for i in 0..n {
+            let key = format!("ttl-key-{i}");
+            let val: Option<u32> = cache.get(&key, None).await.unwrap();
+            assert_eq!(val, Some(i), "TTL entry {key} was lost under concurrent writes");
+        }
+    }
+
 
     #[tokio::test]
     async fn test_ttl_none_means_no_expiration() {
