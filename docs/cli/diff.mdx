@@ -1,20 +1,37 @@
 ---
 title: "grat diff"
 sidebarTitle: "diff"
-description: "View ledger state changes before and after transaction execution."
+description: "Compare ledger state changes or transaction envelopes."
 icon: "square-plus"
 ---
 
-The `diff` command shows you exactly what changed in the ledger as a result of the transaction.
+Use `state` to compute a transaction's ledger changes through replay, or `tx` to compare two transaction envelopes. Hash inputs require access to the selected network's RPC endpoint. You can compare two base64 envelopes directly.
 
 ## Usage
 
 ```bash
-grat diff <TX_HASH> [FLAGS]
+grat diff state <TX_HASH> [OPTIONS]
+grat diff tx <TX_A> <TX_B> [OPTIONS]
 ```
 
-## Features
+| Argument or option | Default | Behavior |
+| --- | --- | --- |
+| `<TX_HASH>` | Required for `state` | Transaction hash to replay. |
+| `<TX_A>`, `<TX_B>` | Both required for `tx` | Base64 transaction envelope XDR or 64-character hex hash. |
+| `--json` | Off | Emit JSON from `tx`. |
+| `--output <FORMAT>` | `human` | Choose output format. For `tx`, `json` emits JSON and the other values emit a human-readable summary. |
+| `--save <PATH>` | Omitted | Write JSON to a file in either mode. |
+| `-n, --network <NETWORK>` | `testnet` | Network for transaction lookups. |
+| `--rpc-url <URL>` | Selected network's RPC URL | Override the RPC endpoint. |
+| `--no-cache` | Off | Bypass the local cache for network data. |
 
-- **Side-by-Side Comparison**: Human-readable view of state changes.
-- **Decoded Values**: Ledger entry values are decoded into field names based on the contract metadata.
-- **XDR View**: Toggle to see the raw XDR diff for low-level verification.
+## Examples
+
+Set the variables to transaction hashes on the selected network.
+
+```bash
+grat diff state "$TX_HASH" --output json --save state-diff.json
+grat diff tx "$TX_A" "$TX_B" --json
+```
+
+See the [global CLI options](/cli-reference#global-flags) for shared defaults. Use `--help` (`-h`) for command help or `--version` (`-V`) for the CLI version.

@@ -1,20 +1,24 @@
 ---
 title: "grat db update"
 sidebarTitle: "db update"
-description: "Sync the local Error Taxonomy Database with the latest version."
+description: "Load the local error taxonomy and report its entry count."
 icon: "arrows-rotate"
 ---
 
-Ensure your diagnostics are accurate by keeping your local database up to date.
+Load the latest taxonomy available to the local loader and report the number of error definitions. The command's download progress messages currently simulate a refresh. Automatic taxonomy update checks run separately at CLI startup and can be disabled with `--offline`.
 
 ## Usage
 
 ```bash
-grat db update
+grat db update [OPTIONS]
 ```
 
-## What it updates
+This subcommand has no positional arguments or command-specific options. The global `--output` option defaults to `human`. Use `json` for a status object with an entry count. The accepted `compact` and `short` formats follow the human output path here.
 
-- **Error Categories**: Maps for new host errors introduced in protocol upgrades.
-- **Suggested Fixes**: Community-contributed solutions for common failures.
-- **WASM Spec Mappings**: Logic for parsing latest `contractspecv0` versions.
+## Example
+
+```bash
+grat db update --output json
+```
+
+See the [global CLI options](/cli-reference#global-flags) for shared defaults. Use `--help` (`-h`) for command help or `--version` (`-V`) for the CLI version.

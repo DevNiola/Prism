@@ -1,22 +1,44 @@
 ---
 title: "grat whatif"
 sidebarTitle: "whatif"
-description: "Re-simulate with modified inputs and compare outcomes."
+description: "Load and inspect hypothetical transaction patches."
 icon: "question"
 ---
 
-The `whatif` command allows for non-destructive experimentation with failed transactions.
+Load a hypothetical transaction's patch file and report the patch count. The current CLI implementation reads and validates the patches and can save the session metadata. Simulation is handled separately by the core debugger.
 
 ## Usage
 
 ```bash
-grat whatif <TX_HASH> --modify <PATCH_FILE>
+grat whatif <TX_HASH> [OPTIONS]
 ```
 
-## Patch Examples
+| Argument or option | Default | Behavior |
+| --- | --- | --- |
+| `<TX_HASH>` | Required | Transaction hash to associate with the session. |
+| `--modify <PATH>` | Omitted | Load a JSON array of patches from a file. |
+| `--output <FORMAT>` | `human` | Set the status output format. |
+| `--save <PATH>` | Omitted | Write session metadata and patches as JSON. |
 
-You can modify:
+## Example
 
-- **Arguments**: Change the values passed to the contract.
-- **Ledger Entries**: Simulate a different starting state.
-- **Resource Limits**: See if a higher budget would have fixed the failure.
+Save this array as `patches.json`. Patch types are `ModifyArgument`, `ModifyLedgerEntry`, `ModifyResourceLimits`, and `ModifyAuth`.
+
+```json
+[
+  {
+    "ModifyResourceLimits": {
+      "cpu_limit": 100000000,
+      "memory_limit": null
+    }
+  }
+]
+```
+
+Set `TX_HASH` to the hash you want to associate with the session, then run:
+
+```bash
+grat whatif "$TX_HASH" --modify patches.json --output json --save whatif.json
+```
+
+See the [global CLI options](/cli-reference#global-flags) for shared defaults. Use `--help` (`-h`) for command help or `--version` (`-V`) for the CLI version.

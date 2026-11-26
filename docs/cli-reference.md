@@ -23,7 +23,7 @@ grat --version
 
 ## Global Flags
 
-These flags apply to every subcommand and must be placed **before** the subcommand name.
+Global flags are accepted before or after the subcommand name. Individual commands use the options relevant to their operation.
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
@@ -257,10 +257,10 @@ Resource Profile
 
 ### `diff`
 
-Computes and displays the ledger state diff for a transaction — what storage entries were created, updated, or deleted.
+Use `diff state` for ledger changes and `diff tx <TX_A> <TX_B>` to compare transaction envelopes. The [diff command page](cli/diff.mdx) documents both modes.
 
 ```
-grat diff <TX_HASH> [FLAGS]
+grat diff state <TX_HASH> [FLAGS]
 ```
 
 **Arguments:**
@@ -273,13 +273,13 @@ grat diff <TX_HASH> [FLAGS]
 
 ```bash
 # Show state changes for a transaction
-grat diff <TX_HASH>
+grat diff state <TX_HASH>
 
 # Output diff as JSON
-grat --output json diff <TX_HASH>
+grat --output json diff state <TX_HASH>
 
 # Save diff to file
-grat --save state_diff.json diff <TX_HASH>
+grat --save state_diff.json diff state <TX_HASH>
 ```
 
 **Sample Output (human):**
@@ -356,50 +356,10 @@ When launched with `--interactive`, the TUI debugger opens in your terminal. It 
 
 ### `whatif`
 
-Re-simulates a transaction with optional modifications to test hypothetical scenarios ("what if the input was different?").
-
-```
-grat whatif <TX_HASH> [FLAGS]
-```
-
-**Arguments:**
-
-| Argument | Description |
-|----------|-------------|
-| `TX_HASH` | The transaction hash to re-simulate |
-
-**Flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--modify <PATH>` | Path to a JSON file containing patches to apply before re-simulation |
-
-**Patch File Format:**
-
-```json
-[
-  {
-    "path": "args.amount",
-    "value": 500
-  },
-  {
-    "path": "auth.source_account",
-    "value": "GABC...XYZ"
-  }
-]
-```
-
-**Examples:**
+Loads a JSON array of hypothetical patches and reports the patch count. Use `--save` to save the session and see the [whatif command page](cli/whatif.mdx) for the patch format.
 
 ```bash
-# Inspect the transaction without modifications
-grat whatif <TX_HASH>
-
-# Re-simulate with a patch file
-grat whatif <TX_HASH> --modify patches.json
-
-# Save the what-if result
-grat --save whatif_result.json whatif <TX_HASH> --modify patches.json
+grat whatif "$TX_HASH" --modify patches.json --save whatif.json
 ```
 
 ---
@@ -448,7 +408,7 @@ Manages the local taxonomy database of Soroban error definitions.
 
 #### `db update`
 
-Downloads the latest version of the taxonomy database from the official release channel.
+Loads the latest taxonomy available locally and reports its entry count. See the [db update command page](cli/db-update.mdx) for how automatic updates are handled.
 
 ```
 grat db update [FLAGS]
@@ -460,7 +420,7 @@ grat db update [FLAGS]
 # Update the taxonomy database
 grat db update
 
-# Update and confirm via JSON
+# Report the entry count as JSON
 grat --output json db update
 ```
 
@@ -833,9 +793,9 @@ grat batch <HASH> <HASH> ...             # Decode multiple transactions
 grat inspect <TX_HASH> [--op-index N]   # Inspect a specific operation
 grat trace <TX_HASH>                     # Full execution timeline
 grat profile <TX_HASH>                   # Resource usage breakdown
-grat diff <TX_HASH>                      # Ledger state diff
+grat diff state <TX_HASH>                      # Ledger state diff
 grat replay <TX_HASH> -i                 # Interactive TUI debugger
-grat whatif <TX_HASH> [--modify f.json] # Re-simulate with changes
+grat whatif <TX_HASH> [--modify f.json] # Inspect hypothetical patches
 grat export <TX_HASH>                    # Export as Rust test case
 grat search-error <QUERY>               # Search error taxonomy
 grat db update                           # Update taxonomy database

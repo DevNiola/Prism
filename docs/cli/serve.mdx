@@ -5,16 +5,28 @@ description: "Start the WebSocket server for real-time trace streaming."
 icon: "server"
 ---
 
-The `serve` command provides the backend for the Grat Web App and other remote interfaces.
+Start the CLI's local HTTP and WebSocket server. Keep this process running while clients connect to the dashboard, `/api/trace/:tx_hash`, or `/ws`. Trace requests need access to the selected network's RPC endpoint.
 
 ## Usage
 
 ```bash
-grat serve --port 8080 --network mainnet
+grat serve [OPTIONS]
 ```
 
-## Features
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `-p, --port <PORT>` | `8080` | TCP port to listen on. |
+| `--host <HOST>` | `127.0.0.1` | IP address to bind to. |
+| `-n, --network <NETWORK>` | `testnet` | Network to use for traces. |
+| `--rpc-url <URL>` | Selected network's RPC URL | Override the RPC endpoint. |
+| `--no-cache` | Off | Bypass the local cache for network data. |
 
-- **Real-time Streaming**: Streams Tier 2 execution nodes to clients.
-- **WebSocket API**: Reusable by custom dashboards and CI monitors.
-- **Concurrent Traces**: Handles multiple trace requests simultaneously.
+## Example
+
+```bash
+grat serve --host 127.0.0.1 --port 9090 --network testnet
+```
+
+Open `http://127.0.0.1:9090` in your browser or connect your WebSocket client to `ws://127.0.0.1:9090/ws`.
+
+See the [global CLI options](/cli-reference#global-flags) for shared defaults. Use `--help` (`-h`) for command help or `--version` (`-V`) for the CLI version.
