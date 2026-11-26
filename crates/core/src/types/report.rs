@@ -188,6 +188,13 @@ pub struct DiagnosticReport {
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub nested_reports: Vec<DiagnosticReport>,
 
+    /// Soroban protocol version that was active when this report was produced.
+    ///
+    /// Populated from [`grat_core::SOROBAN_PROTOCOL_VERSION`] at decode time
+    /// so that reports can be compared or reproduced across protocol upgrades.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub protocol_version: Option<u32>,
+
     pub learn_more: String,
 }
 
@@ -217,6 +224,7 @@ impl DiagnosticReport {
             is_first_failure: None,
             call_depth: None,
             nested_reports: Vec::new(),
+            protocol_version: None,
             learn_more: "https://developers.stellar.org/docs/learn/smart-contracts/errors"
                 .to_string(),
         }

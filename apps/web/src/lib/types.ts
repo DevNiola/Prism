@@ -13,6 +13,8 @@ export interface DiagnosticReport {
   operation_index?: number;
   operation_count?: number;
   is_first_failure?: boolean;
+  /** Soroban protocol version active when this report was produced. */
+  protocol_version?: number;
 }
 
 export interface RootCause {

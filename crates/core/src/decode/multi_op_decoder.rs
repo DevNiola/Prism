@@ -715,6 +715,7 @@ fn build_operation_report(
     report.operation_index = Some(index);
     report.operation_count = Some(count);
     report.is_first_failure = Some(is_first_failure);
+    report.protocol_version = Some(crate::SOROBAN_PROTOCOL_VERSION);
     report.detailed_explanation = operation_explanation(
         index,
         count,
