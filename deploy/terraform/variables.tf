@@ -10,6 +10,18 @@ variable "name" {
   default     = "prism"
 }
 
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging)."
+  type        = string
+  default     = "production"
+}
+
+variable "owner" {
+  description = "Team or individual responsible for these resources, used for cost attribution."
+  type        = string
+  default     = "platform"
+}
+
 variable "domain_name" {
   description = "Fully qualified hostname served by the load balancer, such as prism.example.com."
   type        = string
