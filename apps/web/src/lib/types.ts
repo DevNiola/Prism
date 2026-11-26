@@ -75,3 +75,10 @@ export interface DiagnosticEventEntry {
 }
 
 export type Network = "mainnet" | "testnet" | "futurenet" | "custom";
+
+declare const txHashBrand: unique symbol;
+export type TxHash = string & { readonly [txHashBrand]: true };
+
+export function isTxHash(value: string): value is TxHash {
+  return value.length === 64 && /^[0-9a-f]{64}$/.test(value);
+}
