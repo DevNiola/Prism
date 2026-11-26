@@ -10,18 +10,80 @@ By participating, you agree to follow our [Code of Conduct](./CODE_OF_CONDUCT.md
 
 1. Fork the repository and create your feature branch.
 2. Contributions to the **error taxonomy database** are highly encouraged.
-3. For code changes, ensure all tests pass (`cargo test`).
+3. For code changes, run the relevant checks under Testing.
 4. Document any new features or API changes.
 5. Open a Pull Request with a clear description of your work.
 
-## Development Setup
+## Development setup
 
-Please refer to the comprehensive [Getting Started Guide](./docs/getting-started.md) for full instructions on setting up:
-- The Rust toolchain (stable, wasm32-unknown-unknown, rustfmt, clippy)
-- Node.js and pnpm monorepo dependencies
-- Environment variables for `apps/server` and `apps/web`
-- Running all crates, API server, and web frontend locally
-- Troubleshooting common setup hurdles
+Run the commands from the repository root unless indicated. Install Rust through rustup, Node.js 24, pnpm 9.15.9, and Docker with the Compose plugin. See the [Quickstart](./docs/quickstart.mdx) and [source installation guide](./docs/installation.mdx) for the CLI and source-build prerequisites.
+
+### Build the workspace
+
+```sh
+rustup toolchain install stable --component rustfmt --component clippy --target wasm32-unknown-unknown
+npm install --global pnpm@9.15.9
+pnpm install --no-frozen-lockfile
+cargo build --workspace --all-features
+cargo run --bin grat -- --help
+cargo install wasm-pack --locked
+wasm-pack build crates/wasm --target web --release
+pnpm run build:server
+pnpm run build:web
+pnpm run build:vscode
+```
+
+The Rust toolchain settings come from `rust-toolchain.toml`. The WASM package is written to `crates/wasm/pkg`. The `build:web` script generates the web taxonomy before building Next.js. Use `--no-frozen-lockfile` to install against the current manifests when they differ from the checked-in lockfile.
+
+### Run the local stack
+
+Build and start Redis, the API server, and the frontend with Compose.
+
+```sh
+docker compose up --build
+```
+
+The frontend is at `http://localhost:3000`, the API health endpoint is at `http://localhost:3001/health`, and Redis is on port `6379`. Run `docker compose down` to stop the stack while keeping the Redis volume.
+
+For hot reload and API requests that invoke the local `grat` binary, start just Redis in Compose. Run the server and frontend in separate terminals from the repository root. Stop the full Compose stack first if it is running.
+
+```sh
+docker compose up -d redis
+REDIS_URL=redis://127.0.0.1:6379 GRAT_BINARY="$PWD/target/debug/grat" pnpm run dev:server
+```
+
+```sh
+pnpm run build:taxonomy
+NEXT_PUBLIC_API_URL=http://localhost:3001 pnpm run dev:web
+```
+
+### Testing
+
+The Cargo workspace command runs the Rust unit, integration, and documentation suites. Run the remaining commands for TypeScript, browser WASM coverage, taxonomy validation, and benchmarks.
+
+| Check | Command |
+| --- | --- |
+| Full Rust suite | `cargo test --workspace --all-features` |
+| Rust unit tests for library and binary targets | `cargo test --workspace --all-features --lib --bins` |
+| Rust integration tests | `cargo test --workspace --all-features --tests` |
+| Core library doctests | `cargo test -p grat-core --doc` |
+| Server unit and API integration tests | `pnpm --filter grat-server exec vitest run` |
+| Web unit tests | `pnpm --filter grat-web exec vitest run` |
+| Browser end-to-end tests | `pnpm --filter grat-web exec playwright install chromium`, then `pnpm --filter grat-web exec playwright test` |
+| WASM browser tests (requires Chrome or Chromium) | `wasm-pack test --headless --chrome crates/wasm` |
+| Taxonomy lint | `bash scripts/lint_taxonomy.sh` |
+| Core benchmarks | `cargo bench -p grat-core` |
+
+The web test configs require development dependencies that are missing from the
+current `grat-web` manifest. Install them in your local checkout before running
+the web unit and end-to-end commands.
+
+```sh
+pnpm --filter grat-web add -D vitest @vitejs/plugin-react jsdom @playwright/test
+```
+
+This updates the local web manifest and lockfile. On Linux, use
+`playwright install --with-deps chromium` if Chromium system libraries are needed.
 
 ### Install Git Hooks
 
