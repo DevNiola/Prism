@@ -17,7 +17,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Generate dependency lockfile
         run: cargo generate-lockfile
@@ -68,7 +68,7 @@ print(json.dumps(sarif))
           - apps/server
           - extensions/vscode
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -138,7 +138,7 @@ print(f'Generated pnpm-audit-{safe}.sarif with {len(results)} finding(s)')
           - javascript-typescript
           - rust
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
@@ -159,7 +159,7 @@ print(f'Generated pnpm-audit-{safe}.sarif with {len(results)} finding(s)')
             dockerfile: apps/web/Dockerfile
             context: .
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build container image
         if: hashFiles(matrix.dockerfile) != ''
         run: |
