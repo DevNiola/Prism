@@ -8,6 +8,7 @@ import { cacheRoutes } from "./routes/cache";
 import { config, assertValidConfig } from "./config";
 import { SessionStore } from "./session-store";
 import { shutdownWorker } from "./workers/replay.worker";
+import { registerErrorHandler } from "./middleware/error-handler";
 
 // Validate configuration on startup
 assertValidConfig(config);
@@ -82,6 +83,8 @@ server.addHook("onClose", async () => {
 // ---------------------------------------------------------------------------
 // CORS Middleware
 // ---------------------------------------------------------------------------
+registerErrorHandler(server);
+
 server.register(healthRoutes);
 server.register(replayRoutes, { prefix: "/api" });
 server.register(sessionRoutes, { prefix: "/api" });

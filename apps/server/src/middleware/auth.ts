@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { createHmac } from "node:crypto";
 import { config } from "../config";
+import { errorEnvelope } from "./error-handler";
 
 export interface SessionJwtPayload {
   sessionId: string;
@@ -120,29 +121,29 @@ export async function sessionAuthMiddleware(
   }
 
   if (!token) {
-    return reply.status(401).send({
-      statusCode: 401,
-      error: "Unauthorized",
-      message: "Missing or invalid Authorization header. A valid session JWT Bearer token is required.",
-    });
+    return reply.status(401).send(
+      errorEnvelope(
+        "UNAUTHORIZED",
+        "Missing or invalid Authorization header. A valid session JWT Bearer token is required.",
+      ),
+    );
   }
 
   const payload = verifySessionToken(token, config.jwtSecret);
   if (!payload) {
-    return reply.status(401).send({
-      statusCode: 401,
-      error: "Unauthorized",
-      message: "Invalid or expired session token.",
-    });
+    return reply.status(401).send(
+      errorEnvelope("UNAUTHORIZED", "Invalid or expired session token."),
+    );
   }
 
   const targetSessionId = request.params?.sessionId;
   if (targetSessionId && payload.sessionId !== targetSessionId) {
-    return reply.status(403).send({
-      statusCode: 403,
-      error: "Forbidden",
-      message: "Session token does not grant access to this session ID.",
-    });
+    return reply.status(403).send(
+      errorEnvelope(
+        "FORBIDDEN",
+        "Session token does not grant access to this session ID.",
+      ),
+    );
   }
 
   (request as any).sessionAuth = payload;

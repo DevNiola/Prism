@@ -1,8 +1,26 @@
 import type { FastifyInstance } from "fastify";
 import { replayRateLimiter } from "../middleware/rate-limiter";
+import { errorEnvelope } from "../middleware/error-handler";
+import { replayPostBodySchema } from "../validators/schemas";
 
 export async function replayRoutes(app: FastifyInstance) {
   app.post("/replay", { preHandler: [replayRateLimiter] }, async (request, reply) => {
+    const parsed = replayPostBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send(
+        errorEnvelope(
+          "VALIDATION_ERROR",
+          "Invalid replay request payload",
+          parsed.error.errors,
+        ),
+      );
+    }
+
+    // parsed.data contains the validated and defaulted fields
+    const { txHash, network } = parsed.data;
+    void txHash;
+    void network;
+
     return { status: "queued" };
   });
 

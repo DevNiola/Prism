@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { config } from "../config";
 import { incrBy, setExpiry } from "../redis";
+import { errorEnvelope } from "./error-handler";
 
 /**
  * Creates a rate limiting preHandler middleware backed by Redis / in-memory store.
@@ -34,11 +35,12 @@ export function createRateLimiter(options?: {
 
       if (current > limit) {
         reply.header("Retry-After", windowSec);
-        return reply.status(429).send({
-          statusCode: 429,
-          error: "Too Many Requests",
-          message: `Rate limit of ${limit} requests per ${windowSec}s exceeded for this IP. Please try again later.`,
-        });
+        return reply.status(429).send(
+          errorEnvelope(
+            "RATE_LIMITED",
+            `Rate limit of ${limit} requests per ${windowSec}s exceeded for this IP. Please try again later.`,
+          ),
+        );
       }
     } catch (err) {
       // Non-fatal if rate limiter encounters an error
