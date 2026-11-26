@@ -62,3 +62,6 @@ jobs:
 
       - name: Run tests with all features
         run: cargo test --workspace --all-features
+
+      - name: Check taxonomy protocol-version drift
+        run: scripts/check_taxonomy_protocol_drift.sh
