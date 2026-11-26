@@ -9,6 +9,8 @@ type ServerConfig = {
   sorobanRpcUrl: string;
   gratBinaryPath: string;
   logLevel: string;
+  /** How long (seconds) a session key survives in Redis without activity. */
+  sessionTtl: number;
   ai: {
     apiKey: string;
     apiBaseUrl: string;
@@ -173,6 +175,7 @@ export const config: ServerConfig = {
   },
 
   logLevel: stringValue("LOG_LEVEL", "info"),
+  sessionTtl: numberValue("SESSION_TTL", 3600, { integer: true, min: 60 }),
   cache: {
     decodeTtl: numberValue("CACHE_DECODE_TTL", 300, { integer: true, min: 1 }),
     profileTtl: numberValue("CACHE_PROFILE_TTL", 3_600, { integer: true, min: 1 }),

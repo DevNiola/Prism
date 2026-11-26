@@ -197,6 +197,44 @@ export async function sessionRoutes(app: FastifyInstance) {
   );
 
   // ------------------------------------------------------------------
+  // POST /api/session/:sessionId/refresh
+  // Refresh the session TTL on any client activity (e.g. frontend tab
+  // becomes visible, user interacts with the UI).
+  // Requires: Authorization: Bearer <token>
+  // ------------------------------------------------------------------
+  app.post<{
+    Params: { sessionId: string };
+  }>(
+    "/session/:sessionId/refresh",
+    { schema: sessionIdParamSchema },
+    async (request, reply) => {
+      const { sessionId } = request.params;
+
+      const token = extractBearer(request.headers.authorization);
+      if (!token) {
+        return reply
+          .status(401)
+          .send({ error: "Missing Authorization header" });
+      }
+
+      const valid = await store.verifyToken(sessionId, token);
+      if (!valid) {
+        return reply.status(403).send({ error: "Invalid or expired token" });
+      }
+
+      const touched = await store.touch(sessionId);
+      if (!touched) {
+        return reply.status(404).send({
+          status: "not_found",
+          message: `Session '${sessionId}' does not exist or has expired.`,
+        });
+      }
+
+      return reply.send({ status: "ok", refreshedAt: new Date().toISOString() });
+    },
+  );
+
+  // ------------------------------------------------------------------
   // POST /api/session/:sessionId/heartbeat
   // CLI sends periodic pings to prevent session expiry while a long-
   // running trace is still in progress.

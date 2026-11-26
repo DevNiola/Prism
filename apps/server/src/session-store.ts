@@ -1,8 +1,14 @@
 import Redis from "ioredis";
 import { randomBytes } from "crypto";
+import { config } from "./config";
 
-/** How long (seconds) a session stays alive in Redis without a heartbeat. */
-const SESSION_TTL_SECONDS = 3600; // 1 hour
+/**
+ * How long (seconds) a session stays alive in Redis without a heartbeat.
+ * Reads SESSION_TTL from config (falls back to cache.decodeTtl, then 3600s).
+ */
+function getSessionTtl(): number {
+  return (config as any).sessionTtl ?? config.cache.decodeTtl ?? 3600;
+}
 
 export interface SessionMeta {
   /** Opaque unique identifier for this debug session. */
@@ -54,8 +60,18 @@ function redisKey(sessionId: string): string {
   return `grat:session:${sessionId}`;
 }
 
+/** Callback type invoked when a session expires while a subscriber is watching it. */
+export type SessionExpiredCallback = (sessionId: string) => void;
+
 export class SessionStore {
   private redis: Redis;
+  /**
+   * Subscriber client dedicated to keyspace-expiry notifications.
+   * A second connection is required because a client in subscribe mode
+   * cannot issue regular commands.
+   */
+  private subscriber: Redis | null = null;
+  private expiryCallbacks = new Set<SessionExpiredCallback>();
 
   constructor(redisUrl: string) {
     this.redis = new Redis(redisUrl, {
@@ -70,8 +86,73 @@ export class SessionStore {
   }
 
   async disconnect(): Promise<void> {
+    if (this.subscriber) {
+      await this.subscriber.quit();
+      this.subscriber = null;
+    }
     await this.redis.quit();
   }
+
+  // ---------------------------------------------------------------------------
+  // Expiry notifications
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Register a callback that fires whenever a `grat:session:*` key expires in
+   * Redis.  Idempotent: calling it multiple times with the same function is a
+   * no-op.
+   *
+   * Under the hood this enables keyspace notifications on the first call and
+   * opens a dedicated subscriber connection.
+   */
+  onExpired(cb: SessionExpiredCallback): void {
+    this.expiryCallbacks.add(cb);
+    this.ensureExpirySubscriber();
+  }
+
+  /** Remove a previously registered expiry callback. */
+  offExpired(cb: SessionExpiredCallback): void {
+    this.expiryCallbacks.delete(cb);
+  }
+
+  private ensureExpirySubscriber(): void {
+    if (this.subscriber) return;
+
+    // Reuse the same Redis URL by cloning the connection options.
+    this.subscriber = this.redis.duplicate();
+
+    this.subscriber.on("ready", async () => {
+      // Enable generic keyspace events (Ex = Expired events for every key).
+      // This is a best-effort CONFIG SET; if the Redis instance already has
+      // notify-keyspace-events configured the command is harmless.
+      try {
+        await this.redis.config("SET", "notify-keyspace-events", "Ex");
+      } catch {
+        // Some hosted Redis instances (e.g. Upstash) forbid CONFIG SET.
+        // Silently continue – expiry notifications simply won't fire.
+      }
+
+      // Subscribe to the keyevent channel for "expired" events on db 0.
+      await this.subscriber!.subscribe("__keyevent@0__:expired");
+    });
+
+    this.subscriber.on("message", (_channel: string, key: string) => {
+      if (!key.startsWith("grat:session:")) return;
+      const sessionId = key.slice("grat:session:".length);
+      for (const cb of this.expiryCallbacks) {
+        try {
+          cb(sessionId);
+        } catch {
+          // Swallow individual callback errors so one bad handler cannot
+          // prevent other handlers from running.
+        }
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // CRUD
+  // ---------------------------------------------------------------------------
 
   /**
    * Create a brand-new session and persist it in Redis.
@@ -101,7 +182,7 @@ export class SessionStore {
       redisKey(sessionId),
       JSON.stringify(meta),
       "EX",
-      SESSION_TTL_SECONDS,
+      getSessionTtl(),
     );
 
     return meta;
@@ -135,7 +216,7 @@ export class SessionStore {
       redisKey(sessionId),
       JSON.stringify(meta),
       "EX",
-      SESSION_TTL_SECONDS,
+      getSessionTtl(),
     );
     return true;
   }
@@ -146,7 +227,7 @@ export class SessionStore {
   async touch(sessionId: string): Promise<boolean> {
     const result = await this.redis.expire(
       redisKey(sessionId),
-      SESSION_TTL_SECONDS,
+      getSessionTtl(),
     );
     return result === 1;
   }

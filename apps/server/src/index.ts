@@ -8,6 +8,8 @@ import { cacheRoutes } from "./routes/cache";
 import { config, assertValidConfig } from "./config";
 import { SessionStore } from "./session-store";
 import { shutdownWorker } from "./workers/replay.worker";
+import { REDACTED_KEYS } from "./logger";
+import { createTraceStream } from "./ws/trace-stream";
 
 // Validate configuration on startup
 assertValidConfig(config);
@@ -26,10 +28,18 @@ const server = Fastify({
     level: config.logLevel || "info",
     serializers: {
       req(req) {
+        // Redact sensitive request headers before they reach the log sink.
+        const safeHeaders: Record<string, string> = {};
+        for (const [k, v] of Object.entries(req.headers ?? {})) {
+          safeHeaders[k] = REDACTED_KEYS.includes(k.toLowerCase())
+            ? "[REDACTED]"
+            : String(v ?? "");
+        }
         return {
           request_id: req.id,
           method: req.method,
           url: req.url,
+          headers: safeHeaders,
         };
       },
       res(res) {
@@ -64,6 +74,17 @@ server.addHook("onRequest", async (request) => {
 // plugin can access the same Redis-backed store instance.
 // ---------------------------------------------------------------------------
 const sessionStore = new SessionStore(config.redisUrl);
+
+// ---------------------------------------------------------------------------
+// Trace-stream WebSocket server
+// ---------------------------------------------------------------------------
+const WS_PORT = (config as any).wsPort ?? 3002;
+const traceStream = createTraceStream(WS_PORT);
+
+// Wire session expiry → push `session_expired` to subscribed WS clients.
+sessionStore.onExpired((sessionId) => {
+  traceStream.notifySessionExpired(sessionId);
+});
 
 server.decorate("sessionStore", sessionStore);
 
