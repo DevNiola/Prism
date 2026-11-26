@@ -2,6 +2,7 @@ import { Worker } from "bullmq";
 import { config } from "../config";
 import { explainError } from "../ai";
 import { logger } from "../logger";
+import { replayQueue, replayDLQ, REPLAY_LOCK_DURATION_MS } from "./queue";
 
 let completedCount = 0;
 
@@ -13,6 +14,7 @@ export const worker = new Worker(
       job_id: job.id,
       tx_hash: job.data.txHash,
       request_id: requestId,
+      attempt: job.attemptsMade + 1,
     });
 
     let result = { report: job.data.report ?? null, explanation: null as any };
@@ -51,8 +53,67 @@ export const worker = new Worker(
     completedCount++;
     return result;
   },
-  { connection: { url: config.redisUrl } },
+  {
+    connection: { url: config.redisUrl },
+    /**
+     * lockDuration defines the visibility timeout: if the worker crashes or
+     * stalls, BullMQ reclaims the job after this many milliseconds and retries
+     * it (up to the job's configured attempt limit).
+     */
+    lockDuration: REPLAY_LOCK_DURATION_MS,
+    /**
+     * Concurrency limit — process up to 5 replay jobs simultaneously.
+     */
+    concurrency: 5,
+  },
 );
+
+/**
+ * Move exhausted jobs to the dead-letter queue so they are visible to admins
+ * without polluting the main failed set indefinitely.
+ */
+worker.on("failed", async (job, err) => {
+  if (!job) return;
+  const attemptsLeft = (job.opts.attempts ?? 1) - job.attemptsMade;
+  if (attemptsLeft > 0) {
+    // Still has retries remaining — just log the transient failure.
+    logger.warn(`Replay job ${job.id} failed (attempt ${job.attemptsMade}), will retry`, {
+      job_id: job.id,
+      tx_hash: job.data?.txHash,
+      attempt: job.attemptsMade,
+      error: err.message,
+    });
+    return;
+  }
+
+  logger.error(`Replay job ${job.id} exhausted all retries — moving to DLQ`, {
+    job_id: job.id,
+    tx_hash: job.data?.txHash,
+    attempts_made: job.attemptsMade,
+    error: err.message,
+  });
+
+  try {
+    await replayDLQ.add(
+      "dead-letter",
+      {
+        originalJobId: job.id,
+        txHash: job.data?.txHash,
+        requestId: job.data?.requestId,
+        network: job.data?.network,
+        failedReason: err.message,
+        attemptsMade: job.attemptsMade,
+        failedAt: new Date().toISOString(),
+      },
+      { jobId: `dlq-${job.id}` },
+    );
+  } catch (dlqErr) {
+    logger.error(`Failed to move job ${job.id} to DLQ`, {
+      job_id: job.id,
+      error: String(dlqErr),
+    });
+  }
+});
 
 /**
  * Gracefully shuts down the worker:
