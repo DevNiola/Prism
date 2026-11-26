@@ -54,6 +54,7 @@ function TransactionInfoSkeleton() {
 export default function TracePage() {
   const [txHash, setTxHash] = useState("");
   const [network, setNetwork] = useState("testnet");
+  const txHashInputRef = useRef<HTMLInputElement>(null);
 
   const wsUrl =
     typeof window !== "undefined"
@@ -77,12 +78,53 @@ export default function TracePage() {
     if (hash) setTxHash(hash);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const palette = useCommandPalette();
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (txHash) {
       requestTrace(txHash, network);
     }
-  };
+  }
+
+  const commands: Command[] = useMemo(
+    () => [
+      {
+        id: "trace",
+        label: "Trace transaction",
+        hint: "Submit",
+        perform: () => {
+          if (txHash) requestTrace(txHash, network);
+        },
+      },
+      {
+        id: "focus-hash",
+        label: "Focus transaction hash input",
+        perform: () => txHashInputRef.current?.focus(),
+      },
+      {
+        id: "clear-hash",
+        label: "Clear transaction hash",
+        perform: () => setTxHash(""),
+      },
+      {
+        id: "net-testnet",
+        label: "Switch network to Testnet",
+        perform: () => setNetwork("testnet"),
+      },
+      {
+        id: "net-mainnet",
+        label: "Switch network to Mainnet",
+        perform: () => setNetwork("mainnet"),
+      },
+      {
+        id: "net-futurenet",
+        label: "Switch network to Futurenet",
+        perform: () => setNetwork("futurenet"),
+      },
+    ],
+    [txHash, network, requestTrace],
+  );
 
   return (
     <main className="container mx-auto px-4 sm:px-6 py-6 max-w-full overflow-x-hidden">
@@ -94,6 +136,7 @@ export default function TracePage() {
             Transaction Hash
           </label>
           <input
+            ref={txHashInputRef}
             id="txHash"
             type="text"
             value={txHash}
@@ -242,6 +285,14 @@ export default function TracePage() {
           <StateDiffViewer entries={trace.state_diff} loading={loading} />
         </div>
       )}
+
+      <CommandPalette
+        commands={commands}
+        open={palette.open}
+        query={palette.query}
+        onQueryChange={palette.setQuery}
+        onClose={palette.closePalette}
+      />
     </main>
   );
 }

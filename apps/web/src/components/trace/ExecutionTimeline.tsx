@@ -77,6 +77,32 @@ export function ExecutionTimeline({
     resourceProfile.write_limit > 0 &&
     resourceProfile.write_bytes / resourceProfile.write_limit > 0.9;
 
+  const last = nodes.length - 1;
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLUListElement>) {
+    if (nodes.length === 0) return;
+    switch (e.key) {
+      case "ArrowDown":
+      case "ArrowRight":
+        e.preventDefault();
+        setActive((a) => Math.min(a + 1, last));
+        break;
+      case "ArrowUp":
+      case "ArrowLeft":
+        e.preventDefault();
+        setActive((a) => Math.max(a - 1, 0));
+        break;
+      case "Home":
+        e.preventDefault();
+        setActive(0);
+        break;
+      case "End":
+        e.preventDefault();
+        setActive(last);
+        break;
+    }
+  }
+
   return (
     <div className="bg-white rounded-lg shadow p-4 md:p-6 w-full overflow-hidden transition-opacity duration-300">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
