@@ -8,7 +8,7 @@ Welcome to the Grat documentation.
 
 Installation and basic usage instructions.
 
-### [Architecture](./architecture/overview.md)
+### [Architecture](./architecture/component-details.md)
 
 Detailed breakdown of the monorepo structure and core engines.
 
