@@ -1,8 +1,7 @@
-import Skeleton from "@/components/shared/Skeleton";
-
 "use client";
 
 import React, { useEffect, useRef } from "react";
+import Skeleton from "@/components/shared/Skeleton";
 
 interface ExecutionTimelineProps {
   nodes: any[];
@@ -26,7 +25,7 @@ const TIMELINE_ROWS = 3;
  */
 export function ExecutionTimelineSkeleton() {
   return (
-    <div className="bg-white rounded-lg shadow p-6" aria-busy="true">
+    <div className="bg-white rounded-lg shadow p-6 transition-opacity duration-300" aria-busy="true">
       <h2 className="text-xl font-semibold mb-4">Execution Timeline</h2>
       <div className="space-y-2">
         {Array.from({ length: TIMELINE_ROWS }, (_, index) => (
@@ -79,7 +78,7 @@ export function ExecutionTimeline({
     resourceProfile.write_bytes / resourceProfile.write_limit > 0.9;
 
   return (
-    <div className="bg-white rounded-lg shadow p-4 md:p-6 w-full overflow-hidden">
+    <div className="bg-white rounded-lg shadow p-4 md:p-6 w-full overflow-hidden transition-opacity duration-300">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <h2 className="text-xl font-semibold">Execution Timeline</h2>
         {(isApproachingReadLimit || isApproachingWriteLimit) && (

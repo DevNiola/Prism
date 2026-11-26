@@ -1,3 +1,37 @@
+import React from "react";
+
+interface SkeletonFadeProps {
+  /** The skeleton placeholder, shown while loading. */
+  skeleton: React.ReactNode;
+  /** The real content, shown once loaded. */
+  children: React.ReactNode;
+  /** Whether the content is still loading. */
+  loading: boolean;
+}
+
+/**
+ * Wraps a skeleton and its loaded content in a crossfade transition.
+ * Both skeleton and content occupy the same space; opacity transitions
+ * between them using `transition-opacity duration-300`.
+ */
+export function SkeletonFade({ skeleton, children, loading }: SkeletonFadeProps) {
+  return (
+    <div className="relative">
+      <div
+        className={`transition-opacity duration-300 ${loading ? "opacity-100" : "opacity-0 pointer-events-none absolute inset-0"}`}
+        aria-hidden={!loading}
+      >
+        {skeleton}
+      </div>
+      <div
+        className={`transition-opacity duration-300 ${loading ? "opacity-0 pointer-events-none absolute inset-0" : "opacity-100"}`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 interface SkeletonProps {
   /** Extra classes used to size and position the placeholder (e.g. `h-4 w-32`). */
   className?: string;

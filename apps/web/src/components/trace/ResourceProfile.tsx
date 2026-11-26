@@ -105,7 +105,7 @@ function formatBytes(bytes: number): string {
  */
 export function ResourceProfileSkeleton() {
   return (
-    <div className="bg-white rounded-lg shadow p-6" aria-busy="true">
+    <div className="bg-white rounded-lg shadow p-6 transition-opacity duration-300" aria-busy="true">
       <h2 className="text-xl font-semibold mb-4">Resource Profile</h2>
 
       <div className="space-y-6">
@@ -133,7 +133,7 @@ export function ResourceProfile({ profile, loading }: ResourceProfileProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-white rounded-lg shadow p-6 transition-opacity duration-300">
       <h2 className="text-xl font-semibold mb-4">Resource Profile</h2>
 
       <div className="space-y-6">

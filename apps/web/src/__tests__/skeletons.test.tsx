@@ -230,3 +230,31 @@ describe("ContextSummary", () => {
     expect(container.querySelectorAll("section")).toHaveLength(3);
   });
 });
+
+describe("CLS prevention", () => {
+  it("ResourceProfileSkeleton and ResourceProfile share the same container shape", () => {
+    const { container: skeletonContainer } = render(<ResourceProfileSkeleton />);
+    const { container: loadedContainer } = render(<ResourceProfile profile={profile} />);
+    const skeletonRoot = skeletonContainer.firstElementChild as HTMLElement;
+    const loadedRoot = loadedContainer.firstElementChild as HTMLElement;
+    // Both roots must be the same tag and share layout-defining classes so the
+    // page does not reflow when the skeleton swaps to loaded content.
+    expect(skeletonRoot.tagName).toBe(loadedRoot.tagName);
+    expect(skeletonRoot.className).toContain("rounded-lg");
+    expect(loadedRoot.className).toContain("rounded-lg");
+    expect(skeletonRoot.className).toContain("p-6");
+    expect(loadedRoot.className).toContain("p-6");
+  });
+
+  it("ExecutionTimelineSkeleton and ExecutionTimeline share the same container shape", () => {
+    const { container: skeletonContainer } = render(<ExecutionTimelineSkeleton />);
+    const { container: loadedContainer } = render(
+      <ExecutionTimeline nodes={[{ node: { name: "transfer" }, path: [0] }]} />,
+    );
+    const skeletonRoot = skeletonContainer.firstElementChild as HTMLElement;
+    const loadedRoot = loadedContainer.firstElementChild as HTMLElement;
+    expect(skeletonRoot.tagName).toBe(loadedRoot.tagName);
+    expect(skeletonRoot.className).toContain("rounded-lg");
+    expect(loadedRoot.className).toContain("rounded-lg");
+  });
+});
