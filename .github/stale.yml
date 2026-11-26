@@ -5,7 +5,7 @@ days-before-pr-close: 7
 
 stale-issue-label: stale
 stale-pr-label: stale
-exempt-issue-labels: pinned, security
+exempt-issue-labels: pinned, security, Stellar Wave
 exempt-pr-labels: pinned, security
 
 stale-issue-message: >-
