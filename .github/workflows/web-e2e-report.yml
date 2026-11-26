@@ -1,0 +1,60 @@
+name: Comment on Web E2E failures
+
+on:
+  workflow_run:
+    workflows: [Web E2E]
+    types: [completed]
+
+permissions:
+  actions: read
+  pull-requests: write
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      # Use only GitHub metadata here. PR code runs in the read-only Web E2E workflow.
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const repo = context.repo;
+            if (!run.head_repository) return;
+
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              ...repo, run_id: run.id, name: `playwright-failure-${run.run_attempt}`,
+            });
+            const artifact = artifacts.find(item => !item.expired);
+            if (!artifact) return;
+
+            // Fork PRs can have an empty workflow_run.pull_requests array.
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              ...repo,
+              state: "open",
+              head: `${run.head_repository.owner.login}:${run.head_branch}`,
+            });
+            const linkedNumbers = new Set(run.pull_requests.map(pr => pr.number));
+            const matches = pulls.filter(pr =>
+              pr.head.repo?.id === run.head_repository.id &&
+              pr.head.sha === run.head_sha &&
+              ["main", "master"].includes(pr.base.ref) &&
+              (linkedNumbers.size === 0 || linkedNumbers.has(pr.number))
+            );
+            if (matches.length !== 1) return;
+
+            const issue_number = matches[0].number;
+            const marker = `<!-- playwright-report:${run.id}:${run.run_attempt} -->`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...repo, issue_number,
+            });
+            if (comments.some(comment =>
+              comment.user?.login === "github-actions[bot]" && comment.body?.includes(marker)
+            )) return;
+
+            const url = `${context.serverUrl}/${repo.owner}/${repo.repo}/actions/runs/${run.id}/artifacts/${artifact.id}`;
+            await github.rest.issues.createComment({
+              ...repo,
+              issue_number,
+              body: `${marker}\nWeb E2E failed. [Download the Playwright HTML report and traces](${url}).`,
+            });
