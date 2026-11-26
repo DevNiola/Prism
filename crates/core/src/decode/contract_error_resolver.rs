@@ -248,4 +248,229 @@ mod tests {
         // Cleanup cache
         let _ = cache.remove(CacheCategory::WasmBlob, &cache_key, None);
     }
+
+    // ── Issue #470: Hardened resolver tests ───────────────────────────────
+
+    /// Build a minimal WASM module containing a `contractspecv0` custom section
+    /// that holds the XDR-encoded `entry`.  The LEB-128 length prefix matches
+    /// what a real WASM parser would expect.
+    fn build_spec_wasm(entry_bytes: &[u8]) -> Vec<u8> {
+        let section_name = b"contractspecv0";
+        let mut payload: Vec<u8> = Vec::new();
+        // Name length as a single byte (fine for ≤127 chars).
+        payload.push(section_name.len() as u8);
+        payload.extend_from_slice(section_name);
+        payload.extend_from_slice(entry_bytes);
+
+        // WASM magic + version.
+        let mut wasm = vec![0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00];
+        // Custom section id = 0.
+        wasm.push(0x00);
+        // Section size as a single byte (fine for small payloads).
+        wasm.push(payload.len() as u8);
+        wasm.extend(payload);
+        wasm
+    }
+
+    #[tokio::test]
+    async fn test_resolve_multiple_error_codes_in_enum() {
+        use stellar_xdr::curr::{
+            Limits, ScSpecEntry, ScSpecUdtErrorEnumCaseV0, ScSpecUdtErrorEnumV0, WriteXdr,
+        };
+
+        let error_enum = ScSpecUdtErrorEnumV0 {
+            doc: "Token errors".try_into().unwrap(),
+            lib: "".try_into().unwrap(),
+            name: "TokenError".try_into().unwrap(),
+            cases: vec![
+                ScSpecUdtErrorEnumCaseV0 {
+                    doc: "Balance is too low".try_into().unwrap(),
+                    name: "InsufficientBalance".try_into().unwrap(),
+                    value: 1,
+                },
+                ScSpecUdtErrorEnumCaseV0 {
+                    doc: "Token is frozen".try_into().unwrap(),
+                    name: "TokenFrozen".try_into().unwrap(),
+                    value: 2,
+                },
+                ScSpecUdtErrorEnumCaseV0 {
+                    doc: "Unauthorized operation".try_into().unwrap(),
+                    name: "Unauthorized".try_into().unwrap(),
+                    value: 3,
+                },
+            ]
+            .try_into()
+            .unwrap(),
+        };
+
+        let entry_bytes = ScSpecEntry::UdtErrorEnumV0(error_enum)
+            .to_xdr(Limits::none())
+            .unwrap();
+        let wasm = build_spec_wasm(&entry_bytes);
+
+        let contract_id_str = stellar_strkey::Contract([8u8; 32]).to_string();
+        let cache = CacheStore::default_location().unwrap();
+        let cache_key = format!("{contract_id_str}_spec");
+        cache
+            .put(CacheCategory::WasmBlob, &cache_key, &wasm, None)
+            .unwrap();
+
+        let resolver = ContractErrorResolver::new(NetworkConfig::testnet());
+
+        let (name1, doc1) = resolver.resolve(&contract_id_str, 1).await;
+        assert_eq!(name1, "TokenError::InsufficientBalance");
+        assert_eq!(doc1, Some("Balance is too low".to_string()));
+
+        let (name2, doc2) = resolver.resolve(&contract_id_str, 2).await;
+        assert_eq!(name2, "TokenError::TokenFrozen");
+        assert_eq!(doc2, Some("Token is frozen".to_string()));
+
+        let (name3, doc3) = resolver.resolve(&contract_id_str, 3).await;
+        assert_eq!(name3, "TokenError::Unauthorized");
+        assert_eq!(doc3, Some("Unauthorized operation".to_string()));
+
+        let _ = cache.remove(CacheCategory::WasmBlob, &cache_key, None);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_unknown_code_falls_back_to_numeric_string() {
+        use stellar_xdr::curr::{
+            Limits, ScSpecEntry, ScSpecUdtErrorEnumCaseV0, ScSpecUdtErrorEnumV0, WriteXdr,
+        };
+
+        let error_enum = ScSpecUdtErrorEnumV0 {
+            doc: "".try_into().unwrap(),
+            lib: "".try_into().unwrap(),
+            name: "MyError".try_into().unwrap(),
+            cases: vec![ScSpecUdtErrorEnumCaseV0 {
+                doc: "".try_into().unwrap(),
+                name: "KnownError".try_into().unwrap(),
+                value: 10,
+            }]
+            .try_into()
+            .unwrap(),
+        };
+
+        let entry_bytes = ScSpecEntry::UdtErrorEnumV0(error_enum)
+            .to_xdr(Limits::none())
+            .unwrap();
+        let wasm = build_spec_wasm(&entry_bytes);
+
+        let contract_id_str = stellar_strkey::Contract([9u8; 32]).to_string();
+        let cache = CacheStore::default_location().unwrap();
+        let cache_key = format!("{contract_id_str}_spec");
+        cache
+            .put(CacheCategory::WasmBlob, &cache_key, &wasm, None)
+            .unwrap();
+
+        let resolver = ContractErrorResolver::new(NetworkConfig::testnet());
+
+        // Code 10 is known.
+        let (name_known, _) = resolver.resolve(&contract_id_str, 10).await;
+        assert_eq!(name_known, "MyError::KnownError");
+
+        // Code 999 is not in the spec — falls back to the string "999".
+        let (name_fallback, doc_fallback) = resolver.resolve(&contract_id_str, 999).await;
+        assert_eq!(
+            name_fallback, "999",
+            "unknown error code must fall back to its numeric string"
+        );
+        assert!(doc_fallback.is_none(), "unknown code fallback must have no doc");
+
+        let _ = cache.remove(CacheCategory::WasmBlob, &cache_key, None);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_error_code_zero() {
+        use stellar_xdr::curr::{
+            Limits, ScSpecEntry, ScSpecUdtErrorEnumCaseV0, ScSpecUdtErrorEnumV0, WriteXdr,
+        };
+
+        let error_enum = ScSpecUdtErrorEnumV0 {
+            doc: "".try_into().unwrap(),
+            lib: "".try_into().unwrap(),
+            name: "ZeroError".try_into().unwrap(),
+            cases: vec![ScSpecUdtErrorEnumCaseV0 {
+                doc: "The zero case".try_into().unwrap(),
+                name: "None".try_into().unwrap(),
+                value: 0,
+            }]
+            .try_into()
+            .unwrap(),
+        };
+
+        let entry_bytes = ScSpecEntry::UdtErrorEnumV0(error_enum)
+            .to_xdr(Limits::none())
+            .unwrap();
+        let wasm = build_spec_wasm(&entry_bytes);
+
+        let contract_id_str = stellar_strkey::Contract([10u8; 32]).to_string();
+        let cache = CacheStore::default_location().unwrap();
+        let cache_key = format!("{contract_id_str}_spec");
+        cache
+            .put(CacheCategory::WasmBlob, &cache_key, &wasm, None)
+            .unwrap();
+
+        let resolver = ContractErrorResolver::new(NetworkConfig::testnet());
+        let (name, doc) = resolver.resolve(&contract_id_str, 0).await;
+        assert_eq!(name, "ZeroError::None");
+        assert_eq!(doc, Some("The zero case".to_string()));
+
+        let _ = cache.remove(CacheCategory::WasmBlob, &cache_key, None);
+    }
+
+    #[test]
+    fn test_contract_error_info_fields_are_accessible() {
+        use crate::types::report::ContractErrorInfo;
+
+        let info = ContractErrorInfo {
+            contract_id: "CTEST123".to_string(),
+            error_code: 42,
+            error_name: Some("MyError::Overflow".to_string()),
+            doc_comment: Some("Arithmetic overflow occurred".to_string()),
+            learn_more: "https://developers.stellar.org".to_string(),
+        };
+
+        assert_eq!(info.contract_id, "CTEST123");
+        assert_eq!(info.error_code, 42);
+        assert_eq!(info.error_name.as_deref(), Some("MyError::Overflow"));
+        assert_eq!(
+            info.doc_comment.as_deref(),
+            Some("Arithmetic overflow occurred")
+        );
+        assert!(info.learn_more.starts_with("https://"));
+    }
+
+    #[test]
+    fn test_resolved_error_name_follows_enum_variant_pattern() {
+        // The resolved name must follow "EnumName::VariantName" format.
+        let resolved = "TokenError::InsufficientBalance";
+        let parts: Vec<&str> = resolved.splitn(2, "::").collect();
+        assert_eq!(parts.len(), 2, "resolved name must contain '::'");
+        assert!(!parts[0].is_empty(), "enum name must not be empty");
+        assert!(!parts[1].is_empty(), "variant name must not be empty");
+        assert!(
+            parts[0].chars().next().unwrap().is_uppercase(),
+            "enum name must be PascalCase"
+        );
+        assert!(
+            parts[1].chars().next().unwrap().is_uppercase(),
+            "variant name must be PascalCase"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_resolve_invalid_contract_id_returns_fallback() {
+        // A contract ID that doesn't start with 'C' is invalid; the resolver
+        // must fall back to the numeric string rather than panicking.
+        let resolver = ContractErrorResolver::new(NetworkConfig::testnet());
+        let (name, doc) = resolver.resolve("GNOT_A_CONTRACT", 5).await;
+        assert_eq!(
+            name, "5",
+            "invalid contract ID must fall back to numeric string"
+        );
+        assert!(doc.is_none());
+    }
+
+    // ── End Issue #470 ────────────────────────────────────────────────────
 }
