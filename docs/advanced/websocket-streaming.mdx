@@ -1,25 +1,55 @@
 ---
 title: "WebSocket Streaming"
-description: "How Grat streams real-time traces to the web interface."
+description: "Connect to the standalone trace WebSocket and inspect its message types."
 ---
 
-Grat uses a WebSocket-based streaming architecture to provide real-time feedback during long-running state reconstructions and transaction replays.
+The trace module's `createTraceStream(port)` starts a standalone WebSocket listener. The Fastify application does not mount this listener. Connect to the root of the port passed to `createTraceStream`.
 
-## Connection Flow
+## Subscribe handshake
 
-1. **Establishment**: The web client connects to `grat serve`.
-2. **Request**: Client sends a JSON payload: `{"tx_hash": "abc123..."}`.
-3. **Execution**: The server spawns an independent trace task.
-4. **Streaming**:
-   - `trace_started`: Initial event.
-   - `trace_node`: Sent for every execution step (throttled to 5ms).
-   - `resource_update`: Periodic progress on budget consumption.
-   - `state_diff_entry`: Incremental updates to ledger changes.
-5. **Completion**: `trace_completed` signifies the end of the session.
+After the WebSocket opens, send a JSON message with `type: "subscribe"` and a transaction hash in `tx_hash`. The handler checks that `tx_hash` is truthy, then echoes it in a `subscribed` message. This acknowledgement only confirms receipt. The handler leaves the connection open and does not start a trace. It ignores messages that do not match the subscription condition and logs JSON parsing failures without replying.
 
-## Performance Optimization
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Trace WebSocket
+    C->>S: HTTP Upgrade request
+    S-->>C: 101 Switching Protocols
+    C->>S: subscribe (tx_hash)
+    S-->>C: subscribed (echoed tx_hash)
+    Note over C,S: The connection stays open
+```
 
-- **Throttling**: A 5ms delay between nodes prevents the client from being overwhelmed by large traces.
-- **Batching**: Resource updates are batched every 10 nodes.
-- **Bounded Channels**: Broadcast channels have a 100-message capacity to prevent memory leaks in the server.
-- **Async Processing**: Each trace runs in its own task without blocking other concurrent sessions.
+## Trace message types
+
+`TraceStreamMessage` declares six discriminants, an optional string `trace_id`, and an open payload. The table describes fields consumed by the web client's callbacks and when a trace producer would send each message. The standalone listener currently emits only `subscribed`, so these payloads and their ordering are not enforced by the listener.
+
+| Type | Payload fields used by the web client | Intended lifecycle |
+| --- | --- | --- |
+| `trace_started` | `tx_hash` (string), `ledger_sequence` (number) | Opens trace processing. |
+| `trace_node` | `node` (trace node), `path` (array of numeric indices) | Adds an execution node while the trace is in progress. |
+| `resource_update` | `cpu_used`, `cpu_limit`, `memory_used`, `memory_limit`, `read_bytes`, `read_limit`, `write_bytes`, `write_limit` (all numbers) | Updates resource counters during the trace. |
+| `state_diff_entry` | `key`, `change_type` (strings), `before`, `after` (optional strings) | Reports a ledger change during the trace. |
+| `trace_completed` | `total_nodes`, `duration_ms` (numbers) | Ends trace processing with a summary. |
+| `trace_error` | `error` (string) | Ends trace processing with an error. |
+
+## Try the handshake with wscat
+
+With workspace dependencies installed, start the standalone listener from the repository root.
+
+```sh
+pnpm --filter grat-server exec tsx -e 'import { createTraceStream } from "./src/ws/trace-stream"; createTraceStream(3002)'
+```
+
+In another terminal, connect with `wscat`.
+
+```sh
+npx --yes wscat -c ws://localhost:3002
+```
+
+At the prompt, send the first JSON line below. The second line is the expected response.
+
+```text
+> {"type":"subscribe","tx_hash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
+< {"type":"subscribed","tx_hash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}
+```
