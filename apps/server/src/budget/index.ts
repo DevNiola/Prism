@@ -6,6 +6,10 @@ export {
   releaseConcurrency,
   checkReplayBudget,
   budgetWarningEmitter,
+  assertBudgetAvailableForKey,
+  recordUsageForKey,
+  getKeyBudgetStatus,
+  hashApiKey,
 } from "./tracker";
 export {
   BudgetExceededError,

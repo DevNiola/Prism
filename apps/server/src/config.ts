@@ -24,6 +24,8 @@ type ServerConfig = {
     cpuWarningThresholdPercent: number;
     memoryWarningThresholdPercent: number;
     alertWebhookUrl: string;
+    perKeyHourlyTokenLimit: number;
+    perKeyDailyTokenLimit: number;
   };
   cache: {
     decodeTtl: number;
@@ -190,6 +192,14 @@ export const config: ServerConfig = {
           ["http:", "https:"],
         )
       : "",
+    perKeyHourlyTokenLimit: numberValue("AI_PER_KEY_HOURLY_TOKEN_LIMIT", 20_000, {
+      integer: true,
+      min: 1,
+    }),
+    perKeyDailyTokenLimit: numberValue("AI_PER_KEY_DAILY_TOKEN_LIMIT", 200_000, {
+      integer: true,
+      min: 1,
+    }),
   },
 
   logLevel: stringValue("LOG_LEVEL", "info"),

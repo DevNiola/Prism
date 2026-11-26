@@ -5,11 +5,13 @@ export class BudgetExceededError extends Error {
   public readonly hourlyRemaining: number;
   public readonly dailyRemaining: number;
   public readonly resetAt: Date;
+  public readonly retryAfterSeconds: number;
 
   constructor(opts: {
     hourlyRemaining: number;
     dailyRemaining: number;
     resetAt: Date;
+    retryAfterSeconds?: number;
   }) {
     const which = opts.hourlyRemaining <= 0 ? "hourly" : "daily";
     super(
@@ -20,6 +22,7 @@ export class BudgetExceededError extends Error {
     this.hourlyRemaining = opts.hourlyRemaining;
     this.dailyRemaining = opts.dailyRemaining;
     this.resetAt = opts.resetAt;
+    this.retryAfterSeconds = opts.retryAfterSeconds ?? 0;
   }
 }
 
