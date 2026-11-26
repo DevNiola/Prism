@@ -4,8 +4,11 @@ on:
   release:
     types: [published]
 
+# id-token: write is required for npm --provenance (OIDC-linked publish).
+# contents: read is sufficient for checkout.
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish-server:
@@ -32,12 +35,24 @@ jobs:
       - name: Build server package
         run: pnpm --filter grat-server build
 
+      # --provenance links the published package to this exact workflow run
+      # via an OIDC-signed attestation stored on the npm registry. Consumers
+      # can verify build origin with: npm audit signatures grat-server
       - name: Publish server package
         working-directory: apps/server
-        run: npm publish --access public
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Verify published version
         working-directory: apps/server
         run: npm view "grat-server@$(node -p 'require("./package.json").version')" version
+
+      - name: Compute release SHA256 digest
+        working-directory: apps/server
+        run: |
+          PKG="grat-server-$(node -p 'require("./package.json").version').tgz"
+          npm pack --dry-run 2>/dev/null || true
+          npm pack --silent
+          sha256sum "$PKG" | tee /tmp/grat-server.sha256
+          echo "::notice title=grat-server SHA256::$(cat /tmp/grat-server.sha256)"
