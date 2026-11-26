@@ -11,8 +11,20 @@ permissions:
   pull-requests: write
 
 jobs:
+  wasm:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    uses: ./.github/workflows/wasm-build.yml
+    with:
+      release_tag: ${{ needs.release.outputs.release_tag }}
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   release:
     runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.semantic.outputs.new_release_published }}
+      release_tag: ${{ steps.semantic.outputs.new_release_git_tag }}
     steps:
       - uses: actions/checkout@v4
         with:
