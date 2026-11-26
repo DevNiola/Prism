@@ -2,7 +2,7 @@ import Skeleton from "@/components/shared/Skeleton";
 
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 interface ExecutionTimelineProps {
   nodes: any[];
@@ -54,6 +54,10 @@ export function ExecutionTimeline({
   loading,
 }: ExecutionTimelineProps) {
   const activeItemRef = useRef<HTMLDivElement | null>(null);
+  // On small screens the user can switch which pane is visible
+  const [activePane, setActivePane] = useState<"timeline" | "detail">(
+    "timeline",
+  );
 
   // Smooth scroll to keep current step visible in timeline
   useEffect(() => {
@@ -78,8 +82,11 @@ export function ExecutionTimeline({
     resourceProfile.write_limit > 0 &&
     resourceProfile.write_bytes / resourceProfile.write_limit > 0.9;
 
+  const activeNode = nodes[currentStep];
+
   return (
     <div className="bg-white rounded-lg shadow p-4 md:p-6 w-full overflow-hidden">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <h2 className="text-xl font-semibold">Execution Timeline</h2>
         {(isApproachingReadLimit || isApproachingWriteLimit) && (
@@ -89,65 +96,137 @@ export function ExecutionTimeline({
           </span>
         )}
       </div>
-      <div
-        className="space-y-2 max-h-[600px] overflow-y-auto overflow-x-auto pr-1 -mx-2 px-2 sm:mx-0 sm:px-0"
-        style={{
-          scrollBehavior: "smooth",
-        }}
-      >
-        {nodes.map((node, idx) => {
-          const isActive = idx === currentStep;
-          return (
-            <div
-              key={idx}
-              ref={isActive ? activeItemRef : null}
-              onClick={() => onSelectStep?.(idx)}
-              style={{
-                transitionDuration: `${transitionDurationMs}ms`,
-              }}
-              className={`min-w-[280px] p-3 border rounded cursor-pointer transition-all ${
-                isActive
-                  ? "bg-purple-50 border-purple-500 shadow-sm translate-x-1 border-l-4 border-l-purple-600"
-                  : "border-gray-200 hover:bg-gray-50"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <span
-                    className={`text-xs font-mono px-1.5 py-0.5 rounded ${
-                      isActive
-                        ? "bg-purple-600 text-white font-bold"
-                        : "text-gray-500 bg-gray-100"
-                    }`}
-                  >
-                    #{idx}
-                  </span>
-                  <span className="font-mono text-sm font-medium">
-                    {node.node?.event_type || "Unknown"}
-                  </span>
-                  {isActive && (
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full animate-pulse">
-                      Current Step
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs text-gray-500">
-                  Path: {node.path?.join(" → ") || "root"}
-                </span>
-              </div>
-              {node.node?.data && (
-                <pre
-                  className={`mt-2 text-xs overflow-x-auto transition-opacity ${
-                    isActive ? "text-purple-900" : "text-gray-600"
+
+      {/* Mobile pane switcher — hidden on sm+ where both panes show */}
+      {nodes.length > 0 && (
+        <div className="flex sm:hidden mb-3 rounded-md border border-gray-200 overflow-hidden text-xs font-medium">
+          <button
+            type="button"
+            onClick={() => setActivePane("timeline")}
+            className={`flex-1 py-2 transition-colors min-h-[44px] ${
+              activePane === "timeline"
+                ? "bg-purple-600 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            Timeline
+          </button>
+          <button
+            type="button"
+            onClick={() => setActivePane("detail")}
+            className={`flex-1 py-2 transition-colors min-h-[44px] ${
+              activePane === "detail"
+                ? "bg-purple-600 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            Step Detail
+          </button>
+        </div>
+      )}
+
+      {/* Layout: on sm+ both panes show side by side; on mobile only one at a time */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        {/* Timeline list */}
+        <div
+          className={`${
+            activePane === "timeline" ? "block" : "hidden"
+          } sm:block sm:flex-1`}
+        >
+          {/* Scrollable container: visible scrollbar + drag-to-pan via overflow-x-auto */}
+          <div
+            className="space-y-2 max-h-[600px] overflow-y-auto overflow-x-auto pr-1 scroll-smooth"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            {nodes.map((node, idx) => {
+              const isActive = idx === currentStep;
+              return (
+                <div
+                  key={idx}
+                  ref={isActive ? activeItemRef : null}
+                  onClick={() => {
+                    onSelectStep?.(idx);
+                    setActivePane("detail");
+                  }}
+                  style={{ transitionDuration: `${transitionDurationMs}ms` }}
+                  className={`min-w-[280px] p-3 border rounded cursor-pointer transition-all min-h-[44px] flex flex-col justify-center ${
+                    isActive
+                      ? "bg-purple-50 border-purple-500 shadow-sm translate-x-1 border-l-4 border-l-purple-600"
+                      : "border-gray-200 hover:bg-gray-50"
                   }`}
                 >
-                  {JSON.stringify(node.node.data, null, 2)}
-                </pre>
+                  <div className="flex items-center justify-between flex-wrap gap-1">
+                    <div className="flex items-center space-x-3">
+                      <span
+                        className={`text-xs font-mono px-1.5 py-0.5 rounded ${
+                          isActive
+                            ? "bg-purple-600 text-white font-bold"
+                            : "text-gray-500 bg-gray-100"
+                        }`}
+                      >
+                        #{idx}
+                      </span>
+                      <span className="font-mono text-sm font-medium">
+                        {node.node?.event_type || "Unknown"}
+                      </span>
+                      {isActive && (
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full animate-pulse">
+                          Current Step
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-gray-500 truncate max-w-[140px]">
+                      {node.path?.join(" → ") || "root"}
+                    </span>
+                  </div>
+                  {node.node?.data && (
+                    <pre
+                      className={`mt-2 text-xs overflow-x-auto transition-opacity ${
+                        isActive ? "text-purple-900" : "text-gray-600"
+                      }`}
+                    >
+                      {JSON.stringify(node.node.data, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Step detail panel — always visible on sm+, switchable on mobile */}
+        {nodes.length > 0 && (
+          <div
+            className={`${
+              activePane === "detail" ? "block" : "hidden"
+            } sm:block sm:w-64 lg:w-80 shrink-0`}
+          >
+            <div className="rounded-lg border border-gray-200 p-4 bg-gray-50 h-full max-h-[600px] overflow-y-auto">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                Step #{currentStep} Detail
+              </div>
+              {activeNode ? (
+                <>
+                  <div className="mb-2 text-sm font-medium text-gray-800">
+                    {activeNode.node?.event_type || "Unknown"}
+                  </div>
+                  <div className="text-xs text-gray-500 mb-3">
+                    Path: {activeNode.path?.join(" → ") || "root"}
+                  </div>
+                  {activeNode.node?.data && (
+                    <pre className="text-xs bg-white rounded border p-3 overflow-x-auto whitespace-pre-wrap break-all">
+                      {JSON.stringify(activeNode.node.data, null, 2)}
+                    </pre>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-gray-400">No data for this step.</p>
               )}
             </div>
-          );
-        })}
+          </div>
+        )}
       </div>
+
       {nodes.length === 0 && (
         <p className="text-gray-500 text-center py-8">
           No trace nodes yet. Waiting for trace data...

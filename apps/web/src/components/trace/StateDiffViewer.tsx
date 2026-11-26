@@ -101,6 +101,11 @@ export function StateDiffViewerSkeleton() {
 
 export function StateDiffViewer({ entries, loading }: StateDiffViewerProps) {
   const [showOnlyChanges, setShowOnlyChanges] = useState(false);
+  // Responsive layout: "stacked" is forced on small screens via CSS; this
+  // state lets the user manually switch on larger screens too.
+  const [viewMode, setViewMode] = useState<"side-by-side" | "stacked">(
+    "side-by-side",
+  );
 
   if (loading && entries.length === 0) {
     return <StateDiffViewerSkeleton />;
@@ -152,19 +157,51 @@ export function StateDiffViewer({ entries, loading }: StateDiffViewerProps) {
     .map((entry) => ({ entry, changeType: getChangeType(entry) }))
     .filter(({ changeType }) => !showOnlyChanges || changeType !== "unchanged");
 
+  // On small screens always stack; on larger screens respect viewMode
+  const isStacked = viewMode === "stacked";
+
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-white rounded-lg shadow p-4 sm:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">State Diff</h2>
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            type="checkbox"
-            checked={showOnlyChanges}
-            onChange={(event) => setShowOnlyChanges(event.target.checked)}
-            className="h-4 w-4 accent-indigo-600"
-          />
-          Show only changes
-        </label>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {/* View toggle — hidden on xs where stacked is always used */}
+          <div className="hidden sm:flex items-center rounded-md border border-gray-200 overflow-hidden text-xs font-medium">
+            <button
+              type="button"
+              onClick={() => setViewMode("side-by-side")}
+              className={`px-3 py-1.5 transition-colors min-h-[44px] ${
+                !isStacked
+                  ? "bg-indigo-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Side by Side
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("stacked")}
+              className={`px-3 py-1.5 transition-colors min-h-[44px] ${
+                isStacked
+                  ? "bg-indigo-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Stacked
+            </button>
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700 min-h-[44px]">
+            <input
+              type="checkbox"
+              checked={showOnlyChanges}
+              onChange={(event) => setShowOnlyChanges(event.target.checked)}
+              className="h-4 w-4 accent-indigo-600"
+            />
+            Show only changes
+          </label>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -173,21 +210,30 @@ export function StateDiffViewer({ entries, loading }: StateDiffViewerProps) {
             key={`${entry.key}-${idx}`}
             className={`p-4 border rounded-lg ${getChangeColor(changeType)}`}
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-mono text-sm font-medium">{entry.key}</span>
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <span className="font-mono text-sm font-medium break-all">
+                {entry.key}
+              </span>
               {getChangeBadge(changeType)}
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-3">
+            {/* On xs screens always stack; sm+ respects viewMode */}
+            <div
+              className={`mt-3 ${
+                isStacked
+                  ? "flex flex-col gap-3"
+                  : "grid grid-cols-1 sm:grid-cols-2 gap-4"
+              }`}
+            >
               <div>
                 <div className="text-xs text-gray-600 mb-1">Before</div>
-                <pre className="text-xs bg-white p-2 rounded border overflow-x-auto">
+                <pre className="text-xs bg-white p-2 rounded border overflow-x-auto whitespace-pre-wrap break-all">
                   {entry.before || "(none)"}
                 </pre>
               </div>
               <div>
                 <div className="text-xs text-gray-600 mb-1">After</div>
-                <pre className="text-xs bg-white p-2 rounded border overflow-x-auto">
+                <pre className="text-xs bg-white p-2 rounded border overflow-x-auto whitespace-pre-wrap break-all">
                   {entry.after || "(none)"}
                 </pre>
               </div>

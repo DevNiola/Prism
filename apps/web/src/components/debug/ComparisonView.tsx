@@ -23,30 +23,31 @@ export default function ComparisonView({
   afterLabel = "After (Post-State)",
 }: ComparisonViewProps) {
   const [diffOnly, setDiffOnly] = useState(false);
-  const [splitRatio, setSplitRatio] = useState(50); // percentage for left panel
+  const [splitRatio, setSplitRatio] = useState(50);
+  // Mobile pane switcher: show before or after panel on small screens
+  const [activePane, setActivePane] = useState<"before" | "after">("before");
 
   const leftPanelRef = useRef<HTMLDivElement | null>(null);
   const rightPanelRef = useRef<HTMLDivElement | null>(null);
   const isSyncingScroll = useRef(false);
 
-  const handleScroll = useCallback(
-    (source: "left" | "right") => {
-      if (isSyncingScroll.current) return;
-      isSyncingScroll.current = true;
+  const handleScroll = useCallback((source: "left" | "right") => {
+    if (isSyncingScroll.current) return;
+    isSyncingScroll.current = true;
 
-      const sourceEl = source === "left" ? leftPanelRef.current : rightPanelRef.current;
-      const targetEl = source === "left" ? rightPanelRef.current : leftPanelRef.current;
+    const sourceEl =
+      source === "left" ? leftPanelRef.current : rightPanelRef.current;
+    const targetEl =
+      source === "left" ? rightPanelRef.current : leftPanelRef.current;
 
-      if (sourceEl && targetEl) {
-        targetEl.scrollTop = sourceEl.scrollTop;
-      }
+    if (sourceEl && targetEl) {
+      targetEl.scrollTop = sourceEl.scrollTop;
+    }
 
-      requestAnimationFrame(() => {
-        isSyncingScroll.current = false;
-      });
-    },
-    []
-  );
+    requestAnimationFrame(() => {
+      isSyncingScroll.current = false;
+    });
+  }, []);
 
   const displayedFields = diffOnly
     ? fields.filter((f) => f.type !== "unchanged")
@@ -75,9 +76,9 @@ export default function ComparisonView({
           </div>
         </div>
 
-        <div className="flex items-center space-x-6">
-          {/* Slider for panel ratio */}
-          <div className="flex items-center space-x-2 text-xs text-gray-600">
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Split slider — hidden below sm where panes are toggled */}
+          <div className="hidden sm:flex items-center space-x-2 text-xs text-gray-600">
             <span>Split:</span>
             <input
               type="range"
@@ -87,11 +88,13 @@ export default function ComparisonView({
               onChange={(e) => setSplitRatio(Number(e.target.value))}
               className="w-24 h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-purple-600"
             />
-            <span className="font-mono">{splitRatio}% / {100 - splitRatio}%</span>
+            <span className="font-mono">
+              {splitRatio}% / {100 - splitRatio}%
+            </span>
           </div>
 
           {/* Diff Only Toggle */}
-          <label className="flex items-center space-x-2 cursor-pointer select-none text-xs font-medium text-gray-700">
+          <label className="flex items-center space-x-2 cursor-pointer select-none text-xs font-medium text-gray-700 min-h-[44px]">
             <input
               type="checkbox"
               checked={diffOnly}
@@ -104,8 +107,8 @@ export default function ComparisonView({
               }`}
             >
               <div
-                className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.75 transition-transform ${
-                  diffOnly ? "translate-x-4.5" : "translate-x-1"
+                className={`w-3.5 h-3.5 bg-white rounded-full absolute top-[3px] transition-transform ${
+                  diffOnly ? "translate-x-[18px]" : "translate-x-[4px]"
                 }`}
               />
             </div>
@@ -114,27 +117,50 @@ export default function ComparisonView({
         </div>
       </div>
 
-      {/* Side-by-Side Panels Header */}
-      <div className="grid grid-cols-2 border-b border-gray-200 text-xs font-semibold text-gray-600 bg-gray-100">
-        <div
-          className="p-3 border-r border-gray-200"
-          style={{ width: "100%" }}
+      {/* Mobile pane switcher — only visible below sm */}
+      <div className="flex sm:hidden border-b border-gray-200 text-xs font-semibold">
+        <button
+          type="button"
+          onClick={() => setActivePane("before")}
+          className={`flex-1 p-3 transition-colors min-h-[44px] ${
+            activePane === "before"
+              ? "bg-purple-50 text-purple-700 border-b-2 border-purple-500"
+              : "text-gray-600 bg-gray-100 hover:bg-gray-200"
+          }`}
         >
           {beforeLabel}
-        </div>
-        <div className="p-3">
+        </button>
+        <button
+          type="button"
+          onClick={() => setActivePane("after")}
+          className={`flex-1 p-3 transition-colors min-h-[44px] ${
+            activePane === "after"
+              ? "bg-purple-50 text-purple-700 border-b-2 border-purple-500"
+              : "text-gray-600 bg-gray-100 hover:bg-gray-200"
+          }`}
+        >
           {afterLabel}
-        </div>
+        </button>
       </div>
 
-      {/* Synchronized Scrolling Panels */}
+      {/* Side-by-Side Panel Headers — only on sm+ */}
+      <div className="hidden sm:grid grid-cols-2 border-b border-gray-200 text-xs font-semibold text-gray-600 bg-gray-100">
+        <div className="p-3 border-r border-gray-200">{beforeLabel}</div>
+        <div className="p-3">{afterLabel}</div>
+      </div>
+
+      {/* Panels container */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Panel (Before) */}
         <div
           ref={leftPanelRef}
           onScroll={() => handleScroll("left")}
+          // On mobile: full width, toggled by activePane.
+          // On sm+: fractional width from splitRatio, always visible.
           style={{ width: `${splitRatio}%` }}
-          className="overflow-y-auto p-4 border-r border-gray-200 space-y-2 select-text"
+          className={`overflow-y-auto p-4 space-y-2 select-text border-r border-gray-200
+            ${activePane === "before" ? "flex-1 sm:flex-none" : "hidden sm:block"}
+          `}
         >
           {displayedFields.map((field, idx) => {
             const isRemoved = field.type === "deleted";
@@ -143,15 +169,19 @@ export default function ComparisonView({
 
             let bg = "bg-gray-50 border-gray-200";
             if (isRemoved) bg = "bg-rose-50 border-rose-300 text-rose-900";
-            else if (isModified) bg = "bg-amber-50 border-amber-300 text-amber-900";
-            else if (isAdded) bg = "bg-gray-50 border-dashed border-gray-200 opacity-40";
+            else if (isModified)
+              bg = "bg-amber-50 border-amber-300 text-amber-900";
+            else if (isAdded)
+              bg = "bg-gray-50 border-dashed border-gray-200 opacity-40";
 
             return (
               <div
                 key={`before-${idx}`}
                 className={`p-2.5 rounded border text-xs font-mono transition-colors ${bg}`}
               >
-                <div className="font-bold truncate text-gray-800 mb-1">{field.key}</div>
+                <div className="font-bold truncate text-gray-800 mb-1">
+                  {field.key}
+                </div>
                 <div className="break-all whitespace-pre-wrap">
                   {isAdded ? "<not present>" : field.before ?? "null"}
                 </div>
@@ -170,7 +200,9 @@ export default function ComparisonView({
           ref={rightPanelRef}
           onScroll={() => handleScroll("right")}
           style={{ width: `${100 - splitRatio}%` }}
-          className="overflow-y-auto p-4 space-y-2 select-text"
+          className={`overflow-y-auto p-4 space-y-2 select-text
+            ${activePane === "after" ? "flex-1 sm:flex-none" : "hidden sm:block"}
+          `}
         >
           {displayedFields.map((field, idx) => {
             const isRemoved = field.type === "deleted";
@@ -178,16 +210,21 @@ export default function ComparisonView({
             const isAdded = field.type === "added";
 
             let bg = "bg-gray-50 border-gray-200";
-            if (isAdded) bg = "bg-emerald-50 border-emerald-300 text-emerald-900";
-            else if (isModified) bg = "bg-amber-50 border-amber-300 text-amber-900";
-            else if (isRemoved) bg = "bg-gray-50 border-dashed border-gray-200 opacity-40";
+            if (isAdded)
+              bg = "bg-emerald-50 border-emerald-300 text-emerald-900";
+            else if (isModified)
+              bg = "bg-amber-50 border-amber-300 text-amber-900";
+            else if (isRemoved)
+              bg = "bg-gray-50 border-dashed border-gray-200 opacity-40";
 
             return (
               <div
                 key={`after-${idx}`}
                 className={`p-2.5 rounded border text-xs font-mono transition-colors ${bg}`}
               >
-                <div className="font-bold truncate text-gray-800 mb-1">{field.key}</div>
+                <div className="font-bold truncate text-gray-800 mb-1">
+                  {field.key}
+                </div>
                 <div className="break-all whitespace-pre-wrap">
                   {isRemoved ? "<deleted>" : field.after ?? "null"}
                 </div>
