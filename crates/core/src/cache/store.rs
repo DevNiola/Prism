@@ -185,8 +185,24 @@ impl CacheStore {
     ) -> GratResult<Option<Vec<u8>>> {
         let path = self.entry_path(category, key, ledger_sequence);
         if path.exists() {
-            let data = std::fs::read(&path)
-                .map_err(|e| GratError::CacheError(format!("Failed to read cache entry: {e}")))?;
+            let data = match std::fs::read(&path) {
+                Ok(bytes) => bytes,
+                Err(_) => {
+                    // Corrupted or unreadable file — treat as miss and remove.
+                    self.stats.record_miss();
+                    let _ = std::fs::remove_file(&path);
+                    self.stats.record_eviction();
+                    return Ok(None);
+                }
+            };
+
+            // Truncated / 0-byte file on disk is treated as corrupted entry (cache miss).
+            if data.is_empty() {
+                self.stats.record_miss();
+                let _ = std::fs::remove_file(&path);
+                self.stats.record_eviction();
+                return Ok(None);
+            }
 
             // Check TTL header if present (files with >= 8 bytes).
             if data.len() >= TTL_HEADER_LEN {
@@ -224,7 +240,12 @@ impl CacheStore {
         }
     }
 
-    pub fn contains(&self, category: CacheCategory, key: &str, ledger_sequence: Option<u32>) -> bool {
+    pub fn contains(
+        &self,
+        category: CacheCategory,
+        key: &str,
+        ledger_sequence: Option<u32>,
+    ) -> bool {
         self.entry_path(category, key, ledger_sequence).exists()
     }
 
@@ -242,7 +263,11 @@ impl CacheStore {
         Ok(())
     }
 
-    pub fn prune_older_than(&self, category: CacheCategory, ledger_sequence: u32) -> GratResult<()> {
+    pub fn prune_older_than(
+        &self,
+        category: CacheCategory,
+        ledger_sequence: u32,
+    ) -> GratResult<()> {
         let base_dir = self.cache_dir.join(category.as_str());
         if !base_dir.exists() {
             return Ok(());
@@ -267,8 +292,9 @@ impl CacheStore {
 
         for path in stale_paths {
             if path.exists() {
-                std::fs::remove_file(&path)
-                    .map_err(|e| GratError::CacheError(format!("Failed to prune cache entry: {e}")))?;
+                std::fs::remove_file(&path).map_err(|e| {
+                    GratError::CacheError(format!("Failed to prune cache entry: {e}"))
+                })?;
             }
         }
 
@@ -281,6 +307,27 @@ impl CacheStore {
                 .map_err(|e| GratError::CacheError(format!("Failed to clear cache: {e}")))?;
             std::fs::create_dir_all(&self.cache_dir)
                 .map_err(|e| GratError::CacheError(format!("Failed to recreate cache dir: {e}")))?;
+        }
+        Ok(())
+    }
+
+    /// Clears all entries belonging to a specific cache category (namespace),
+    /// leaving other categories intact.
+    pub fn clear_category(&self, category: CacheCategory) -> GratResult<()> {
+        let cat_dir = self.cache_dir.join(category.as_str());
+        if cat_dir.exists() {
+            std::fs::remove_dir_all(&cat_dir).map_err(|e| {
+                GratError::CacheError(format!(
+                    "Failed to clear category {}: {e}",
+                    category.as_str()
+                ))
+            })?;
+            std::fs::create_dir_all(&cat_dir).map_err(|e| {
+                GratError::CacheError(format!(
+                    "Failed to recreate category dir {}: {e}",
+                    category.as_str()
+                ))
+            })?;
         }
         Ok(())
     }
@@ -411,7 +458,9 @@ mod tests {
         store
             .put(CacheCategory::WasmBlob, "test_key", b"hello", None)
             .unwrap();
-        let result = store.get(CacheCategory::WasmBlob, "test_key", None).unwrap();
+        let result = store
+            .get(CacheCategory::WasmBlob, "test_key", None)
+            .unwrap();
         assert_eq!(result, Some(b"hello".to_vec()));
 
         store.clear().unwrap();
@@ -426,9 +475,13 @@ mod tests {
         // 12 bytes on disk. Use 30 bytes to fit 2 entries and evict on the 3rd.
         let store = CacheStore::with_max_size_bytes(dir.clone(), 30).unwrap();
 
-        store.put(CacheCategory::WasmBlob, "key1", b"1234", None).unwrap();
+        store
+            .put(CacheCategory::WasmBlob, "key1", b"1234", None)
+            .unwrap();
         std::thread::sleep(std::time::Duration::from_millis(10));
-        store.put(CacheCategory::WasmBlob, "key2", b"5678", None).unwrap();
+        store
+            .put(CacheCategory::WasmBlob, "key2", b"5678", None)
+            .unwrap();
 
         assert!(store.contains(CacheCategory::WasmBlob, "key1", None));
         assert!(store.contains(CacheCategory::WasmBlob, "key2", None));
@@ -436,7 +489,9 @@ mod tests {
         store.get(CacheCategory::WasmBlob, "key1", None).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(10));
 
-        store.put(CacheCategory::WasmBlob, "key3", b"9012", None).unwrap();
+        store
+            .put(CacheCategory::WasmBlob, "key3", b"9012", None)
+            .unwrap();
 
         assert!(store.contains(CacheCategory::WasmBlob, "key1", None));
         assert!(!store.contains(CacheCategory::WasmBlob, "key2", None));
@@ -464,7 +519,9 @@ mod tests {
 
         // Immediately available.
         assert_eq!(
-            store.get(CacheCategory::LedgerEntry, "ephemeral", None).unwrap(),
+            store
+                .get(CacheCategory::LedgerEntry, "ephemeral", None)
+                .unwrap(),
             Some(b"temp".to_vec())
         );
 
@@ -473,7 +530,9 @@ mod tests {
 
         // After expiry, get returns None and the file is removed.
         assert_eq!(
-            store.get(CacheCategory::LedgerEntry, "ephemeral", None).unwrap(),
+            store
+                .get(CacheCategory::LedgerEntry, "ephemeral", None)
+                .unwrap(),
             None
         );
 
@@ -510,8 +569,8 @@ mod tests {
     fn test_cache_stats_track_hits_misses_evictions() {
         let dir = std::env::temp_dir().join("grat_test_stats");
         let _ = std::fs::remove_dir_all(&dir);
-        // 30 bytes: fits one 12-byte entry (4 bytes + 8-byte header), evicts on second.
-        let store = CacheStore::with_max_size_bytes(dir.clone(), 30).unwrap();
+        // 20 bytes: fits one 12-byte entry (4 bytes + 8-byte header), evicts on second (24 bytes > 20 bytes).
+        let store = CacheStore::with_max_size_bytes(dir.clone(), 20).unwrap();
 
         // Miss: key doesn't exist.
         let _ = store.get(CacheCategory::WasmBlob, "absent", None).unwrap();
@@ -531,7 +590,10 @@ mod tests {
         let (hits, misses, evictions) = store.stats();
         assert!(hits >= 1, "expected at least 1 hit, got {hits}");
         assert!(misses >= 1, "expected at least 1 miss, got {misses}");
-        assert!(evictions >= 1, "expected at least 1 eviction, got {evictions}");
+        assert!(
+            evictions >= 1,
+            "expected at least 1 eviction, got {evictions}"
+        );
 
         store.clear().unwrap();
         let _ = std::fs::remove_dir_all(dir);
@@ -557,6 +619,254 @@ mod tests {
             store.get(CacheCategory::WasmBlob, "old", None).unwrap(),
             Some(b"legacy".to_vec())
         );
+
+        store.clear().unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_ttl_zero_duration_expires_immediately() {
+        let dir = std::env::temp_dir().join("grat_test_ttl_zero");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
+
+        store
+            .put_with_ttl(
+                CacheCategory::TransactionResult,
+                "instant_expire",
+                b"ephemeral_data",
+                None,
+                Some(Duration::from_secs(0)),
+            )
+            .unwrap();
+
+        // Expired immediately on next get
+        assert_eq!(
+            store
+                .get(CacheCategory::TransactionResult, "instant_expire", None)
+                .unwrap(),
+            None
+        );
+
+        let (hits, misses, evictions) = store.stats();
+        assert_eq!(misses, 1);
+        assert_eq!(evictions, 1);
+        assert_eq!(hits, 0);
+
+        store.clear().unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_lru_eviction_mixed_read_write_sequence() {
+        let dir = std::env::temp_dir().join("grat_test_lru_mixed");
+        let _ = std::fs::remove_dir_all(&dir);
+        // 30 bytes: fits two 12-byte entries (4 bytes + 8 bytes TTL header).
+        let store = CacheStore::with_max_size_bytes(dir.clone(), 30).unwrap();
+
+        store
+            .put(CacheCategory::WasmBlob, "A", b"AAAA", None)
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(15));
+        store
+            .put(CacheCategory::WasmBlob, "B", b"BBBB", None)
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(15));
+
+        // Read A: updates its accessed/modified timestamp so A is newer than B.
+        assert_eq!(
+            store.get(CacheCategory::WasmBlob, "A", None).unwrap(),
+            Some(b"AAAA".to_vec())
+        );
+        std::thread::sleep(Duration::from_millis(15));
+
+        // Insert C: capacity (30) exceeded, so least-recently-used (B) must be evicted!
+        store
+            .put(CacheCategory::WasmBlob, "C", b"CCCC", None)
+            .unwrap();
+
+        assert!(
+            store.contains(CacheCategory::WasmBlob, "A", None),
+            "A should remain because it was recently read"
+        );
+        assert!(
+            !store.contains(CacheCategory::WasmBlob, "B", None),
+            "B should have been evicted as LRU"
+        );
+        assert!(
+            store.contains(CacheCategory::WasmBlob, "C", None),
+            "C was just inserted and must exist"
+        );
+
+        store.clear().unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_lru_multiple_evictions_to_fit_large_entry() {
+        let dir = std::env::temp_dir().join("grat_test_lru_multi");
+        let _ = std::fs::remove_dir_all(&dir);
+        // 40 bytes: fits three 10-byte entries (2 bytes data + 8-byte header = 10 bytes each).
+        let store = CacheStore::with_max_size_bytes(dir.clone(), 40).unwrap();
+
+        store
+            .put(CacheCategory::WasmBlob, "k1", b"11", None)
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(10));
+        store
+            .put(CacheCategory::WasmBlob, "k2", b"22", None)
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(10));
+        store
+            .put(CacheCategory::WasmBlob, "k3", b"33", None)
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(10));
+
+        // Now insert a large entry of 20 bytes data + 8-byte header = 28 bytes.
+        // Needs 28 bytes headroom. Current size is 30 bytes.
+        // It must evict both k1 and k2 to fit!
+        store
+            .put(CacheCategory::WasmBlob, "large", &[0xAA; 20], None)
+            .unwrap();
+
+        assert!(!store.contains(CacheCategory::WasmBlob, "k1", None));
+        assert!(!store.contains(CacheCategory::WasmBlob, "k2", None));
+        assert!(store.contains(CacheCategory::WasmBlob, "k3", None));
+        assert!(store.contains(CacheCategory::WasmBlob, "large", None));
+
+        store.clear().unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_disk_cache_corruption_zero_byte_recovery() {
+        let dir = std::env::temp_dir().join("grat_test_corrupt_zero");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
+
+        // Write an empty 0-byte file mimicking truncated/corrupted disk write
+        let path = store.entry_path(CacheCategory::WasmBlob, "corrupt", None);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(&path, b"").unwrap();
+        assert!(path.exists());
+
+        // Get should detect 0-byte corruption, treat as miss, and delete corrupt file
+        let res = store.get(CacheCategory::WasmBlob, "corrupt", None).unwrap();
+        assert_eq!(res, None);
+        assert!(
+            !path.exists(),
+            "Corrupt 0-byte file should have been cleaned up"
+        );
+
+        // Now write valid data to the same key and verify recovery
+        store
+            .put(CacheCategory::WasmBlob, "corrupt", b"recovered", None)
+            .unwrap();
+        assert_eq!(
+            store.get(CacheCategory::WasmBlob, "corrupt", None).unwrap(),
+            Some(b"recovered".to_vec())
+        );
+
+        store.clear().unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_concurrent_reads_and_writes_no_data_races() {
+        use std::sync::Arc;
+
+        let dir = std::env::temp_dir().join("grat_test_concurrent");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = Arc::new(CacheStore::with_max_size_bytes(dir.clone(), 1024 * 1024).unwrap());
+
+        let mut handles = Vec::new();
+        for thread_idx in 0..8 {
+            let store_clone = Arc::clone(&store);
+            handles.push(std::thread::spawn(move || {
+                for i in 0..25 {
+                    let key = format!("thread_{thread_idx}_key_{i}");
+                    let val = format!("val_{thread_idx}_{i}").into_bytes();
+
+                    store_clone
+                        .put(CacheCategory::ContractSpec, &key, &val, None)
+                        .unwrap();
+                    let got = store_clone
+                        .get(CacheCategory::ContractSpec, &key, None)
+                        .unwrap();
+                    assert_eq!(got, Some(val));
+                }
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        store.clear().unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_clear_category_namespace_isolation() {
+        let dir = std::env::temp_dir().join("grat_test_clear_cat");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = CacheStore::with_max_size_bytes(dir.clone(), 1024).unwrap();
+
+        store
+            .put(CacheCategory::WasmBlob, "w1", b"wasm_bytes", None)
+            .unwrap();
+        store
+            .put(CacheCategory::ContractSpec, "s1", b"spec_bytes", None)
+            .unwrap();
+        store
+            .put(CacheCategory::LedgerEntry, "l1", b"ledger_bytes", None)
+            .unwrap();
+
+        assert!(store.contains(CacheCategory::WasmBlob, "w1", None));
+        assert!(store.contains(CacheCategory::ContractSpec, "s1", None));
+        assert!(store.contains(CacheCategory::LedgerEntry, "l1", None));
+
+        // Clear ONLY WasmBlob category
+        store.clear_category(CacheCategory::WasmBlob).unwrap();
+
+        assert!(!store.contains(CacheCategory::WasmBlob, "w1", None));
+        assert!(store.contains(CacheCategory::ContractSpec, "s1", None));
+        assert!(store.contains(CacheCategory::LedgerEntry, "l1", None));
+
+        store.clear().unwrap();
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn test_prune_older_than_selective_ledger_cleanup() {
+        let dir = std::env::temp_dir().join("grat_test_prune");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = CacheStore::with_max_size_bytes(dir.clone(), 2048).unwrap();
+
+        store
+            .put(CacheCategory::LedgerEntry, "e1", b"old_entry", Some(100))
+            .unwrap();
+        store
+            .put(CacheCategory::LedgerEntry, "e2", b"mid_entry", Some(200))
+            .unwrap();
+        store
+            .put(CacheCategory::LedgerEntry, "e3", b"new_entry", Some(300))
+            .unwrap();
+
+        assert!(store.contains(CacheCategory::LedgerEntry, "e1", Some(100)));
+        assert!(store.contains(CacheCategory::LedgerEntry, "e2", Some(200)));
+        assert!(store.contains(CacheCategory::LedgerEntry, "e3", Some(300)));
+
+        // Prune older than 200: deletes 100, preserves 200 and 300
+        store
+            .prune_older_than(CacheCategory::LedgerEntry, 200)
+            .unwrap();
+
+        assert!(!store.contains(CacheCategory::LedgerEntry, "e1", Some(100)));
+        assert!(store.contains(CacheCategory::LedgerEntry, "e2", Some(200)));
+        assert!(store.contains(CacheCategory::LedgerEntry, "e3", Some(300)));
 
         store.clear().unwrap();
         let _ = std::fs::remove_dir_all(dir);
