@@ -1,30 +1,23 @@
 ---
 title: "Security"
-description: "How Grat ensures the safety of your data and keys."
+description: "Report a vulnerability in Grat privately."
+icon: "shield"
 ---
 
-Security is a top priority for Grat. As a diagnostic tool, we follow a strict set of principles to protect user data.
+## Report a vulnerability
 
-## No Private Keys
+1. Email the project maintainers privately. Keep vulnerability details out of public issues and pull requests.
+2. Include the affected version or commit, the affected component, the impact, and enough detail for the maintainers to reproduce the issue. Remove credentials and personal data from attachments.
+3. Keep follow-up and any disclosure timing in the private email thread with the maintainers.
 
-Grat is a **read-only** diagnostic tool.
+The repository maintains the [security policy](https://github.com/DevNiola/Prism/blob/main/SECURITY.md).
 
-- It never asks for, handles, or stores private keys.
-- It never signs transactions or submits data to the ledger.
-- All operations are performed on public blockchain data.
+## Security practices
 
-## Replay Isolation
+- Grat performs read-only diagnostics and never handles private keys or signs transactions.
+- Transaction replay runs in an isolated local sandbox without network access.
+- Grat validates external inputs such as XDR and WASM metadata before processing them.
 
-Transaction replaying occurs in a local, isolated sandbox.
+## Automated scanning
 
-- The sandbox has no network access during execution.
-- It cannot modify any real-world ledger state.
-- It operates strictly on a historical snapshot reconstructed from public archives.
-
-## Data Validation
-
-All external inputs, including XDR payloads and WASM contract metadata, are strictly validated at the boundary before processing to prevent exploitation of the parsing engines.
-
-## Reporting Vulnerabilities
-
-If you identify a security vulnerability in Grat, please report it privately by emailing the project maintainers. Do not open public issues for security-related concerns.
+GitHub Actions audits Rust dependencies with `cargo-audit` against RustSec and JavaScript dependencies with `pnpm audit`, which enforces high and critical severity findings. CodeQL analyzes pull requests and runs weekly. Trivy scans filesystem configuration, secrets, and container manifests. High-severity findings block pull requests from merging. [Security workflow](https://github.com/DevNiola/Prism/blob/main/.github/workflows/security.yml)
