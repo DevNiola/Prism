@@ -5,9 +5,11 @@ import { healthRoutes } from "./routes/health";
 import { sessionRoutes } from "./routes/session";
 import { aiRoutes } from "./routes/ai";
 import { cacheRoutes } from "./routes/cache";
+import { metricsRoutes } from "./routes/metrics";
 import { config, assertValidConfig } from "./config";
 import { SessionStore } from "./session-store";
 import { shutdownWorker } from "./workers/replay.worker";
+import { httpRequestsTotal, httpRequestDurationSeconds } from "./metrics";
 
 // Validate configuration on startup
 assertValidConfig(config);
@@ -59,6 +61,18 @@ server.addHook("onRequest", async (request) => {
   }, "Incoming request");
 });
 
+server.addHook("onResponse", async (request, reply) => {
+  const route = request.routeOptions?.url ?? request.url ?? "unknown";
+  const labels = {
+    method: request.method,
+    route,
+    status_code: String(reply.statusCode),
+  };
+  httpRequestsTotal.inc(labels);
+  // elapsedTime is in seconds in Fastify 5
+  httpRequestDurationSeconds.observe(labels, reply.elapsedTime / 1000);
+});
+
 // ---------------------------------------------------------------------------
 // Bootstrap the session store and attach it as a decorator so every route
 // plugin can access the same Redis-backed store instance.
@@ -88,6 +102,7 @@ server.register(sessionRoutes, { prefix: "/api" });
 server.register(aiRoutes, { prefix: "/api" });
 server.register(cacheRoutes, { prefix: "/api" });
 server.register(cacheRoutes);
+server.register(metricsRoutes);
 
 // ---------------------------------------------------------------------------
 // Start

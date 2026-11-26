@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { logger } from "../logger";
+import { wsClientsActive } from "../metrics";
 
 export interface TraceStreamMessage {
   type:
@@ -24,6 +25,7 @@ export function createTraceStream(port: number) {
 
   wss.on("connection", (ws: WebSocket) => {
     logger.info("New trace stream client connected");
+    wsClientsActive.inc();
 
     ws.on("message", (data: Buffer) => {
       try {
@@ -47,6 +49,7 @@ export function createTraceStream(port: number) {
     });
 
     ws.on("close", () => {
+      wsClientsActive.dec();
       logger.info("Trace stream client disconnected");
     });
 

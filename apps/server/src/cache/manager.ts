@@ -2,6 +2,7 @@ import type { CacheEntryType } from "../ai/types";
 import { cacheSet, cacheGet, cacheDel, scanKeys } from "../redis";
 import { PROMPT_VERSION_HASH } from "../ai/prompts";
 import { config } from "../config";
+import { cacheHitsTotal, cacheMissesTotal } from "../metrics";
 
 // ---------------------------------------------------------------------------
 // Key schema: grat:cache:{type}:{promptVersion}:{fingerprint}
@@ -105,8 +106,10 @@ export async function getCache(
   const result = await cacheGet(key);
   if (result !== null) {
     stats.hits++;
+    cacheHitsTotal.inc();
   } else {
     stats.misses++;
+    cacheMissesTotal.inc();
   }
   logCacheRatio();
   return result;
