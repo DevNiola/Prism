@@ -203,6 +203,19 @@ export const config: ServerConfig = {
     defaultLimit: numberValue("RATE_LIMIT_DEFAULT", 30, { integer: true, min: 1 }),
     windowSec: numberValue("RATE_LIMIT_WINDOW_SEC", 60, { integer: true, min: 1 }),
   },
+
+  // Replay worker
+  replay: {
+    /**
+     * Hard timeout for a single replay run (ms).  Aligned with AI_TIMEOUT_MS
+     * so the replay and its subsequent AI explanation share the same deadline.
+     * Override independently with REPLAY_TIMEOUT_MS.
+     */
+    timeoutMs:
+      Number(process.env.REPLAY_TIMEOUT_MS) ||
+      Number(process.env.AI_TIMEOUT_MS) ||
+      30_000,
+  },
 };
 
 export function assertValidConfig(cfg: ServerConfig): void {
