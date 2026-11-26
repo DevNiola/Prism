@@ -2,6 +2,8 @@
 
 import React, { Component, type ReactNode, type ErrorInfo } from "react";
 import { reloadWasm } from "@/lib/wasm";
+import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
 
 export interface FallbackProps {
   error: Error;
@@ -21,6 +23,13 @@ export interface ErrorBoundaryProps {
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
   /** Explicitly flag whether this boundary wraps a WASM-dependent component */
   isWasm?: boolean;
+  /**
+   * When true the fallback is rendered inside the shared Header/Footer shell
+   * so users keep access to navigation. Defaults to true for the root-level
+   * boundary; set to false for nested/widget boundaries where the shell is
+   * already present in the tree.
+   */
+  withLayout?: boolean;
 }
 
 export interface ErrorBoundaryState {
@@ -43,6 +52,54 @@ export function isWasmError(error: Error | null): boolean {
     message.includes("webassembly")
   );
 }
+
+// ---------------------------------------------------------------------------
+// Helpers shared by both fallback components
+// ---------------------------------------------------------------------------
+
+const GITHUB_REPO = "DevNiola/Prism";
+const BUG_REPORT_TEMPLATE = "bug_report.md";
+
+/**
+ * Strips transaction hashes (64-char hex strings) from text to avoid
+ * inadvertently sharing sensitive tx data in a public bug report.
+ */
+export function sanitizeStackTrace(text: string): string {
+  return text.replace(/\b[0-9a-fA-F]{64}\b/g, "[tx-hash-redacted]");
+}
+
+export function buildGitHubIssueUrl(error: Error): string {
+  const title = encodeURIComponent(
+    `[Bug]: ${error.name}: ${error.message}`.slice(0, 120)
+  );
+  const body = encodeURIComponent(
+    `## Bug description\n\nAn unexpected render error occurred.\n\n` +
+      `## Error details\n\n\`\`\`\n${sanitizeStackTrace(
+        `${error.name}: ${error.message}\n\n${error.stack ?? ""}`.slice(0, 2000)
+      )}\n\`\`\`\n\n## Steps to reproduce\n\n1. \n2. \n3. \n\n## Environment\n\n- Prism version or commit:\n- OS:\n- Browser:\n`
+  );
+  return `https://github.com/${GITHUB_REPO}/issues/new?template=${BUG_REPORT_TEMPLATE}&title=${title}&body=${body}`;
+}
+
+// ---------------------------------------------------------------------------
+// Layout shell — wraps any fallback in Header + Footer
+// ---------------------------------------------------------------------------
+
+function LayoutShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+      <Header />
+      <main className="flex-1 flex flex-col justify-center py-12 px-4">
+        {children}
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// WasmFallback
+// ---------------------------------------------------------------------------
 
 /**
  * Reusable Error Boundary Fallback for WASM load failures.
@@ -79,9 +136,10 @@ export function WasmFallback({
 
       <div className="space-y-4 mb-6">
         <p className="text-sm text-slate-300 leading-relaxed">
-          This component relies on Prism&apos;s WebAssembly engine to decode contract
-          errors and parse contract specifications. The WASM bundle failed to load,
-          which may be caused by network connectivity issues or an unsupported browser environment.
+          This component relies on Prism&apos;s WebAssembly engine to decode
+          contract errors and parse contract specifications. The WASM bundle
+          failed to load, which may be caused by network connectivity issues or
+          an unsupported browser environment.
         </p>
 
         <div className="bg-slate-950 rounded-lg p-3 border border-slate-800 text-xs font-mono text-red-300/90 break-all">
@@ -145,13 +203,29 @@ export function WasmFallback({
   );
 }
 
+// ---------------------------------------------------------------------------
+// DefaultFallback
+// ---------------------------------------------------------------------------
+
 /**
  * Default fallback for non-WASM general component failures.
+ * Includes Try again, Copy error (sanitized), and Open GitHub issue actions.
  */
-export function DefaultFallback({
-  error,
-  resetErrorBoundary,
-}: FallbackProps) {
+export function DefaultFallback({ error, resetErrorBoundary }: FallbackProps) {
+  const [copyLabel, setCopyLabel] = React.useState<"Copy error" | "Copied!">(
+    "Copy error"
+  );
+
+  function handleCopyError() {
+    const text = sanitizeStackTrace(
+      `${error.name}: ${error.message}\n\n${error.stack ?? ""}`.slice(0, 4000)
+    );
+    navigator.clipboard.writeText(text).then(() => {
+      setCopyLabel("Copied!");
+      setTimeout(() => setCopyLabel("Copy error"), 2000);
+    });
+  }
+
   return (
     <div
       role="alert"
@@ -159,7 +233,7 @@ export function DefaultFallback({
     >
       <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-4">
         <h3 className="text-lg font-bold text-amber-400 flex items-center gap-2">
-          <span>⚠️</span> Something went wrong
+          <span aria-hidden="true">⚠️</span> Something went wrong
         </h3>
         <span className="text-xs px-2.5 py-1 rounded bg-amber-950/40 border border-amber-800/50 text-amber-400 font-mono">
           Component Error
@@ -167,27 +241,55 @@ export function DefaultFallback({
       </div>
 
       <p className="text-sm text-slate-400 mb-4">
-        An error occurred while displaying this section. You can try refreshing or resetting the view.
+        An error occurred while displaying this section. You can try resetting
+        the view or report the issue on GitHub.
       </p>
 
       <div className="bg-slate-950 rounded-lg p-3 border border-slate-800 text-xs font-mono text-red-300 mb-6 break-all">
         {error.message || "Unknown error"}
       </div>
 
-      <button
-        type="button"
-        onClick={resetErrorBoundary}
-        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-      >
-        Try Again
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={resetErrorBoundary}
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+        >
+          Try again
+        </button>
+
+        <button
+          type="button"
+          onClick={handleCopyError}
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+        >
+          {copyLabel}
+        </button>
+
+        <a
+          href={buildGitHubIssueUrl(error)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-4 py-2 bg-violet-700 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
+        >
+          <span aria-hidden="true">↗</span> Open GitHub issue
+        </a>
+      </div>
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// ErrorBoundary class
+// ---------------------------------------------------------------------------
+
 /**
- * A reusable React Error Boundary designed to gracefully catch component errors,
- * with first-class handling and fallbacks for WASM loading failures.
+ * A reusable React Error Boundary designed to gracefully catch component
+ * errors, with first-class handling and fallbacks for WASM loading failures.
+ *
+ * Set `withLayout` to render the fallback inside the shared Header/Footer
+ * shell so users keep access to navigation even when a full-page component
+ * crashes.
  */
 export class ErrorBoundary extends Component<
   ErrorBoundaryProps,
@@ -203,10 +305,7 @@ export class ErrorBoundary extends Component<
   }
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
-    return {
-      hasError: true,
-      error,
-    };
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
@@ -219,11 +318,7 @@ export class ErrorBoundary extends Component<
     if (this.props.onReset) {
       this.props.onReset();
     }
-    this.setState({
-      hasError: false,
-      error: null,
-      isReloading: false,
-    });
+    this.setState({ hasError: false, error: null, isReloading: false });
   };
 
   handleReloadWasm = async (): Promise<void> => {
@@ -244,7 +339,7 @@ export class ErrorBoundary extends Component<
 
   render(): ReactNode {
     const { hasError, error, isReloading } = this.state;
-    const { children, fallback, isWasm } = this.props;
+    const { children, fallback, isWasm, withLayout = false } = this.props;
 
     if (hasError && error) {
       const isWasmFailure = Boolean(isWasm || isWasmError(error));
@@ -257,24 +352,28 @@ export class ErrorBoundary extends Component<
         isReloading,
       };
 
+      let content: ReactNode;
+
       if (typeof fallback === "function") {
-        return fallback(fallbackProps);
+        content = fallback(fallbackProps);
+      } else if (fallback) {
+        content = fallback;
+      } else if (isWasmFailure) {
+        content = <WasmFallback {...fallbackProps} />;
+      } else {
+        content = <DefaultFallback {...fallbackProps} />;
       }
 
-      if (fallback) {
-        return fallback;
-      }
-
-      if (isWasmFailure) {
-        return <WasmFallback {...fallbackProps} />;
-      }
-
-      return <DefaultFallback {...fallbackProps} />;
+      return withLayout ? <LayoutShell>{content}</LayoutShell> : content;
     }
 
     return children;
   }
 }
+
+// ---------------------------------------------------------------------------
+// withErrorBoundary HOC
+// ---------------------------------------------------------------------------
 
 /**
  * Higher-Order Component helper to wrap any component in an ErrorBoundary.
