@@ -1,3 +1,27 @@
+# [1.5.0](https://github.com/DevNiola/Prism/compare/v1.4.0...v1.5.0) (2026-11-26)
+
+
+### Bug Fixes
+
+* **devops:** exempt Stellar Wave, pinned, and security from stale bot ([#418](https://github.com/DevNiola/Prism/issues/418)) ([3dcf57c](https://github.com/DevNiola/Prism/commit/3dcf57c27bcd093ebd1c7d2540cddf96dc93397a))
+
+
+### Features
+
+* **backend:** redact sensitive fields in structured logger ([#395](https://github.com/DevNiola/Prism/issues/395)) ([64a31f9](https://github.com/DevNiola/Prism/commit/64a31f96b0a934be49dd33261ec5263eecbc5b52))
+* **ci:** add provenance attestations and SHA256 digests to publish workflows ([97d16ce](https://github.com/DevNiola/Prism/commit/97d16ce2e3c8ba9083e2a7e176acbaea707ca4af)), closes [#409](https://github.com/DevNiola/Prism/issues/409)
+* **devops:** add liveness/readiness health split and compose healthcheck conditions ([aea0bbf](https://github.com/DevNiola/Prism/commit/aea0bbfa25f8f7ca63378c62301f68db6b8fdc34)), closes [#414](https://github.com/DevNiola/Prism/issues/414)
+* **devops:** group minor/patch dependabot updates and add auto-merge ([#417](https://github.com/DevNiola/Prism/issues/417)) ([1474491](https://github.com/DevNiola/Prism/commit/1474491638dce6b53ec3894cb804940acb183cfb))
+* **infra:** add default tagging policy and scheduled drift detection to Terraform ([0411ec9](https://github.com/DevNiola/Prism/commit/0411ec9aadcb3242c53411aa6b491233cdae554e)), closes [#413](https://github.com/DevNiola/Prism/issues/413)
+* **k8s:** require Redis AUTH and restrict ingress with NetworkPolicy ([23399bc](https://github.com/DevNiola/Prism/commit/23399bc4f51e777fbb72caddda7eec45684d3cd3)), closes [#411](https://github.com/DevNiola/Prism/issues/411)
+* **rpc:** configurable retry with jitter and explicit retryable error classification ([#406](https://github.com/DevNiola/Prism/issues/406)) ([b5bc11e](https://github.com/DevNiola/Prism/commit/b5bc11e1fbc2a52460c7c1f7ecdae1a4ec9c90c9))
+* **server:** add shared Zod validators and normalized error envelope ([#396](https://github.com/DevNiola/Prism/issues/396)) ([0dc00bc](https://github.com/DevNiola/Prism/commit/0dc00bc5b05612049bc355079d8732df1e644a13))
+* **server:** add shared Zod validators and normalized error envelope ([#603](https://github.com/DevNiola/Prism/issues/603)) ([a7e3759](https://github.com/DevNiola/Prism/commit/a7e3759eca8525cb0baeb125c32849b5db2206aa))
+* **web:** add pin, per-item delete, and clear confirmation to RecentTransactions ([2827005](https://github.com/DevNiola/Prism/commit/282700599acd28a811341b6989cb67370512e0c5)), closes [#501](https://github.com/DevNiola/Prism/issues/501)
+* **web:** add Try Again, Copy Error, and GitHub issue link to ErrorBoundary fallback ([78ddf42](https://github.com/DevNiola/Prism/commit/78ddf4263402b9da4fc358fdf1d5a10e55760c50)), closes [#499](https://github.com/DevNiola/Prism/issues/499)
+* **web:** render ErrorBoundary fallback inside Header/Footer layout shell ([6d267c0](https://github.com/DevNiola/Prism/commit/6d267c005773096ed8b75bc37158c48f2682eac3)), closes [#466](https://github.com/DevNiola/Prism/issues/466)
+* **web:** render ErrorBoundary fallback inside Header/Footer layout shell ([6c7dcf0](https://github.com/DevNiola/Prism/commit/6c7dcf04adf5a11278cac70027be33810fb4fbeb))
+
 # [1.4.0](https://github.com/DevNiola/Prism/compare/v1.3.5...v1.4.0) (2026-11-21)
 
 
