@@ -145,6 +145,28 @@ export function WasmFallback({
   );
 }
 
+const GITHUB_REPO = "Joiystick/Prism";
+const BUG_REPORT_TEMPLATE = "bug_report.md";
+
+/**
+ * Strips transaction hashes (64-char hex strings) from text to avoid
+ * inadvertently sharing sensitive tx data in a public bug report.
+ */
+function sanitizeStackTrace(text: string): string {
+  return text.replace(/\b[0-9a-fA-F]{64}\b/g, "[tx-hash-redacted]");
+}
+
+function buildGitHubIssueUrl(error: Error): string {
+  const title = encodeURIComponent(`[Bug]: ${error.name}: ${error.message}`.slice(0, 120));
+  const body = encodeURIComponent(
+    `## Bug description\n\nAn unexpected render error occurred.\n\n` +
+    `## Error details\n\n\`\`\`\n${sanitizeStackTrace(
+      `${error.name}: ${error.message}\n\n${error.stack ?? ""}`.slice(0, 2000)
+    )}\n\`\`\`\n\n## Steps to reproduce\n\n1. \n2. \n3. \n\n## Environment\n\n- Prism version or commit:\n- OS:\n- Browser:\n`
+  );
+  return `https://github.com/${GITHUB_REPO}/issues/new?template=${BUG_REPORT_TEMPLATE}&title=${title}&body=${body}`;
+}
+
 /**
  * Default fallback for non-WASM general component failures.
  */
@@ -152,6 +174,18 @@ export function DefaultFallback({
   error,
   resetErrorBoundary,
 }: FallbackProps) {
+  const [copyLabel, setCopyLabel] = React.useState<"Copy error" | "Copied!">("Copy error");
+
+  function handleCopyError() {
+    const text = sanitizeStackTrace(
+      `${error.name}: ${error.message}\n\n${error.stack ?? ""}`.slice(0, 4000)
+    );
+    navigator.clipboard.writeText(text).then(() => {
+      setCopyLabel("Copied!");
+      setTimeout(() => setCopyLabel("Copy error"), 2000);
+    });
+  }
+
   return (
     <div
       role="alert"
@@ -167,20 +201,39 @@ export function DefaultFallback({
       </div>
 
       <p className="text-sm text-slate-400 mb-4">
-        An error occurred while displaying this section. You can try refreshing or resetting the view.
+        An error occurred while displaying this section. You can try resetting the view or report the issue on GitHub.
       </p>
 
       <div className="bg-slate-950 rounded-lg p-3 border border-slate-800 text-xs font-mono text-red-300 mb-6 break-all">
         {error.message || "Unknown error"}
       </div>
 
-      <button
-        type="button"
-        onClick={resetErrorBoundary}
-        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-      >
-        Try Again
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={resetErrorBoundary}
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+        >
+          Try again
+        </button>
+
+        <button
+          type="button"
+          onClick={handleCopyError}
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+        >
+          {copyLabel}
+        </button>
+
+        <a
+          href={buildGitHubIssueUrl(error)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-4 py-2 bg-violet-700 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
+        >
+          <span aria-hidden="true">↗</span> Open GitHub issue
+        </a>
+      </div>
     </div>
   );
 }
