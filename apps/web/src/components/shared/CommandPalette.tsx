@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { recentTransactionHref, truncateHash } from "./RecentTransactions";
+import { useSessionStore } from "@/store/session";
 import { useNetworkStore } from "@/store/network";
 import type { Network } from "@/lib/types";
 
@@ -21,22 +23,49 @@ const NETWORKS: Array<{ value: Network; label: string }> = [
   { value: "futurenet", label: "Futurenet" },
 ];
 
-function fuzzyMatch(query: string, text: string) {
-  let queryIndex = 0;
-  const normalizedText = text.toLowerCase();
+const LAST_COMMAND_KEY = "prism-last-command";
 
-  for (const character of query.toLowerCase()) {
-    queryIndex = normalizedText.indexOf(character, queryIndex);
-    if (queryIndex === -1) return false;
-    queryIndex += 1;
+function matchScore(term: string, value: string): number {
+  const text = value.toLowerCase();
+  if (text === term) return 4;
+  if (text.startsWith(term)) return 3;
+  if (text.includes(term)) return 2;
+
+  let position = 0;
+  for (const character of term) {
+    const index = text.indexOf(character, position);
+    if (index < 0) return 0;
+    position = index + 1;
   }
+  return 1;
+}
 
-  return true;
+function rankCommands(commands: PaletteCommand[], terms: string[]) {
+  return commands
+    .map((command) => {
+      let score = 0;
+      for (const term of terms) {
+        const best = Math.max(
+          matchScore(term, command.title) * 2,
+          matchScore(term, command.id),
+          matchScore(term, command.detail),
+          matchScore(term, command.keywords),
+        );
+        if (best === 0) return { command, score: -1 };
+        score += best;
+      }
+      return { command, score };
+    })
+    .filter(({ score }) => score >= 0)
+    .sort((a, b) => b.score - a.score)
+    .map(({ command }) => command);
 }
 
 export default function CommandPalette() {
   const router = useRouter();
   const { network, setNetwork } = useNetworkStore();
+  const history = useSessionStore((state) => state.history);
+  const [lastCommand, setLastCommand] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [theme, setTheme] = useState<Theme>("dark");
@@ -44,6 +73,7 @@ export default function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    setLastCommand(localStorage.getItem(LAST_COMMAND_KEY));
     const savedTheme = localStorage.getItem("prism-theme");
     const nextTheme: Theme = savedTheme === "light" ? "light" : "dark";
     setTheme(nextTheme);
@@ -140,14 +170,52 @@ export default function CommandPalette() {
     [network, router, setNetwork, theme],
   );
 
-  const visibleCommands = commands.filter((command) =>
-    fuzzyMatch(query.trim(), `${command.title} ${command.detail} ${command.keywords}`),
+  const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const visibleCommands = rankCommands(commands, terms);
+  if (terms.length === 0) {
+    visibleCommands.sort((a, b) => Number(b.id === lastCommand) - Number(a.id === lastCommand));
+  }
+
+  const recentCommands = rankCommands(
+    history.map((entry) => ({
+      id: `recent-${entry.id}`,
+      title: /^[0-9a-f]{64}$/i.test(entry.txHash) ? truncateHash(entry.txHash) : entry.errorName,
+      detail: `${entry.network} · ${entry.errorName}`,
+      keywords: `${entry.txHash} ${entry.errorCategory}`,
+      run: () => router.push(recentTransactionHref(entry)),
+    })),
+    terms,
   );
+  const firstResult = visibleCommands[0] ?? recentCommands[0];
 
   function runCommand(command: PaletteCommand) {
+    setLastCommand(command.id);
+    localStorage.setItem(LAST_COMMAND_KEY, command.id);
     setMessage("");
     command.run();
     if (command.id !== "paste-transaction") setOpen(false);
+  }
+
+  function renderCommand(command: PaletteCommand) {
+    return (
+      <li key={command.id} role="presentation">
+        <button
+          type="button"
+          role="option"
+          aria-selected={command.id === lastCommand}
+          onClick={() => runCommand(command)}
+          className="flex w-full items-center justify-between gap-4 rounded-md px-3 py-3 text-left hover:bg-slate-100 focus:bg-slate-100 focus:outline-none"
+        >
+          <span>
+            <span className="block text-sm font-medium text-slate-900">{command.title}</span>
+            <span className="mt-0.5 block text-xs text-slate-600">{command.detail}</span>
+          </span>
+          {command.id === lastCommand && (
+            <span className="text-xs text-slate-500">Last selected</span>
+          )}
+        </button>
+      </li>
+    );
   }
 
   return (
@@ -186,40 +254,36 @@ export default function CommandPalette() {
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search commands..."
-              aria-label="Search commands"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.nativeEvent.isComposing && firstResult) {
+                  event.preventDefault();
+                  runCommand(firstResult);
+                }
+              }}
+              placeholder="Search commands or transactions..."
+              aria-label="Search commands or transactions"
               className="w-full border-b border-slate-200 px-4 py-4 text-base text-slate-900 outline-none placeholder:text-slate-500"
             />
-            <ul role="listbox" aria-label="Commands" className="max-h-[50vh] overflow-y-auto p-2">
-              {visibleCommands.map((command) => (
-                <li key={command.id}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected="false"
-                    onClick={() => runCommand(command)}
-                    className="flex w-full items-center justify-between gap-4 rounded-md px-3 py-3 text-left hover:bg-slate-100 focus:bg-slate-100 focus:outline-none"
-                  >
-                    <span>
-                      <span className="block text-sm font-medium text-slate-900">
-                        {command.title}
-                      </span>
-                      <span className="mt-0.5 block text-xs text-slate-600">
-                        {command.detail}
-                      </span>
-                    </span>
-                    {command.id.startsWith("network-") && (
-                      <span className="text-xs text-slate-500">{network}</span>
-                    )}
-                  </button>
-                </li>
-              ))}
-              {visibleCommands.length === 0 && (
-                <li className="px-3 py-8 text-center text-sm text-slate-500">
-                  No matching commands
-                </li>
+            <div className="max-h-[50vh] overflow-y-auto p-2">
+              {visibleCommands.length > 0 && (
+                <ul role="listbox" aria-label="Commands">
+                  {visibleCommands.map(renderCommand)}
+                </ul>
               )}
-            </ul>
+              {recentCommands.length > 0 && (
+                <div className="mt-2 border-t border-slate-200 pt-2">
+                  <h2 id="palette-recent-transactions" className="px-3 py-1 text-xs font-semibold text-slate-600">
+                    Recent transactions
+                  </h2>
+                  <ul role="listbox" aria-labelledby="palette-recent-transactions">
+                    {recentCommands.map(renderCommand)}
+                  </ul>
+                </div>
+              )}
+              {!firstResult && (
+                <p className="px-3 py-8 text-center text-sm text-slate-500">No matching results</p>
+              )}
+            </div>
             {message && (
               <p role="status" className="border-t border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 {message}
