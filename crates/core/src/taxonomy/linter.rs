@@ -297,6 +297,20 @@ pub fn lint_dir(dir: &Path) -> GratResult<()> {
         }
     }
 
+    // Globally unique id check — no two entries across all files may share the same id.
+    let mut seen_ids: HashMap<String, String> = HashMap::new();
+    for (file_name, content, entry) in &all_entries {
+        if let Some(prev_file) = seen_ids.get(&entry.id) {
+            let line_num = get_line_number(content, &entry.id, None).unwrap_or(1);
+            panic!(
+                "Taxonomy validation error in {} at line {}: duplicate id '{}' already defined in {}",
+                file_name, line_num, entry.id, prev_file
+            );
+        } else {
+            seen_ids.insert(entry.id.clone(), file_name.clone());
+        }
+    }
+
     // related_errors should reference existing ids
     let all_ids: HashSet<&str> = all_entries.iter().map(|(_, _, e)| e.id.as_str()).collect();
     for (file_name, content, entry) in &all_entries {
@@ -467,6 +481,44 @@ unknown_field = "oops"
         entry.since_protocol = Some(20);
         entry.deprecated_protocol = Some(15);
         write_taxonomy_file(dir.path(), "test.toml", vec![entry]);
+
+        let _ = lint_dir(dir.path());
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate id")]
+    fn duplicate_id_across_files_fails() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        // Two different files each declare an entry with the same id but
+        // different category and code — the global uniqueness check must reject this.
+        write_taxonomy_file(
+            dir.path(),
+            "file_a.toml",
+            vec![valid_entry("shared.duplicate.id", ErrorCategory::Budget, 100)],
+        );
+        write_taxonomy_file(
+            dir.path(),
+            "file_b.toml",
+            vec![valid_entry("shared.duplicate.id", ErrorCategory::Storage, 200)],
+        );
+
+        let _ = lint_dir(dir.path());
+    }
+
+    #[test]
+    #[should_panic(expected = "duplicate id")]
+    fn duplicate_id_within_same_file_fails() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        // Two entries in the same file sharing an id but with different category/code
+        // must also be caught by the global uniqueness check.
+        write_taxonomy_file(
+            dir.path(),
+            "test.toml",
+            vec![
+                valid_entry("test.same.id", ErrorCategory::Budget, 10),
+                valid_entry("test.same.id", ErrorCategory::Storage, 20),
+            ],
+        );
 
         let _ = lint_dir(dir.path());
     }
