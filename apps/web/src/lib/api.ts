@@ -66,6 +66,11 @@ export interface ResourceProfileResponse {
 }
 
 export interface StateDiffEntryResponse {
+  /**
+   * Canonical, human-readable ledger key string in the form
+   * `<kind>/<discriminating-fields>` (e.g. `contract_data/<contract-id>/<key-hex>`).
+   * Falls back to `raw/<base64>` for unrecognised key variants.
+   */
   key: string;
   before?: string;
   after?: string;
