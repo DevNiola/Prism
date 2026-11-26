@@ -32,13 +32,20 @@ function ResourceBar({
   const displayLimit = format ? format(limit) : limit.toLocaleString();
   const isBudgetExceeded = limit > 0 && used > limit;
 
-  // Color code: green (<50%), amber (50-80%), red (>80%)
+  // Color code: green (<50%), amber (50–80%), red (>80%)
   const barColor =
     percentage > 80
       ? "bg-red-500"
       : percentage >= 50
         ? "bg-amber-500"
         : "bg-emerald-500";
+
+  const percentageColor =
+    percentage > 80
+      ? "text-red-600"
+      : percentage >= 50
+        ? "text-amber-600"
+        : "text-emerald-600";
 
   return (
     <div className="space-y-1.5">
@@ -58,15 +65,7 @@ function ResourceBar({
           <span className="text-xs font-mono text-gray-500">
             {displayValue} / {displayLimit}
           </span>
-          <span
-            className={`ml-2 text-xs font-bold ${
-              percentage > 80
-                ? "text-red-600"
-                : percentage >= 50
-                  ? "text-amber-600"
-                  : "text-emerald-600"
-            }`}
-          >
+          <span className={`ml-2 text-xs font-bold ${percentageColor}`}>
             {percentage.toFixed(1)}%
           </span>
         </div>
@@ -97,6 +96,30 @@ function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB"];
   const i = Math.min(Math.floor(Math.log2(bytes) / 10), units.length - 1);
   return `${(bytes / (1 << (i * 10))).toFixed(i > 0 ? 2 : 0)} ${units[i]}`;
+}
+
+function getBudgetVerdict(profile: ResourceProfileData): {
+  label: string;
+  level: "over" | "near" | "ok";
+} {
+  const metrics = [
+    { used: profile.cpu_used, limit: profile.cpu_limit },
+    { used: profile.memory_used, limit: profile.memory_limit },
+    { used: profile.read_bytes, limit: profile.read_limit },
+    { used: profile.write_bytes, limit: profile.write_limit },
+  ];
+
+  const percentages = metrics
+    .filter((m) => m.limit > 0)
+    .map((m) => (m.used / m.limit) * 100);
+
+  if (percentages.some((p) => p >= 100)) {
+    return { label: "Over budget", level: "over" };
+  }
+  if (percentages.some((p) => p >= 80)) {
+    return { label: "Near limit", level: "near" };
+  }
+  return { label: "Within budget", level: "ok" };
 }
 
 /**
@@ -132,6 +155,28 @@ export function ResourceProfile({ profile, loading }: ResourceProfileProps) {
     return null;
   }
 
+  const verdict = getBudgetVerdict(profile);
+
+  const verdictStyles = {
+    over: {
+      wrapper: "bg-red-50 border border-red-200",
+      icon: "🔴",
+      text: "text-red-800 font-semibold",
+    },
+    near: {
+      wrapper: "bg-amber-50 border border-amber-200",
+      icon: "🟡",
+      text: "text-amber-800 font-semibold",
+    },
+    ok: {
+      wrapper: "bg-emerald-50 border border-emerald-200",
+      icon: "🟢",
+      text: "text-emerald-800 font-semibold",
+    },
+  };
+
+  const style = verdictStyles[verdict.level];
+
   return (
     <div className="bg-white rounded-lg shadow p-6 transition-opacity duration-300">
       <h2 className="text-xl font-semibold mb-4">Resource Profile</h2>
@@ -162,14 +207,13 @@ export function ResourceProfile({ profile, loading }: ResourceProfileProps) {
         />
       </div>
 
-      {profile.cpu_limit > 0 && profile.cpu_used / profile.cpu_limit > 0.9 && (
-        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-          <p className="text-sm text-yellow-800">
-            Resource usage is approaching limits. Consider optimizing contract
-            code.
-          </p>
-        </div>
-      )}
+      {/* One-line budget verdict */}
+      <div
+        className={`mt-5 px-4 py-2.5 rounded-md flex items-center gap-2 ${style.wrapper}`}
+      >
+        <span aria-hidden="true">{style.icon}</span>
+        <span className={`text-sm ${style.text}`}>{verdict.label}</span>
+      </div>
     </div>
   );
 }
