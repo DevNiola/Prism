@@ -106,6 +106,27 @@ pub struct FailureAttribution {
     pub origin_description: String,
 }
 
+/// Structured diagnostics for a failed transaction.
+///
+/// ## Example
+///
+/// Classify a failed transaction response before building and serializing its report.
+///
+/// ```rust
+/// use grat_core::decode::{host_error::classify_error, report::build_report};
+/// use grat_core::DiagnosticReport;
+/// use serde_json::json;
+///
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let tx = json!({ "status": "FAILED", "errorCode": 50 });
+///     let error = classify_error(&tx)?;
+///     let report: DiagnosticReport = build_report(&error)?;
+///
+///     assert_eq!(report.error_code, 50);
+///     println!("{}", serde_json::to_string_pretty(&report)?);
+///     Ok(())
+/// }
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiagnosticReport {
     pub error_category: String,
