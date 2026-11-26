@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTrace } from "@/hooks/useTrace";
+import DiagnosticEvents from "@/components/trace/DiagnosticEvents";
 import { ExecutionTimeline } from "@/components/trace/ExecutionTimeline";
 import { StateDiffViewer } from "@/components/trace/StateDiffViewer";
 import { ResourceProfile } from "@/components/trace/ResourceProfile";
@@ -277,11 +278,15 @@ export default function TracePage() {
           <ResourceProfile profile={trace.resource_profile} loading={loading} />
 
           <ExecutionTimeline
+            id="execution-timeline"
             nodes={trace.nodes}
             resourceProfile={trace.resource_profile}
             loading={loading}
           />
 
+          {trace.diagnostic_events && (
+            <DiagnosticEvents events={trace.diagnostic_events} timelineId="execution-timeline" />
+          )}
           <StateDiffViewer entries={trace.state_diff} loading={loading} />
         </div>
       )}
