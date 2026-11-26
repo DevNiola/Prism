@@ -1,4 +1,4 @@
-# Getting Started with Prism (Grat)
+# Getting Started with Prism
 
 Welcome to the contributor guide for Prism! This comprehensive guide walks you through setting up your local development environment from scratch, configuring environment variables, running all project components, and troubleshooting common issues.
 
@@ -103,7 +103,7 @@ cargo build --workspace
 
 To run the CLI locally:
 ```bash
-cargo run --bin grat -- --help
+cargo run --bin prism -- --help
 ```
 
 ### Running the Server (`apps/server`)

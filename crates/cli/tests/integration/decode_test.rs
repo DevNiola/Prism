@@ -170,7 +170,7 @@ async fn test_decode_command_loop_success() {
     let addr = spawn_mock_server(vec![response]).await;
 
     for i in 0..5 {
-        let mut cmd = Command::cargo_bin("grat").expect("Failed to find or build 'grat' binary. Ensure the project compiles on this platform.");
+        let mut cmd = Command::cargo_bin("prism").expect("Failed to find or build 'prism' binary. Ensure the project compiles on this platform.");
         cmd.args([
             "decode",
             tx_hash,
@@ -225,7 +225,7 @@ async fn test_decode_command_loop_failure() {
     let addr = spawn_mock_server(vec![response]).await;
 
     for i in 0..5 {
-        let mut cmd = Command::cargo_bin("grat").expect("Failed to find or build 'grat' binary. Ensure the project compiles on this platform.");
+        let mut cmd = Command::cargo_bin("prism").expect("Failed to find or build 'prism' binary. Ensure the project compiles on this platform.");
         cmd.args([
             "decode",
             tx_hash,
@@ -267,7 +267,7 @@ async fn test_decode_command_prints_reports_to_stdout() {
     let response = http_response(200, "OK", &body);
     let addr = spawn_mock_server(vec![response]).await;
 
-    let mut cmd = Command::cargo_bin("grat").expect("Failed to find or build 'grat' binary. Ensure the project compiles on this platform.");
+    let mut cmd = Command::cargo_bin("prism").expect("Failed to find or build 'prism' binary. Ensure the project compiles on this platform.");
     cmd.args([
         "decode",
         tx_hash,

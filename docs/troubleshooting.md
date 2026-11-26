@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-This guide covers the most common errors users encounter when running Grat, explains why each error happens, and shows exactly how to fix it. If your problem is not listed here, see [Reporting Bugs](#reporting-bugs) at the bottom of this page.
+This guide covers the most common errors users encounter when running Prism, explains why each error happens, and shows exactly how to fix it. If your problem is not listed here, see [Reporting Bugs](#reporting-bugs) at the bottom of this page.
 
 ---
 
@@ -46,7 +46,7 @@ curl -s https://soroban-testnet.stellar.org/health
 
 **Switch to a different RPC endpoint:**
 ```bash
-grat --rpc-url https://soroban-testnet.stellar.org decode <TX_HASH>
+prism --rpc-url https://soroban-testnet.stellar.org decode <TX_HASH>
 ```
 
 **Increase the timeout** in `~/.grat/config.toml`:
@@ -86,10 +86,10 @@ Error: Transaction not found: <TX_HASH>
 **Verify the network:**
 ```bash
 # Mainnet transaction
-grat --network mainnet decode <TX_HASH>
+prism --network mainnet decode <TX_HASH>
 
 # Testnet transaction
-grat --network testnet decode <TX_HASH>
+prism --network testnet decode <TX_HASH>
 ```
 
 **Double-check the hash** — transaction hashes are 64 hex characters:
@@ -118,7 +118,7 @@ Error: invalid JSON input: expected value at line 1 column 1
 
 - The XDR string passed to `--xdr` is truncated, corrupted, or incorrectly base64-encoded.
 - A copy/paste of the XDR dropped characters or introduced whitespace.
-- The XDR was encoded for a different protocol version than the one Grat expects.
+- The XDR was encoded for a different protocol version than the one Prism expects.
 
 ### How to fix it
 
@@ -130,11 +130,11 @@ echo "<XDR_STRING>" | base64 --decode | xxd | head -5
 # should show recognizable XDR structure bytes (0x00 0x00 0x00 0x...)
 ```
 
-**Use the transaction hash instead of raw XDR** when possible — Grat fetches and decodes XDR automatically:
+**Use the transaction hash instead of raw XDR** when possible — Prism fetches and decodes XDR automatically:
 ```bash
-grat decode <TX_HASH>
+prism decode <TX_HASH>
 # instead of:
-grat decode --xdr <LONG_XDR_STRING>
+prism decode --xdr <LONG_XDR_STRING>
 ```
 
 **Enable verbose logging** to see the exact decode step that fails:
@@ -162,19 +162,19 @@ Warning: Unknown host error type: value(12)
 
 **Update the taxonomy database:**
 ```bash
-grat db update
+prism db update
 ```
 
-This fetches the latest `enhanced_error_taxonomy.toml` from the Grat repository. You need internet access for this command.
+This fetches the latest `enhanced_error_taxonomy.toml` from the Prism repository. You need internet access for this command.
 
 **Check the current taxonomy version:**
 ```bash
-grat db update --check
+prism db update --check
 ```
 
-**Force an offline decode** — Grat will still report the raw error code even without a taxonomy match:
+**Force an offline decode** — Prism will still report the raw error code even without a taxonomy match:
 ```bash
-grat --offline decode <TX_HASH>
+prism --offline decode <TX_HASH>
 ```
 
 If the error code is genuinely new, consider [contributing a taxonomy entry](./contributing-taxonomy.md) so future users benefit from the description.
@@ -191,19 +191,19 @@ Error: Transaction succeeded — no error to decode
 
 ### Why it happens
 
-You ran `grat decode` on a transaction that completed successfully. There is no error to explain.
+You ran `prism decode` on a transaction that completed successfully. There is no error to explain.
 
 ### How to fix it
 
 This is not a bug — it is a guard to prevent confusing output on successful transactions.
 
-- If you are looking for resource usage, use `grat profile` instead:
+- If you are looking for resource usage, use `prism profile` instead:
   ```bash
-  grat profile <TX_HASH>
+  prism profile <TX_HASH>
   ```
-- If you want a full execution trace of a successful transaction, use `grat trace`:
+- If you want a full execution trace of a successful transaction, use `prism trace`:
   ```bash
-  grat trace <TX_HASH>
+  prism trace <TX_HASH>
   ```
 - If you believe the transaction should have failed, double-check the hash or network.
 
@@ -223,12 +223,12 @@ The transaction hash refers to a classic Stellar transaction (e.g., a payment, a
 
 ### How to fix it
 
-Grat only decodes Soroban transactions. Verify the transaction on a Stellar explorer:
+Prism only decodes Soroban transactions. Verify the transaction on a Stellar explorer:
 
 - **Mainnet:** https://stellar.expert/explorer/public/tx/`<TX_HASH>`
 - **Testnet:** https://stellar.expert/explorer/testnet/tx/`<TX_HASH>`
 
-Look for an `InvokeHostFunction` operation type. If the transaction does not contain one, it is a classic transaction and outside Grat's scope.
+Look for an `InvokeHostFunction` operation type. If the transaction does not contain one, it is a classic transaction and outside Prism's scope.
 
 ---
 
@@ -252,12 +252,12 @@ Error: Archive error: failed to fetch 'contracts/CABC...XYZ.wasm' from all archi
 
 **Verify the contract exists on the correct network:**
 ```bash
-grat --network mainnet inspect <CONTRACT_ID>
+prism --network mainnet inspect <CONTRACT_ID>
 ```
 
-**Try without custom error resolution** — Grat will still decode the numeric error code:
+**Try without custom error resolution** — Prism will still decode the numeric error code:
 ```bash
-grat decode <TX_HASH>
+prism decode <TX_HASH>
 # Custom error names like "InsufficientBalance" may show as "#3" but the report is still useful
 ```
 
@@ -291,12 +291,12 @@ Error: Archive error: decompression failed for 'bucket/...': unexpected EOF
 
 **Retry the command** — transient network issues often resolve themselves:
 ```bash
-grat trace <TX_HASH>
+prism trace <TX_HASH>
 ```
 
 **Bypass the cache** — a stale cached partial download can cause this:
 ```bash
-grat --no-cache trace <TX_HASH>
+prism --no-cache trace <TX_HASH>
 ```
 
 **Add a redundant archive URL** in `~/.grat/config.toml`:
@@ -333,18 +333,18 @@ Error: Cache error: failed to deserialize cache value for key '...': invalid Mes
 
 - The local disk cache has hit its configured size limit.
 - The cache directory's filesystem is full.
-- A previous Grat version wrote cache entries in a format incompatible with the current version.
+- A previous Prism version wrote cache entries in a format incompatible with the current version.
 
 ### How to fix it
 
 **Clear the entire cache:**
 ```bash
-grat clean
+prism clean
 ```
 
 **Clear only stale entries** (keeps recent results):
 ```bash
-grat clean --stale
+prism clean --stale
 ```
 
 **Increase the cache size limit** in `~/.grat/config.toml`:
@@ -359,10 +359,10 @@ cache_dir = "/mnt/large-disk/grat-cache"
 
 **Bypass the cache for a single command:**
 ```bash
-grat --no-cache decode <TX_HASH>
+prism --no-cache decode <TX_HASH>
 ```
 
-If the issue is a deserialization error from a format mismatch after upgrading Grat, run `grat clean` to wipe the old-format entries.
+If the issue is a deserialization error from a format mismatch after upgrading Prism, run `prism clean` to wipe the old-format entries.
 
 ---
 
@@ -422,14 +422,14 @@ rpc_url = "https://soroban-testnet.stellar.org"
 **Reset to defaults** by deleting the config file:
 ```bash
 rm ~/.grat/config.toml
-# Grat will use built-in defaults on next run
+# Prism will use built-in defaults on next run
 ```
 
 ---
 
 ## Enabling Debug Logging
 
-For any issue not immediately obvious from the error message, enable verbose logging to get a detailed trace of what Grat is doing internally.
+For any issue not immediately obvious from the error message, enable verbose logging to get a detailed trace of what Prism is doing internally.
 
 ### Verbosity Levels
 
@@ -443,7 +443,7 @@ For any issue not immediately obvious from the error message, enable verbose log
 
 ```bash
 # Debug level
-grat -v decode <TX_HASH>
+prism -v decode <TX_HASH>
 
 # Trace level (very verbose — redirect to file for readability)
 grat -vv trace <TX_HASH> 2> grat-trace.log
@@ -458,10 +458,10 @@ You can also control log levels via the `RUST_LOG` environment variable for fine
 
 ```bash
 # Show only network module at trace level
-RUST_LOG=grat_core::rpc=trace grat decode <TX_HASH>
+RUST_LOG=grat_core::rpc=trace prism decode <TX_HASH>
 
 # Show everything at debug
-RUST_LOG=debug grat trace <TX_HASH>
+RUST_LOG=debug prism trace <TX_HASH>
 ```
 
 ---
@@ -474,13 +474,13 @@ If you have worked through the steps above and the problem persists, please file
 
 1. **Reproduce on the latest version:**
    ```bash
-   grat --version
+   prism --version
    ```
    Check [GitHub Releases](https://github.com/DevNiola/Prism/releases) for the current version.
 
 2. **Update the taxonomy database:**
    ```bash
-   grat db update
+   prism db update
    ```
 
 3. **Collect a debug log:**
@@ -492,7 +492,7 @@ If you have worked through the steps above and the problem persists, please file
 
 Please include all of the following in your issue:
 
-- **Grat version:** output of `grat --version`
+- **Prism version:** output of `prism --version`
 - **Operating system and version:** e.g., Ubuntu 24.04, macOS 14.5
 - **Network:** mainnet / testnet / futurenet / custom
 - **Transaction hash:** the full 64-character hex hash (or a reproducible example)

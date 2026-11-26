@@ -1,6 +1,6 @@
-# Grat VS Code Extension — User Guide
+# Prism VS Code Extension — User Guide
 
-The Grat VS Code extension brings Soroban error decoding and transaction debugging directly into your editor. Inline diagnostics, hover explanations, code lens actions, and quick-fix suggestions are all available without leaving VS Code.
+The Prism VS Code extension brings Soroban error decoding and transaction debugging directly into your editor. Inline diagnostics, hover explanations, code lens actions, and quick-fix suggestions are all available without leaving VS Code.
 
 ---
 
@@ -28,7 +28,7 @@ The Grat VS Code extension brings Soroban error decoding and transaction debuggi
 
 1. Open VS Code.
 2. Press `Ctrl+Shift+X` (or `Cmd+Shift+X` on macOS) to open the Extensions panel.
-3. Search for **"Grat — Soroban Debugger"**.
+3. Search for **"Prism — Soroban Debugger"**.
 4. Click **Install**.
 
 Alternatively, run this in a terminal:
@@ -73,7 +73,7 @@ Or install directly from the VS Code UI:
 
 ## Prerequisites
 
-The extension shells out to the `grat` CLI binary for all decoding and replay operations. You must have `grat` installed and on your `PATH` before using the extension.
+The extension shells out to the `prism` CLI binary for all decoding and replay operations. You must have `prism` installed and on your `PATH` before using the extension.
 
 **Install the CLI:**
 
@@ -83,16 +83,16 @@ git clone https://github.com/DevNiola/Prism.git
 cd Prism
 cargo build --release
 # Add ./target/release to your PATH, or copy the binary:
-cp target/release/grat ~/.local/bin/grat
+cp target/release/prism ~/.local/bin/prism
 ```
 
 Verify the CLI is available:
 
 ```bash
-grat --version
+prism --version
 ```
 
-If `grat` is installed in a non-standard location, configure the path in VS Code settings (see [Configuration](#configuration)).
+If `prism` is installed in a non-standard location, configure the path in VS Code settings (see [Configuration](#configuration)).
 
 ---
 
@@ -103,14 +103,14 @@ The extension exposes settings under the `grat` namespace in VS Code's `settings
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `grat.network` | string | `"testnet"` | Stellar network to use for all operations. Accepted values: `mainnet`, `testnet`, `futurenet`. |
-| `grat.binaryPath` | string | `"grat"` | Path to the `grat` CLI binary. Use an absolute path if the binary is not on your `PATH`. |
+| `grat.binaryPath` | string | `"prism"` | Path to the `prism` CLI binary. Use an absolute path if the binary is not on your `PATH`. |
 
 ### Editing Settings
 
 **Via the Settings UI:**
 
 1. Open Settings (`Ctrl+,` / `Cmd+,`).
-2. Search for **"grat"**.
+2. Search for **"Prism"**.
 3. Update the values.
 
 **Via `settings.json`:**
@@ -118,7 +118,7 @@ The extension exposes settings under the `grat` namespace in VS Code's `settings
 ```json
 {
   "grat.network": "mainnet",
-  "grat.binaryPath": "/home/user/.local/bin/grat"
+  "grat.binaryPath": "/home/user/.local/bin/prism"
 }
 ```
 
@@ -140,7 +140,7 @@ The extension activates automatically when you open a Rust file (`*.rs`) or invo
 
 ### Diagnostics
 
-The **Diagnostics** provider registers a diagnostic collection named `grat` in the Problems panel. When Grat identifies issues in your Soroban contract code (such as patterns that match known error-prone host function usages), it reports them as warnings or errors directly in the editor gutter.
+The **Diagnostics** provider registers a diagnostic collection named `grat` in the Problems panel. When Prism identifies issues in your Soroban contract code (such as patterns that match known error-prone host function usages), it reports them as warnings or errors directly in the editor gutter.
 
 - Diagnostics appear in the **Problems** panel (`Ctrl+Shift+M`).
 - Red/yellow squiggles underline the relevant code.
@@ -181,7 +181,7 @@ Click any lens to execute the action directly in the editor without opening a te
 
 ### Quick Fix
 
-The **Quick Fix** provider registers code actions (the lightbulb `💡` icon) for diagnostics raised by Grat. When Grat detects a known error pattern, it suggests one or more automated fixes:
+The **Quick Fix** provider registers code actions (the lightbulb `💡` icon) for diagnostics raised by Prism. When Prism detects a known error pattern, it suggests one or more automated fixes:
 
 - **Increase resource budget** — Inserts the recommended `soroban_sdk` resource declaration snippet.
 - **Add balance check** — Inserts a guard clause before a transfer call.
@@ -195,16 +195,16 @@ To trigger a quick fix:
 
 ### Decode Command
 
-The **Grat: Decode Transaction Error** command lets you decode any transaction hash or raw XDR string from directly within VS Code, without switching to a terminal.
+The **Prism: Decode Transaction Error** command lets you decode any transaction hash or raw XDR string from directly within VS Code, without switching to a terminal.
 
 **How to use:**
 
 1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
-2. Type **"Grat: Decode"** and select **Grat: Decode Transaction Error**.
+2. Type **"Prism: Decode"** and select **Prism: Decode Transaction Error**.
 3. Paste a transaction hash (64-character hex) or a raw base64-encoded XDR string.
 4. Press `Enter`.
 
-A progress notification appears while Grat fetches and decodes the transaction. The result opens as a read-only JSON document in a side panel:
+A progress notification appears while Prism fetches and decodes the transaction. The result opens as a read-only JSON document in a side panel:
 
 ```json
 {
@@ -236,8 +236,8 @@ If the decode fails (network error, invalid hash, etc.), an error notification a
 
 | Command ID | Title | Description |
 |------------|-------|-------------|
-| `grat.decode` | Grat: Decode Transaction Error | Prompt for a tx hash or XDR, decode it, and display the report |
-| `grat.inspect` | Grat: Inspect Transaction | Inspect a transaction and show all operation reports |
+| `grat.decode` | Prism: Decode Transaction Error | Prompt for a tx hash or XDR, decode it, and display the report |
+| `grat.inspect` | Prism: Inspect Transaction | Inspect a transaction and show all operation reports |
 
 All commands are accessible from the Command Palette (`Ctrl+Shift+P`).
 
@@ -247,25 +247,25 @@ All commands are accessible from the Command Palette (`Ctrl+Shift+P`).
 
 ### "grat CLI error: ..." notification
 
-The extension failed to call the `grat` binary. Check:
+The extension failed to call the `prism` binary. Check:
 
-1. **Is `grat` installed?**
+1. **Is `prism` installed?**
    ```bash
    which grat
-   grat --version
+   prism --version
    ```
-2. **Is the binary path correct?** If `grat` is not on your `PATH`, set `grat.binaryPath` in settings to the absolute path of the binary.
+2. **Is the binary path correct?** If `prism` is not on your `PATH`, set `grat.binaryPath` in settings to the absolute path of the binary.
 3. **Does the binary have execute permission?**
    ```bash
-   chmod +x ~/.local/bin/grat
+   chmod +x ~/.local/bin/prism
    ```
 
-### "Failed to parse grat output"
+### "Failed to parse Prism output"
 
-The CLI produced output that could not be parsed as JSON. This can happen if `grat` printed a warning or error to stdout before the JSON payload. Run the same command in a terminal with `--output json` to see the raw output:
+The CLI produced output that could not be parsed as JSON. This can happen if `prism` printed a warning or error to stdout before the JSON payload. Run the same command in a terminal with `--output json` to see the raw output:
 
 ```bash
-grat --output json decode <TX_HASH>
+prism --output json decode <TX_HASH>
 ```
 
 ### Diagnostics not appearing
@@ -276,7 +276,7 @@ Diagnostics are only populated when a decode or inspect operation is run. Make s
 
 The extension activates on `onLanguage:rust` and `onCommand:grat.decode`. If you are working in a Rust file and the extension has not activated:
 
-1. Confirm the extension is installed: open Extensions (`Ctrl+Shift+X`) and search **"Grat"**.
+1. Confirm the extension is installed: open Extensions (`Ctrl+Shift+X`) and search **"Prism"**.
 2. Check the VS Code Output panel (`Ctrl+Shift+U`) for any activation errors.
 3. Reload the window: `Ctrl+Shift+P` → **Developer: Reload Window**.
 
@@ -315,7 +315,7 @@ The extension source lives in `extensions/vscode/src/`:
 | File | Purpose |
 |------|---------|
 | `extension.ts` | Entry point — activates the extension and registers all providers |
-| `cli/bridge.ts` | Shells out to the `grat` binary |
+| `cli/bridge.ts` | Shells out to the `prism` binary |
 | `providers/diagnostics.ts` | Registers the diagnostics collection |
 | `providers/hover.ts` | Hover tooltip provider for Rust files |
 | `providers/codeLens.ts` | Code lens provider for Rust files |

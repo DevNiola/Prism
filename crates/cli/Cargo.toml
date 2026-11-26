@@ -6,7 +6,7 @@ name = "grat-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Grat CLI — Soroban Transaction Debugger"
+description = "Prism CLI — Soroban Transaction Debugger"
 build = "build.rs"
 
 [lib]
@@ -14,7 +14,7 @@ name = "grat_cli"
 path = "src/lib.rs"
 
 [[bin]]
-name = "grat"
+name = "prism"
 path = "src/main.rs"
 
 [dependencies]

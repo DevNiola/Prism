@@ -1,6 +1,6 @@
 # Taxonomy Guide — Custom Error Mappings
 
-The Grat error taxonomy is the database that powers plain-English error explanations. It maps raw Soroban host error codes to human-readable names, detailed descriptions, common causes, and suggested fixes. This guide explains the taxonomy schema and walks through adding your own custom error mappings.
+The Prism error taxonomy is the database that powers plain-English error explanations. It maps raw Soroban host error codes to human-readable names, detailed descriptions, common causes, and suggested fixes. This guide explains the taxonomy schema and walks through adding your own custom error mappings.
 
 ---
 
@@ -28,7 +28,7 @@ The Grat error taxonomy is the database that powers plain-English error explanat
 
 ## Overview
 
-When Grat decodes a failed Soroban transaction, it looks up the host error code in the taxonomy database and returns a structured `DiagnosticReport` with:
+When Prism decodes a failed Soroban transaction, it looks up the host error code in the taxonomy database and returns a structured `DiagnosticReport` with:
 
 - **Error name** — A readable identifier (e.g. `CPUExceeded`).
 - **Summary** — A one-sentence description.
@@ -314,19 +314,19 @@ Fix any reported errors before proceeding.
 After the linter passes, rebuild the in-memory database index to pick up your changes:
 
 ```bash
-grat db update
+prism db update
 ```
 
 Then verify your entry is indexed:
 
 ```bash
-grat db search "InsufficientBalance"
+prism db search "InsufficientBalance"
 ```
 
 Or search with the `search-error` command for a rich table view:
 
 ```bash
-grat search-error "InsufficientBalance"
+prism search-error "InsufficientBalance"
 ```
 
 ---
@@ -446,6 +446,6 @@ When contributing new taxonomy entries or fixing existing ones:
 2. **Add at least one `common_causes` entry** (ideally with `"high"` likelihood) and at least one `suggested_fixes` entry.
 3. **Run the linter** (`./scripts/lint_taxonomy.sh`) and ensure it exits with code 0.
 4. **Search for duplicates** — check that the `id` and `code` are not already used in the same category.
-5. **Open a pull request** — PRs that add or fix taxonomy entries are very welcome. Include the output of `grat search-error <name>` in the PR description to show the entry is correctly indexed.
+5. **Open a pull request** — PRs that add or fix taxonomy entries are very welcome. Include the output of `prism search-error <name>` in the PR description to show the entry is correctly indexed.
 
 For questions about the schema or to propose new categories, open a discussion on GitHub.

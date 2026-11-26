@@ -1,12 +1,12 @@
 # Network Configuration
 
-This document explains how Prism (Grat) resolves and manages network connections for the Stellar Soroban ecosystem, covering the `NetworkConfig` structure, built-in network types, the CLI `--network` flag, the config file format, and how to add a custom local or private network.
+This document explains how Prism resolves and manages network connections for the Stellar Soroban ecosystem, covering the `NetworkConfig` structure, built-in network types, the CLI `--network` flag, the config file format, and how to add a custom local or private network.
 
 ---
 
 ## NetworkConfig Structure
 
-`NetworkConfig` is defined in `crates/core/src/network/config.rs`. It holds everything Grat needs to talk to a Soroban RPC node and its associated history archives.
+`NetworkConfig` is defined in `crates/core/src/network/config.rs`. It holds everything Prism needs to talk to a Soroban RPC node and its associated history archives.
 
 ```rust
 pub struct NetworkConfig {
@@ -86,7 +86,7 @@ The `Network::parse()` function accepts several aliases and is case-insensitive:
 
 ## CLI `--network` Flag
 
-Every Grat command accepts a global `--network` flag (short: `-n`). The default is `testnet`.
+Every Prism command accepts a global `--network` flag (short: `-n`). The default is `testnet`.
 
 ```
 grat [--network <NETWORK>] [--rpc-url <URL>] [--no-cache] [--config-path <PATH>] <SUBCOMMAND>
@@ -96,39 +96,39 @@ grat [--network <NETWORK>] [--rpc-url <URL>] [--no-cache] [--config-path <PATH>]
 
 **Decode an error on mainnet:**
 ```bash
-grat --network mainnet decode <TX_HASH>
+prism --network mainnet decode <TX_HASH>
 ```
 
 **Use testnet (default):**
 ```bash
-grat decode <TX_HASH>
+prism decode <TX_HASH>
 # equivalent to:
-grat --network testnet decode <TX_HASH>
+prism --network testnet decode <TX_HASH>
 ```
 
 **Use futurenet:**
 ```bash
-grat --network futurenet trace <TX_HASH>
+prism --network futurenet trace <TX_HASH>
 ```
 
 **Point directly at a custom RPC node by URL:**
 ```bash
-grat --network http://127.0.0.1:8000/rpc decode <TX_HASH>
+prism --network http://127.0.0.1:8000/rpc decode <TX_HASH>
 ```
 
 **Override only the RPC URL while keeping the named network's passphrase and archives:**
 ```bash
-grat --network testnet --rpc-url https://my-testnet-rpc.example.com decode <TX_HASH>
+prism --network testnet --rpc-url https://my-testnet-rpc.example.com decode <TX_HASH>
 ```
 
 **Bypass cache for a fresh fetch:**
 ```bash
-grat --network mainnet --no-cache decode <TX_HASH>
+prism --network mainnet --no-cache decode <TX_HASH>
 ```
 
 ### Resolution Order
 
-When Grat resolves the final `NetworkConfig` for a command:
+When Prism resolves the final `NetworkConfig` for a command:
 
 1. `--network` value is parsed into a `Network` variant (aliases applied).
 2. The built-in defaults for that variant are loaded (RPC URL, passphrase, archives).
@@ -140,10 +140,10 @@ When Grat resolves the final `NetworkConfig` for a command:
 
 ## Config File (`~/.grat/config.toml`)
 
-Grat reads a TOML config file at `~/.grat/config.toml` on startup. Use `--config-path` to specify an alternate path.
+Prism reads a TOML config file at `~/.grat/config.toml` on startup. Use `--config-path` to specify an alternate path.
 
 ```bash
-grat --config-path /path/to/custom-config.toml decode <TX_HASH>
+prism --config-path /path/to/custom-config.toml decode <TX_HASH>
 ```
 
 ### Full Config File Structure
@@ -220,12 +220,12 @@ request_timeout_secs = 10
 no_cache = true
 ```
 
-Then run any Grat command against it:
+Then run any Prism command against it:
 
 ```bash
-grat --network local decode <TX_HASH>
+prism --network local decode <TX_HASH>
 # or, since default_network = "local":
-grat decode <TX_HASH>
+prism decode <TX_HASH>
 ```
 
 ### Example 2 — Private Devnet
@@ -243,7 +243,7 @@ request_timeout_secs = 60
 ```
 
 ```bash
-grat --network devnet trace <TX_HASH>
+prism --network devnet trace <TX_HASH>
 ```
 
 ### Example 3 — Inline URL Without a Config Entry
@@ -251,10 +251,10 @@ grat --network devnet trace <TX_HASH>
 For a quick one-off test, pass the RPC URL directly as the network name:
 
 ```bash
-grat --network https://rpc.devnet.example.com decode <TX_HASH>
+prism --network https://rpc.devnet.example.com decode <TX_HASH>
 ```
 
-Grat will use that URL as both the network identifier and the RPC endpoint. The network passphrase and archive URLs will be empty; if you need them for replay commands, use a full config entry instead.
+Prism will use that URL as both the network identifier and the RPC endpoint. The network passphrase and archive URLs will be empty; if you need them for replay commands, use a full config entry instead.
 
 ---
 
@@ -301,7 +301,7 @@ Default values when no config file exists:
 
 ## Verifying Network Connectivity
 
-Grat can probe a network's health before running a command. This is done automatically in some scenarios, but you can also run it manually via the Rust API:
+Prism can probe a network's health before running a command. This is done automatically in some scenarios, but you can also run it manually via the Rust API:
 
 ```rust
 use grat_core::network::config::{NetworkConfig, validate_network};
@@ -324,7 +324,7 @@ You passed an empty string to `--network`. Specify a valid network name or URL.
 Make sure your local node is running and listening on `http://127.0.0.1:8000/rpc`. If you changed the port, update `rpc_url` in your config file or use `--rpc-url`.
 
 **`Unknown network, defaulting to testnet`** (warning log)
-Grat could not find a config entry for the requested custom network name. It fell back to testnet. Add a matching `[[networks]]` entry to your config file.
+Prism could not find a config entry for the requested custom network name. It fell back to testnet. Add a matching `[[networks]]` entry to your config file.
 
 **`Failed to parse config file … as TOML`**
 Your config file has a syntax error. Validate it with `taplo lint ~/.grat/config.toml` or check the TOML spec at <https://toml.io>.

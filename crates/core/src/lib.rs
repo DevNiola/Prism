@@ -1,6 +1,6 @@
-//! # Prism Core (Grat Core)
+//! # Prism Core
 //!
-//! `grat_core` is the core execution, decoding, and analysis engine for Soroban smart contracts
+//! `grat_core` is Prism's execution, decoding, and analysis engine for Soroban smart contracts
 //! on the Stellar network.
 //!
 //! ## Modules

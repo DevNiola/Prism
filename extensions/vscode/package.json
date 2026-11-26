@@ -1,6 +1,6 @@
 {
   "name": "grat-vscode",
-  "displayName": "Grat — Soroban Debugger",
+  "displayName": "Prism — Soroban Debugger",
   "description": "Inline Soroban error decoding and transaction debugging for VS Code.",
   "version": "0.1.0",
   "publisher": "grat-soroban",
@@ -28,11 +28,11 @@
     "commands": [
       {
         "command": "grat.decode",
-        "title": "Grat: Decode Transaction Error"
+        "title": "Prism: Decode Transaction Error"
       },
       {
         "command": "grat.inspect",
-        "title": "Grat: Inspect Transaction"
+        "title": "Prism: Inspect Transaction"
       }
     ]
   },

@@ -1,11 +1,13 @@
 ---
 title: "Core Library"
 sidebarTitle: "Core Library"
-description: "Embed Grat diagnostics into your own tools."
+description: "Embed Prism diagnostics into your own tools."
 icon: "cube"
 ---
 
-The Grat core engine is published as a Rust crate and a WASM package.
+The Prism core engine is published as a Rust crate and a WASM package.
+
+Prism is the product and `prism` is its CLI executable. Rust integrations import the engine as `grat_core` from the Cargo package `grat-core`.
 
 ## Rust Usage
 
@@ -18,10 +20,10 @@ grat-core = "0.1.0"
 
 ## WASM Usage
 
-Embed Grat into your JavaScript/TypeScript applications:
+Embed Prism into your JavaScript/TypeScript applications:
 
 ```bash
-npm install @grat-soroban/wasm
+npm install @grat-soroban/grat-wasm
 ```
 
 ## Public API Highlights
@@ -39,7 +41,7 @@ and an `Unknown` variant for forward compatibility.
 ### `summary() -> String`
 
 Returns a one-line plain-English sentence explaining what went wrong.
-This is the headline shown by `grat decode` — the first thing a developer
+This is the headline shown by `prism decode` — the first thing a developer
 reads when diagnosing a failed transaction.
 
 ```rust

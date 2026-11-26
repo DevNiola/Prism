@@ -1,45 +1,32 @@
 ---
 title: "Installation"
-description: "Get Grat installed on your machine."
+description: "Install the Prism command-line debugger."
 icon: "download"
 ---
 
-## Prerequisites
+## Install the CLI
 
-Before installing Grat, ensure your environment meets the following requirements:
+Install the CLI from the repository with a current stable Rust toolchain. The Cargo package is named `grat-cli` and installs the `prism` executable.
 
-- **Rust**: 1.77 or higher
-- **Node.js**: 20 or higher
-- **pnpm**: 9 or higher (for monorepo development)
+```bash
+cargo install --git https://github.com/DevNiola/Prism.git --branch main grat-cli
+prism --version
+```
 
-## Install CLI
+## Build from a checkout
 
-<Tabs>
-  <Tab title="Cargo">
-    The easiest way to install Grat is via Cargo: ```bash cargo install grat ```
-  </Tab>
-  <Tab title="Pre-built Binaries">
-    Download the latest binary for your platform from the [GitHub
-    Releases](https://github.com/grat-soroban/grat/releases) page. -
-    `grat-linux-x86_64` - `grat-macos-aarch64` - `grat-windows-x86_64.exe`
-  </Tab>
-  <Tab title="From Source">
-    <Steps>
-      <Step title="Clone the Repository">
-        ```bash git clone https://github.com/grat-soroban/grat.git cd Grat ```
-      </Step>
-      <Step title="Install Dependencies">```bash pnpm install ```</Step>
-      <Step title="Build the Binary">```bash cargo build --release ```</Step>
-      <Step title="Verify Installation">
-        ```bash ./target/release/grat --version ```
-      </Step>
-    </Steps>
-  </Tab>
-</Tabs>
+```bash
+git clone https://github.com/DevNiola/Prism.git
+cd Prism
+cargo build --release -p grat-cli
+./target/release/prism --version
+```
+
+For web or server development, also install Node.js and pnpm as described in the [contributing guide](/contributing).
 
 ## Accessing RPC
 
-Grat requires access to a Soroban RPC endpoint to fetch transaction data.
+Prism requires a Soroban RPC endpoint to fetch transaction data.
 
-- **Testnet/Mainnet**: Works out of the box using public endpoints.
-- **Custom**: Use the `--rpc-url` flag or set the `SOROBAN_RPC_URL` environment variable.
+- **Testnet and Mainnet** use public endpoints by default.
+- **Custom endpoints** can be set with the `--rpc-url` flag or the `SOROBAN_RPC_URL` environment variable.

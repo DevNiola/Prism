@@ -143,7 +143,7 @@ export const config: ServerConfig = {
     "https://soroban-testnet.stellar.org",
     ["http:", "https:"],
   ),
-  gratBinaryPath: stringValue("GRAT_BINARY", "grat"),
+  gratBinaryPath: stringValue("GRAT_BINARY", "prism"),
   jwtSecret: stringValue("JWT_SECRET", "prism-default-jwt-secret-session-auth"),
   disableSessionAuth: environment.DISABLE_SESSION_AUTH === "true",
   gracefulShutdownTimeoutMs: numberValue("SHUTDOWN_TIMEOUT_MS", 30_000, { integer: true, min: 1000 }),

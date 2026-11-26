@@ -4,7 +4,7 @@ description: "Decode your first failed transaction in under 60 seconds."
 icon: "bolt"
 ---
 
-Follow these steps to diagnose a failed Soroban transaction using the Grat CLI.
+Follow these steps to diagnose a failed Soroban transaction using the Prism CLI.
 
 <Steps>
   <Step title="Identify a failed transaction">
@@ -13,11 +13,11 @@ Follow these steps to diagnose a failed Soroban transaction using the Grat CLI.
   </Step>
   <Step title="Run the decode command">
     <CodeGroup>
-      ```bash Terminal grat decode abc123def456... --network testnet ```
+      ```bash Terminal prism decode abc123def456... --network testnet ```
     </CodeGroup>
   </Step>
   <Step title="Review the diagnostic report">
-    Grat will resolve the error and provide a clear explanation. ```text
+    Prism will resolve the error and provide a clear explanation. ```text
     Diagnostic Report: ------------------ Error: InsufficientBalance (resolved
     from #3) Contract: CD...123 (MyTokenContract) Reason: The sender does not
     have enough XLM to complete the transfer. Suggested Fix: Ensure the account

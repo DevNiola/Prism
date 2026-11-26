@@ -25,7 +25,7 @@ A complete annotated example based on the current config:
 
 ```json
 {
-  "name": "Grat",
+  "name": "Prism",
   "logo": {
     "light": "<url-to-light-logo>",
     "dark": "<url-to-dark-logo>"
@@ -254,7 +254,7 @@ Mintlify provides a set of built-in MDX components. No imports required — they
 <Tabs>
   <Tab title="CLI">
     ```bash
-    grat decode <tx-hash>
+    prism decode <tx-hash>
     ```
   </Tab>
   <Tab title="Rust">

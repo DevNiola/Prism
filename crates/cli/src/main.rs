@@ -14,7 +14,7 @@ use url::Url;
 const BUILD_HASH: &str = env!("GRAT_BUILD_HASH");
 
 #[derive(Parser)]
-#[command(name = "grat", version = env!("CARGO_PKG_VERSION"), about, long_about = None)]
+#[command(name = "prism", version = env!("CARGO_PKG_VERSION"), about, long_about = None)]
 #[command(propagate_version = true)]
 #[command(before_help = ui::logo::GRAT_LOGO)]
 struct Cli {
@@ -196,7 +196,7 @@ async fn main() -> anyhow::Result<()> {
 
 fn build_version() -> String {
     format!(
-        "{}\ngrat {} (build: {}) | Soroban Protocol: {}",
+        "{}\nprism {} (build: {}) | Soroban Protocol: {}",
         ui::logo::GRAT_LOGO,
         grat_core::VERSION,
         BUILD_HASH,
@@ -238,13 +238,13 @@ mod tests {
 
     #[test]
     fn parses_short_verbose_flag() {
-        let cli = Cli::try_parse_from(["grat", "-v", "db", "update"]).expect("cli should parse");
+        let cli = Cli::try_parse_from(["prism", "-v", "db", "update"]).expect("cli should parse");
         assert_eq!(cli.verbose, 1);
     }
 
     #[test]
     fn parses_repeated_verbose_flags_as_trace() {
-        let cli = Cli::try_parse_from(["grat", "-vv", "db", "update"]).expect("cli should parse");
+        let cli = Cli::try_parse_from(["prism", "-vv", "db", "update"]).expect("cli should parse");
         assert_eq!(cli.verbose, 2);
         assert!(build_log_filter(cli.verbose)
             .to_string()
@@ -253,21 +253,21 @@ mod tests {
 
     #[test]
     fn parses_long_verbose_flag_after_subcommand() {
-        let cli = Cli::try_parse_from(["grat", "decode", "--verbose", &"a".repeat(64)])
+        let cli = Cli::try_parse_from(["prism", "decode", "--verbose", &"a".repeat(64)])
             .expect("cli should parse");
         assert_eq!(cli.verbose, 1);
     }
 
     #[test]
     fn parses_short_output_alias() {
-        let cli = Cli::try_parse_from(["grat", "--output", "short", "decode", "abc123"])
+        let cli = Cli::try_parse_from(["prism", "--output", "short", "decode", "abc123"])
             .expect("cli should parse");
         assert_eq!(cli.output, "short");
     }
 
     #[test]
     fn parses_trace_tx_hash_as_positional_argument() {
-        let cli = Cli::try_parse_from(["grat", "trace", "abc123"]).expect("cli should parse");
+        let cli = Cli::try_parse_from(["prism", "trace", "abc123"]).expect("cli should parse");
 
         match cli.command {
             Commands::Trace(args) => {
@@ -280,7 +280,7 @@ mod tests {
 
     #[test]
     fn parses_trace_output_file_flag_with_positional_tx_hash() {
-        let cli = Cli::try_parse_from(["grat", "trace", "abc123", "--output-file", "trace.json"])
+        let cli = Cli::try_parse_from(["prism", "trace", "abc123", "--output-file", "trace.json"])
             .expect("cli should parse");
 
         match cli.command {
@@ -295,7 +295,7 @@ mod tests {
     #[test]
     fn parses_diff_state_subcommand() {
         let cli =
-            Cli::try_parse_from(["grat", "diff", "state", "deadbeef"]).expect("cli should parse");
+            Cli::try_parse_from(["prism", "diff", "state", "deadbeef"]).expect("cli should parse");
 
         match cli.command {
             Commands::Diff(args) => match args.mode {
@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     fn parses_diff_tx_subcommand() {
-        let cli = Cli::try_parse_from(["grat", "diff", "tx", "aaa", "bbb"]).expect("cli should parse");
+        let cli = Cli::try_parse_from(["prism", "diff", "tx", "aaa", "bbb"]).expect("cli should parse");
 
         match cli.command {
             Commands::Diff(args) => match args.mode {
@@ -328,21 +328,21 @@ mod tests {
     #[test]
     fn parses_save_flag_for_trace() {
         let tx_hash = "a".repeat(64);
-        let cli = Cli::try_parse_from(["grat", "--save", "report.json", "trace", &tx_hash])
+        let cli = Cli::try_parse_from(["prism", "--save", "report.json", "trace", &tx_hash])
             .expect("cli should parse with --save");
         assert_eq!(cli.save.as_deref(), Some("report.json"));
     }
 
     #[test]
     fn save_flag_absent_by_default() {
-        let cli = Cli::try_parse_from(["grat", "db", "update"]).expect("cli should parse");
+        let cli = Cli::try_parse_from(["prism", "db", "update"]).expect("cli should parse");
         assert!(cli.save.is_none());
     }
 
     #[test]
     fn save_flag_can_appear_after_subcommand() {
         let tx_hash = "a".repeat(64);
-        let cli = Cli::try_parse_from(["grat", "trace", &tx_hash, "--save", "out.json"])
+        let cli = Cli::try_parse_from(["prism", "trace", &tx_hash, "--save", "out.json"])
             .expect("--save after subcommand should parse");
         assert_eq!(cli.save.as_deref(), Some("out.json"));
     }
@@ -350,7 +350,7 @@ mod tests {
     #[test]
     fn parses_config_path_flag() {
         let cli = Cli::try_parse_from([
-            "grat",
+            "prism",
             "--config-path",
             "/tmp/custom_config.toml",
             "decode",
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     fn config_path_absent_by_default() {
-        let cli = Cli::try_parse_from(["grat", "db", "update"]).expect("cli should parse");
+        let cli = Cli::try_parse_from(["prism", "db", "update"]).expect("cli should parse");
         assert!(cli.config_path.is_none());
     }
 
@@ -392,14 +392,14 @@ mod tests {
 
     #[test]
     fn parses_no_cache_flag_on_decode() {
-        let cli = Cli::try_parse_from(["grat", "decode", "abc123", "--no-cache"])
+        let cli = Cli::try_parse_from(["prism", "decode", "abc123", "--no-cache"])
             .expect("cli should parse with --no-cache");
         assert!(cli.no_cache);
     }
 
     #[test]
     fn no_cache_absent_by_default() {
-        let cli = Cli::try_parse_from(["grat", "decode", "abc123"]).expect("cli should parse");
+        let cli = Cli::try_parse_from(["prism", "decode", "abc123"]).expect("cli should parse");
         assert!(!cli.no_cache);
     }
 }

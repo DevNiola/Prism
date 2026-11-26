@@ -1,12 +1,12 @@
 # WebSocket Trace Stream Protocol
 
-This document describes the WebSocket-based streaming protocol used by the Grat server to deliver real-time transaction trace events to clients. By the end of this document you should have enough information to write a fully functional WebSocket consumer from scratch.
+This document describes the WebSocket-based streaming protocol used by the Prism server to deliver real-time transaction trace events to clients. By the end of this document you should have enough information to write a fully functional WebSocket consumer from scratch.
 
 ---
 
 ## Overview
 
-When the Grat server executes a trace or replay, it streams progress events in real time over a persistent WebSocket connection. Each event is a JSON object with a `type` discriminant field and event-specific payload fields.
+When the Prism server executes a trace or replay, it streams progress events in real time over a persistent WebSocket connection. Each event is a JSON object with a `type` discriminant field and event-specific payload fields.
 
 The server is implemented in `apps/server/src/ws/trace-stream.ts`. The HTTP/WebSocket server runs via Fastify on port **3001** by default (configurable via the `PORT` environment variable).
 
@@ -34,7 +34,7 @@ wss://your-grat-server.example.com/ws/trace
 
 ### Authentication
 
-The current implementation does not require authentication headers on the initial WebSocket handshake. If your deployment sits behind an API gateway or reverse proxy that enforces bearer tokens, pass the token as a query parameter or a custom header at the HTTP upgrade request level — this is outside the scope of the Grat protocol itself.
+The current implementation does not require authentication headers on the initial WebSocket handshake. If your deployment sits behind an API gateway or reverse proxy that enforces bearer tokens, pass the token as a query parameter or a custom header at the HTTP upgrade request level — this is outside the scope of the Prism protocol itself.
 
 ### Connection Lifecycle
 
@@ -372,7 +372,7 @@ class GratTraceClient {
     this.ws = new WebSocket(this.serverUrl);
 
     this.ws.addEventListener("open", () => {
-      console.log("Connected to Grat trace stream");
+      console.log("Connected to Prism trace stream");
     });
 
     this.ws.addEventListener("message", (event) => {

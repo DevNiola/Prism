@@ -1,6 +1,6 @@
 # Architecture Overview
 
-Prism (Grat) is a modular diagnostic tool for Stellar Soroban smart contracts. This document describes the system's layered architecture, the data flow from a raw transaction hash through to a fully enriched diagnostic report, and how each component fits into the whole.
+Prism is a modular diagnostic tool for Stellar Soroban smart contracts. This document describes the system's layered architecture, the data flow from a raw transaction hash through to a fully enriched diagnostic report, and how each component fits into the whole.
 
 ---
 
@@ -125,7 +125,7 @@ sequenceDiagram
     participant ContractSpec
     participant Report
 
-    User->>CLI / Web: grat decode <TX_HASH>
+    User->>CLI / Web: prism decode <TX_HASH>
     CLI / Web->>RPC: getTransaction(tx_hash)
     RPC-->>CLI / Web: TransactionResult XDR
     CLI / Web->>DecodeEngine: decode(tx_result_xdr)
@@ -143,13 +143,13 @@ sequenceDiagram
 
 ### Step-by-Step
 
-1. **Fetch transaction** — The RPC client calls `getTransaction` with the provided hash. If the transaction succeeded (`TransactionSucceeded`), Grat exits early with an informational message.
+1. **Fetch transaction** — The RPC client calls `getTransaction` with the provided hash. If the transaction succeeded (`TransactionSucceeded`), Prism exits early with an informational message.
 
 2. **Parse XDR** — The `XdrCodec` wrapper decodes the `TransactionResultPair` envelope. Inner `ScError` / `HostError` variants are extracted and classified.
 
 3. **Taxonomy lookup** — The error code is matched against `taxonomy/enhanced_error_taxonomy.toml`. Each entry provides a human-readable `description`, a `fix` suggestion, a `severity` level, and an optional documentation link.
 
-4. **Contract error resolution** — If the error is a custom contract error code (e.g., `#3`), Grat fetches the contract's WASM bytecode and parses the embedded `contractspec` section to resolve the numeric code to a named variant (e.g., `InsufficientBalance`).
+4. **Contract error resolution** — If the error is a custom contract error code (e.g., `#3`), Prism fetches the contract's WASM bytecode and parses the embedded `contractspec` section to resolve the numeric code to a named variant (e.g., `InsufficientBalance`).
 
 5. **Authorization detection** — The `auth.rs` decoder inspects every `SorobanAddressCredentials` entry and classifies each as `Ed25519` (account address, `G…`) or `Smart Wallet` (contract address, `C…`).
 
@@ -169,7 +169,7 @@ sequenceDiagram
     participant Sandbox
     participant WS Client
 
-    User->>CLI / Web: grat trace <TX_HASH>
+    User->>CLI / Web: prism trace <TX_HASH>
     CLI / Web->>RPC: getTransaction(tx_hash) → ledger_sequence
     CLI / Web->>ReplayEngine: replay(tx_hash, ledger_sequence)
 
@@ -299,11 +299,11 @@ Clients retrieve stored sessions by session ID for sharing and later review.
 
 ## VS Code Extension
 
-The VS Code extension (`extensions/vscode`) is intentionally thin: it **shells out to the installed `grat` CLI binary** rather than embedding any Rust logic itself. This avoids duplicating the core engine and means the extension automatically benefits from CLI upgrades.
+The VS Code extension (`extensions/vscode`) is intentionally thin: it **shells out to the installed `prism` CLI binary** rather than embedding any Rust logic itself. This avoids duplicating the core engine and means the extension automatically benefits from CLI upgrades.
 
 ```
 VS Code Extension
-  └─► spawns: grat decode <TX_HASH> --output json
+  └─► spawns: prism decode <TX_HASH> --output json
        └─► pipes stdout JSON into Webview panel
 ```
 

@@ -1,6 +1,6 @@
 # WASM Bridge
 
-The `crates/wasm` crate compiles the Prism (Grat) core engine to WebAssembly so the web application can decode Soroban transaction errors entirely in the browser — no server round-trip required.
+The `crates/wasm` crate compiles the Prism core engine to WebAssembly so the web application can decode Soroban transaction errors entirely in the browser — no server round-trip required.
 
 ---
 

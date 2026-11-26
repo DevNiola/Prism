@@ -86,7 +86,7 @@ pub async fn run(args: ServeArgs, network: &NetworkConfig) -> anyhow::Result<()>
         .layer(TraceLayer::new_for_http())
         .with_state(Arc::clone(&network));
 
-    println!("🚀 Grat instrumentation server starting...");
+    println!("🚀 Prism instrumentation server starting...");
     println!("   URL: http://{addr}");
     println!("   WebSocket: ws://{addr}/ws");
     println!("   API Bridge: http://{addr}/api/trace/<tx_hash>");
@@ -104,7 +104,7 @@ async fn index_handler() -> Html<&'static str> {
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Grat | instrumentation</title>
+            <title>Prism | instrumentation</title>
             <style>
                 body { background: #0f172a; color: #f8fafc; font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
                 .card { background: #1e293b; padding: 2rem; border-radius: 1rem; border: 1px solid #334155; text-align: center; }
@@ -113,7 +113,7 @@ async fn index_handler() -> Html<&'static str> {
         </head>
         <body>
             <div class="card">
-                <h1>Grat Instrumentation</h1>
+                <h1>Prism Instrumentation</h1>
                 <p>The web dashboard is being served. Connect your front-end to <code>/ws</code> or use the <code>/api</code> endpoints.</p>
             </div>
         </body>

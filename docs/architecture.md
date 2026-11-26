@@ -1,4 +1,4 @@
-# Grat Architecture
+# Prism Architecture
 
 ## High-Level Component Map
 
@@ -18,7 +18,7 @@
 ## Crate Structure
 
 - **`grat-core`** — Core library. All decode, replay, and debugger logic.
-- **`grat` (CLI)** — Command-line binary. Thin layer over `grat-core`.
+- **`prism` (CLI)** — Command-line binary. Thin layer over `grat-core`.
 - **`grat-wasm`** — WASM target. Exposes Tier 1 decode for browsers.
 
 ## Data Flow

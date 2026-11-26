@@ -1,6 +1,6 @@
-# Grat Server API Reference
+# Prism Server API Reference
 
-The Grat server is a [Fastify](https://fastify.dev/) application (TypeScript) that exposes REST endpoints and a WebSocket stream used by the Grat web dashboard and the CLI's `serve` bridge.
+The Prism server is a [Fastify](https://fastify.dev/) application (TypeScript) that exposes REST endpoints and a WebSocket stream used by the Prism web dashboard and the CLI's `serve` bridge.
 
 **Default base URL:** `http://localhost:3001`
 
@@ -487,11 +487,11 @@ curl -X DELETE http://localhost:3001/api/ai/cache
 
 ## WebSocket Streaming
 
-The Grat server (started via `grat serve`) exposes a WebSocket endpoint at `/ws` for streaming live trace events from the replay engine to the web frontend.
+The Prism server (started via `prism serve`) exposes a WebSocket endpoint at `/ws` for streaming live trace events from the replay engine to the web frontend.
 
 **Endpoint:** `ws://localhost:8080/ws`
 
-> Note: The WebSocket server is provided by the **CLI's built-in `serve` command** (`grat serve`), not the Fastify server. The Fastify server (`apps/server`) handles the REST API and session management.
+> Note: The WebSocket server is provided by the **CLI's built-in `serve` command** (`prism serve`), not the Fastify server. The Fastify server (`apps/server`) handles the REST API and session management.
 
 ### Initiating a Stream
 
@@ -635,7 +635,7 @@ The server is configured via environment variables:
 |----------|---------|-------------|
 | `PORT` | `3001` | HTTP server port |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection URL (session store) |
-| `GRAT_BINARY` | `grat` | Path to the `grat` CLI binary |
+| `GRAT_BINARY` | `prism` | Path to the `prism` CLI binary |
 | `AI_API_KEY` | *(required for AI endpoints)* | OpenAI-compatible API key |
 | `AI_API_BASE_URL` | `https://api.openai.com/v1` | AI provider base URL |
 | `AI_MODEL` | `gpt-4o-mini` | Model to use for AI explanations |
