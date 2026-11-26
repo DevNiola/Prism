@@ -1,13 +1,15 @@
 ---
-title: "diff_state"
-description: "Compares pre and post execution ledger states."
+title: "Diff ledger state"
+description: "Read the ledger changes recorded during a replay."
 ---
 
-```rust
-pub fn diff_state(
-    before: &LedgerState,
-    after: &LedgerState
-) -> Result<StateDiff, GratError>
+The Fastify server has no standalone state diff route. Run `cargo run -p grat-cli -- --network testnet serve` and use the CLI bridge's `GET /api/trace/:tx_hash`. Supply a transaction hash in the path and leave the request body empty.
+
+```bash
+curl --fail-with-body "http://localhost:8080/api/trace/${TX_HASH}" |
+  jq '.state_diff.entries'
 ```
 
-Produces a structured comparison of ledger entries, highlighting created, updated, and deleted keys.
+HTTP 200 returns a JSON execution trace. The `state_diff.entries` array contains ledger entry keys, change types, and before and after values where available. Replay failures return HTTP 500 with plain text.
+
+Use `cargo run -p grat-cli -- --network testnet --output json diff state "$TX_HASH"` to get the diff directly.

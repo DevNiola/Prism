@@ -1,17 +1,14 @@
 ---
-title: "decode_error"
-description: "Core API for Tier 1 diagnostics."
+title: "Decode an error"
+description: "Decode a Soroban transaction failure into a diagnostic report."
 ---
 
-```rust
-pub async fn decode_error(
-    result_xdr: &str,
-    network: &NetworkConfig
-) -> Result<DiagnosticReport, GratError>
+The Fastify server does not expose an HTTP route for decoding transaction errors. Run the CLI with a failed transaction hash on the selected network.
+
+```bash
+cargo run -p grat-cli -- --network testnet --output json decode "$TX_HASH"
 ```
 
-Given a transaction result XDR, this function:
+The JSON output is a diagnostic report with fields such as `error_name`, `severity`, and `summary`. Browser integrations can call the WASM export `decode_error(tx_result_json)` with a serialized Soroban RPC transaction result and receive a diagnostic report or a decoding error.
 
-- Classifies the error category.
-- Enriches the error with taxonomy data.
-- Returns a structured report suitable for UI rendering.
+The Fastify API can [explain an existing report](https://github.com/DevNiola/Prism/blob/main/docs/api-reference.md#post-apiaiexplain) after you decode it.

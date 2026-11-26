@@ -2,6 +2,7 @@ import { Worker } from "bullmq";
 import { config } from "../config";
 import { explainError } from "../ai";
 import { logger } from "../logger";
+import { replayQueue } from "./queue";
 
 let completedCount = 0;
 

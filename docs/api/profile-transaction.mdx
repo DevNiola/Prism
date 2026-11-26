@@ -1,12 +1,15 @@
 ---
-title: "profile_transaction"
-description: "Analyzes resource hotspots."
+title: "Profile a transaction"
+description: "Read resource usage and hotspots from a replay trace."
 ---
 
-```rust
-pub fn profile_transaction(
-    trace: &TraceTimeline
-) -> Result<ResourceProfile, GratError>
+The Fastify server has no standalone profiling route. Run `cargo run -p grat-cli -- --network testnet serve` and use the CLI bridge's `GET /api/trace/:tx_hash`. Supply a transaction hash in the path and leave the request body empty.
+
+```bash
+curl --fail-with-body "http://localhost:8080/api/trace/${TX_HASH}" |
+  jq '.resource_profile'
 ```
 
-Post-processes an execution trace to identify the most expensive operations and budget-critical segments.
+HTTP 200 returns a JSON execution trace. Its `resource_profile` object includes integer totals and limits for CPU, memory, and ledger I/O (`total_cpu`, `cpu_limit`, `total_memory`, `memory_limit`, `total_read_bytes`, `total_write_bytes`, `read_limit`, `write_limit`), a `hotspots` array, and a `warnings` array of strings. Replay failures return HTTP 500 with plain text.
+
+Use `cargo run -p grat-cli -- --network testnet --output json profile "$TX_HASH"` to get the profile directly.
