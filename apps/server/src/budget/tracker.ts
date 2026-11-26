@@ -8,6 +8,7 @@ import {
   ConcurrencyLimitError,
 } from "./errors";
 import type { BudgetStatus } from "../ai/types";
+import { aiTokensUsedTotal, aiRequestsTotal } from "../metrics";
 
 // ---------------------------------------------------------------------------
 // Redis key constants
@@ -74,11 +75,13 @@ export async function assertBudgetAvailable(): Promise<void> {
 
   if (!status.allowed) {
     if (status.concurrent_active >= status.concurrent_limit) {
+      aiRequestsTotal.inc({ result: "budget_exceeded" });
       throw new ConcurrencyLimitError(
         status.concurrent_active,
         status.concurrent_limit,
       );
     }
+    aiRequestsTotal.inc({ result: "budget_exceeded" });
     throw new BudgetExceededError({
       hourlyRemaining: status.hourly_remaining,
       dailyRemaining: status.daily_remaining,
@@ -143,6 +146,9 @@ export async function recordUsage(tokensUsed: number): Promise<void> {
   if (dailyNew === tokensUsed) {
     await setExpiry(DAILY_KEY, secondsUntilMidnightUTC());
   }
+
+  aiTokensUsedTotal.inc(tokensUsed);
+  aiRequestsTotal.inc({ result: "success" });
 }
 
 // ---------------------------------------------------------------------------
