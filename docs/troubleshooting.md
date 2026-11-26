@@ -4,147 +4,128 @@ This guide covers the most common errors users encounter when running Grat, expl
 
 ---
 
-## Table of Contents
+## Common RPC and replay errors
 
-1. [RPC Node Unavailable / Network Timeout](#1-rpc-node-unavailable--network-timeout)
-2. [Transaction Not Found](#2-transaction-not-found)
-3. [Malformed or Invalid XDR](#3-malformed-or-invalid-xdr)
-4. [Unsupported or Unknown Error Code](#4-unsupported-or-unknown-error-code)
-5. [Transaction Succeeded — Nothing to Decode](#5-transaction-succeeded--nothing-to-decode)
-6. [Not a Soroban Transaction](#6-not-a-soroban-transaction)
-7. [Contract Not Found / WASM Fetch Failed](#7-contract-not-found--wasm-fetch-failed)
-8. [State Reconstruction Failed (Replay)](#8-state-reconstruction-failed-replay)
-9. [Cache Errors](#9-cache-errors)
-10. [Config File Parse Error](#10-config-file-parse-error)
+Use the [CLI decode reference](./cli/decode.mdx) for a failure report by
+transaction hash and the [CLI inspect reference](./cli/inspect.mdx) to focus
+on an operation with `--op-index`. The [error taxonomy](./concepts/error-taxonomy.mdx)
+explains Soroban host errors, including auth failures. Transport, archive
+and XDR errors can occur before a host error is available to classify.
+
+### Network timeout or connection failure
+
+**Symptom.** `RPC request timed out after 30s (method: getTransaction)`
+(`GratError::NetworkTimeout`) or an RPC connection refused error.
+
+**Cause.** The node is unreachable, overloaded, or still starting. For a
+local node, the RPC port may be unpublished or reachable only from a different
+container.
+
+**Fix.** Check the configured endpoint with a JSON-RPC `getHealth` request:
+
+```bash
+curl -fsS http://127.0.0.1:8000/rpc \
+  -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"getHealth"}'
+```
+
+If connectivity still fails, retry with another endpoint on the same
+network. Use `--network <NETWORK>` (or `-n`) to select the network and
+`--rpc-url <URL>` to override the endpoint. Add `--no-cache` for a fresh
+fetch. `--config-path <PATH>` selects an alternate TOML file for validation,
+while the CLI flags supply the network and RPC used by the command.
+See [network configuration](./network-config.md).
+
+### RPC errors and missing transactions
+
+**Symptom.** `RPC error:`, `JSON-RPC error:`, an HTTP 401, 403, 429 or 503
+response, or `Transaction not found`.
+
+**Cause.** The provider may require credentials, reject a method, rate-limit
+requests or be temporarily unavailable. A missing transaction can also mean
+the hash is wrong, the node is on a different network, ingestion is still
+in progress, or the ledger has been pruned from the node’s retained history.
+
+**Fix.** Verify that the hash contains 64 hexadecimal characters and that the
+endpoint serves the transaction’s network. For a recent transaction, let the
+node finish ingestion and retry. For 429 or 503 responses, retry after a
+delay or switch to a healthy same-network provider. For 401 or 403, check the
+provider’s access requirements and use an endpoint that accepts requests from
+your CLI. These HTTP statuses concern access to the RPC service. Soroban
+authorization failures appear in transaction diagnostics.
+
+If `getTransaction` returns `NOT_FOUND`, compare the transaction’s ledger
+with the response’s `oldestLedger`. Use a same-network endpoint that still
+serves that transaction when its ledger is older than the retention window.
+
+```bash
+grat --network testnet --rpc-url https://soroban-testnet.stellar.org --no-cache decode YOUR_TX_HASH
+```
+
+### Archive and replay state
+
+**Symptom.** `Archive error:` with a fetch failure, checksum mismatch or
+decompression failure, or `Replay error:` during state reconstruction.
+
+**Cause.** Replay first needs the transaction and its ledger from RPC. For
+older ledgers that it can locate, it may need a history archive checkpoint for
+state reconstruction. An unavailable archive or an incomplete download can
+interrupt that step.
+
+**Fix.** If the transaction lookup failed, fix RPC retention first. Once RPC
+can retrieve the transaction, verify that the selected network’s history
+archive is reachable and has published the relevant checkpoint. Retry with
+verbose logging and a fresh fetch:
+
+```bash
+grat -vv --network mainnet --no-cache trace YOUR_TX_HASH
+```
+
+If archive integrity errors persist, record the failing file and ledger
+sequence for the archive operator. An RPC URL override keeps the selected
+network’s archive settings.
+
+### Invalid XDR or missing contract metadata
+
+**Symptom.** `XDR error:`, `XDR decoding failed for ...`, or a numeric
+contract error code with no resolved name.
+
+**Cause.** XDR may be truncated, malformed base64 or incompatible with the
+expected XDR type or protocol. A numeric contract code can also be valid XDR
+whose WASM contract spec is unavailable.
+
+**Fix.** Copy the full base64 value and check its encoding. If you have the
+transaction hash, use it so Grat can fetch the result XDR directly. For raw
+base64 input, use `grat decode --raw "$RESULT_XDR"`. Some diagnostics mention
+`--resolve` for WASM metadata lookup. The current `decode` and `inspect`
+commands attempt contract-error resolution automatically when the spec is
+available. Their CLI parsers do not accept `--resolve`.
+
+### Soroban authorization
+
+**Symptom.** The diagnostic report identifies an auth failure, such as a
+missing authorization or invalid signature.
+
+**Cause.** The signing account, allowed invocation, nonce or signature
+expiration ledger may differ from what the contract requires. Switching
+networks can invalidate signatures because they are tied to the network
+passphrase.
+
+**Fix.** Inspect the failing operation on the transaction’s network. If
+replay succeeds, use the authorization trace to examine its invocation chain.
+
+```bash
+grat --network testnet inspect --op-index 0 YOUR_TX_HASH
+grat --network testnet trace --auth-only YOUR_TX_HASH
+```
+
+Simulate the intended call again on that network, compare the required
+addresses and invocation arguments, and collect fresh authorizations before
+resubmitting. See the [Auth category in the error taxonomy](./concepts/error-taxonomy.mdx#error-categories).
 
 ---
 
-## 1. RPC Node Unavailable / Network Timeout
-
-### Error messages
-
-```
-Error: RPC request timed out after 30s (method: getTransaction)
-Error: RPC error: connection refused (http://127.0.0.1:8000/rpc)
-Error: RPC error: 503 Service Unavailable
-```
-
-### Why it happens
-
-- The Soroban RPC node at the configured `rpc_url` is unreachable, overloaded, or has gone offline.
-- You are pointing at a local node (`http://127.0.0.1:8000/rpc`) that is not running.
-- A third-party RPC provider is rate-limiting your requests.
-- Your machine has no internet access and you are targeting a public network.
-
-### How to fix it
-
-**Check that the node is up:**
-```bash
-curl -s https://soroban-testnet.stellar.org/health
-# expected: {"status":"healthy"}
-```
-
-**Switch to a different RPC endpoint:**
-```bash
-grat --rpc-url https://soroban-testnet.stellar.org decode <TX_HASH>
-```
-
-**Increase the timeout** in `~/.grat/config.toml`:
-```toml
-[[networks]]
-network = "testnet"
-rpc_url = "https://soroban-testnet.stellar.org"
-request_timeout_secs = 60
-```
-
-**For local nodes**, make sure your Quickstart container is running:
-```bash
-docker ps | grep quickstart
-# If missing, restart it:
-docker run --rm -it -p 8000:8000 stellar/quickstart:latest --standalone --enable-soroban-rpc
-```
-
----
-
-## 2. Transaction Not Found
-
-### Error message
-
-```
-Error: Transaction not found: <TX_HASH>
-```
-
-### Why it happens
-
-- The transaction hash is incorrect (typo, wrong case, or truncated).
-- You are querying the wrong network — the transaction is on mainnet but you are querying testnet (or vice versa).
-- The transaction is too old to be in the RPC node's retention window (default: 17 280 ledgers ≈ 24 hours). Older transactions require history archive access.
-- The RPC node has not yet ingested the ledger containing this transaction (very recent transactions).
-
-### How to fix it
-
-**Verify the network:**
-```bash
-# Mainnet transaction
-grat --network mainnet decode <TX_HASH>
-
-# Testnet transaction
-grat --network testnet decode <TX_HASH>
-```
-
-**Double-check the hash** — transaction hashes are 64 hex characters:
-```bash
-echo -n "<TX_HASH>" | wc -c
-# should print 64
-```
-
-**Wait for ingestion** — if the transaction was just submitted, wait ~10 seconds and retry.
-
-**For old transactions**, enable the history archive path by ensuring `archive_urls` is set in your network config (it is set by default for mainnet, testnet, and futurenet).
-
----
-
-## 3. Malformed or Invalid XDR
-
-### Error messages
-
-```
-Error: XDR error: unexpected end of input
-Error: XDR decoding failed for TransactionResultPair: invalid enum discriminant
-Error: invalid JSON input: expected value at line 1 column 1
-```
-
-### Why it happens
-
-- The XDR string passed to `--xdr` is truncated, corrupted, or incorrectly base64-encoded.
-- A copy/paste of the XDR dropped characters or introduced whitespace.
-- The XDR was encoded for a different protocol version than the one Grat expects.
-
-### How to fix it
-
-**Always copy the full XDR** — it is a long base64 string with no spaces or newlines.
-
-**Validate base64 encoding:**
-```bash
-echo "<XDR_STRING>" | base64 --decode | xxd | head -5
-# should show recognizable XDR structure bytes (0x00 0x00 0x00 0x...)
-```
-
-**Use the transaction hash instead of raw XDR** when possible — Grat fetches and decodes XDR automatically:
-```bash
-grat decode <TX_HASH>
-# instead of:
-grat decode --xdr <LONG_XDR_STRING>
-```
-
-**Enable verbose logging** to see the exact decode step that fails:
-```bash
-grat -vv decode <TX_HASH> 2>&1 | head -50
-```
-
----
-
-## 4. Unsupported or Unknown Error Code
+## 1. Unsupported or Unknown Error Code
 
 ### Error messages
 
@@ -181,7 +162,7 @@ If the error code is genuinely new, consider [contributing a taxonomy entry](./c
 
 ---
 
-## 5. Transaction Succeeded — Nothing to Decode
+## 2. Transaction Succeeded — Nothing to Decode
 
 ### Error message
 
@@ -209,7 +190,7 @@ This is not a bug — it is a guard to prevent confusing output on successful tr
 
 ---
 
-## 6. Not a Soroban Transaction
+## 3. Not a Soroban Transaction
 
 ### Error message
 
@@ -232,94 +213,7 @@ Look for an `InvokeHostFunction` operation type. If the transaction does not con
 
 ---
 
-## 7. Contract Not Found / WASM Fetch Failed
-
-### Error messages
-
-```
-Error: Contract not found: CABC...XYZ
-Error: Archive error: failed to fetch 'contracts/CABC...XYZ.wasm' from all archive backends
-```
-
-### Why it happens
-
-- The contract ID is incorrect.
-- The contract was deployed on a different network than the one you specified.
-- The contract's WASM bytecode is not available from the RPC node (e.g., it was deployed before the node's retention window).
-- The history archive is temporarily unavailable.
-
-### How to fix it
-
-**Verify the contract exists on the correct network:**
-```bash
-grat --network mainnet inspect <CONTRACT_ID>
-```
-
-**Try without custom error resolution** — Grat will still decode the numeric error code:
-```bash
-grat decode <TX_HASH>
-# Custom error names like "InsufficientBalance" may show as "#3" but the report is still useful
-```
-
-**Check archive availability:**
-```bash
-curl -s https://history.stellar.org/prd/core-testnet/core_testnet_001/.well-known/stellar-history.json | head -5
-```
-
-If the archive is unreachable, wait a few minutes and retry, or configure an alternative archive URL in `~/.grat/config.toml`.
-
----
-
-## 8. State Reconstruction Failed (Replay)
-
-### Error messages
-
-```
-Error: Replay error: failed to reconstruct ledger state at sequence 49523801
-Error: Archive error: checksum mismatch for 'ledger/00/2f/43/ledger-00002f43.xdr.gz'
-Error: Archive error: decompression failed for 'bucket/...': unexpected EOF
-```
-
-### Why it happens
-
-- The transaction is from a ledger that is older than the RPC node's hot path window (approximately last 50 000 ledgers) and the history archive fetch failed.
-- A history archive returned a corrupted file (checksum mismatch).
-- The history archive server is temporarily offline or rate-limiting requests.
-- Network interruption mid-download of a large archive snapshot.
-
-### How to fix it
-
-**Retry the command** — transient network issues often resolve themselves:
-```bash
-grat trace <TX_HASH>
-```
-
-**Bypass the cache** — a stale cached partial download can cause this:
-```bash
-grat --no-cache trace <TX_HASH>
-```
-
-**Add a redundant archive URL** in `~/.grat/config.toml`:
-```toml
-[[networks]]
-network = "mainnet"
-archive_urls = [
-  "https://history.stellar.org/prd/core-live/core_live_001",
-  "https://history.stellar.org/prd/core-live/core_live_002",
-  "https://history.stellar.org/prd/core-live/core_live_003"
-]
-```
-
-**Enable verbose logging** to see which archive step fails:
-```bash
-grat -vv trace <TX_HASH> 2>&1 | grep -i archive
-```
-
-For checksum mismatch errors, the archive file is corrupted on the server side. This is rare but can occur; try a different archive URL or wait for the archive operator to fix the issue.
-
----
-
-## 9. Cache Errors
+## 4. Cache Errors
 
 ### Error messages
 
@@ -366,7 +260,7 @@ If the issue is a deserialization error from a format mismatch after upgrading G
 
 ---
 
-## 10. Config File Parse Error
+## 5. Config File Parse Error
 
 ### Error messages
 
