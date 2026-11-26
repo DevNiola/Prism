@@ -4,10 +4,11 @@ import { useState } from "react";
 import type { DiagnosticReport } from "@/lib/types";
 
 interface DecodeFormProps {
+  onLoadingChange?: (loading: boolean) => void;
   onDecode: (report: DiagnosticReport | null) => void;
 }
 
-export default function DecodeForm({ onDecode }: DecodeFormProps) {
+export default function DecodeForm({ onDecode, onLoadingChange }: DecodeFormProps) {
   const [category, setCategory] = useState<string>("contract");
   const [code, setCode] = useState<string>("0");
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -189,10 +190,12 @@ export default function DecodeForm({ onDecode }: DecodeFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    onLoadingChange?.(true);
     setTimeout(() => {
       const decodedReport = mockDecode(category, Number(code));
       onDecode(decodedReport);
       setIsLoading(false);
+      onLoadingChange?.(false);
     }, 500);
   };
 

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
+import type { DiagnosticEventEntry } from "@/lib/types";
+
 export interface TraceNode {
   node: any;
   path: number[];
@@ -31,6 +33,7 @@ export interface TraceStreamCallbacks {
   onTraceCompleted?: (data: {
     total_nodes: number;
     duration_ms: number;
+    diagnostic_events?: DiagnosticEventEntry[];
   }) => void;
   onTraceError?: (data: { error: string }) => void;
 }
