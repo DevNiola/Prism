@@ -1,3 +1,57 @@
+# [1.7.0](https://github.com/DevNiola/Prism/compare/v1.6.0...v1.7.0) (2026-11-26)
+
+
+### Bug Fixes
+
+* broadcast server_shutdown to WebSocket clients on graceful shutdown ([#398](https://github.com/DevNiola/Prism/issues/398)) ([924ab6d](https://github.com/DevNiola/Prism/commit/924ab6d6c6508dfa62ff2e21d5c02ae3d1237170))
+* **ci:** fix syntax delimiter in enum_decoder.rs and sync pnpm lockfile for frozen-lockfile ([b847f41](https://github.com/DevNiola/Prism/commit/b847f411f85ac9fb6bdbff575c1619f1ed24577f))
+* **ci:** fix syntax delimiter in enum_decoder.rs and sync pnpm lockfile for frozen-lockfile ([a0115cd](https://github.com/DevNiola/Prism/commit/a0115cd3eb734e4e11abfaf849e7a311a228e93d))
+* declare jwtSecret, disableSessionAuth and gracefulShutdownTimeoutMs on ServerConfig ([189fe85](https://github.com/DevNiola/Prism/commit/189fe85c621430be5e0f237b8c967761ca91bb6c)), closes [#386](https://github.com/DevNiola/Prism/issues/386)
+* **devops:** reconcile stale config — add blocked label and Stellar Wave to PR exemptions ([c3181d2](https://github.com/DevNiola/Prism/commit/c3181d22c194cadca78a0767cc9e44f4e75fd53f)), closes [#418](https://github.com/DevNiola/Prism/issues/418)
+* pull current images for Kubernetes latest tags ([f385e9d](https://github.com/DevNiola/Prism/commit/f385e9d7218a996f9c0a7a7a891a2d092ec9a88d))
+* register openapiRoute in index.ts (missed during PR 628 conflict resolution) ([abb3522](https://github.com/DevNiola/Prism/commit/abb35228a102877b312369e8b81dafb38df3b01f))
+* restore workspace dependencies for frozen installs ([4145414](https://github.com/DevNiola/Prism/commit/41454145cca4abd7b6fc6f1357ccb86b6716971d))
+* **server:** drive CORS allowed origins from CORS_ORIGINS config ([8aefd75](https://github.com/DevNiola/Prism/commit/8aefd75c116c4490cc71433b86c9df579cd55002)), closes [#397](https://github.com/DevNiola/Prism/issues/397)
+* **theme:** replace hardcoded colors with semantic tokens for dark/light consistency ([00bbe29](https://github.com/DevNiola/Prism/commit/00bbe2910a45aaae46ec0dc390d5190a8261e9aa)), closes [#502](https://github.com/DevNiola/Prism/issues/502) [#493](https://github.com/DevNiola/Prism/issues/493) [#497](https://github.com/DevNiola/Prism/issues/497)
+* **web:** cancel pending reconnects when replay is cancelled ([db4f208](https://github.com/DevNiola/Prism/commit/db4f2082713ec24aa6de3affbf7258b8964b3655))
+* **web:** hydrate saved decode reports and their network ([ec0e795](https://github.com/DevNiola/Prism/commit/ec0e79559c878f01a2626c14a3233e18cf2c5ead))
+* **web:** reconnect interrupted replay streams ([7f041f6](https://github.com/DevNiola/Prism/commit/7f041f6ee7739da1137fc8444e58ee60f87bf495))
+* **web:** render the severity badge on restored reports ([52143c7](https://github.com/DevNiola/Prism/commit/52143c7cca03b6c0eb4414fb5ded406a030b48c3))
+* **web:** render the severity badge on restored reports ([1b906a4](https://github.com/DevNiola/Prism/commit/1b906a45c8103883c8aa59bcb7f0195795d1b2db))
+* **web:** reserve panel layout while replay data loads ([8d9e90e](https://github.com/DevNiola/Prism/commit/8d9e90e7babdb4301d5be2c7f82fe372609fdccf))
+* **web:** reserve the complete height of diagnostic rows ([1ce51f7](https://github.com/DevNiola/Prism/commit/1ce51f7a89d44a55bbc4d19c20f24a3424cbd0fe))
+
+
+### Features
+
+* add /v1/health/live and /v1/health/ready endpoints with Redis readiness check ([3a77d36](https://github.com/DevNiola/Prism/commit/3a77d36c2c228d198a51f0c6334e61b4b4125824)), closes [#389](https://github.com/DevNiola/Prism/issues/389)
+* add live preview of changed args in WhatIfEditor ([#503](https://github.com/DevNiola/Prism/issues/503)) ([82a735b](https://github.com/DevNiola/Prism/commit/82a735b0dbb31ed07097d4d527ac3e8cb3bf6f7a))
+* add network status indicator to NetworkSwitcher ([#496](https://github.com/DevNiola/Prism/issues/496)) ([ffe2d6a](https://github.com/DevNiola/Prism/commit/ffe2d6a20812011d6d8c04d6df899d1545dabbea))
+* add ping/pong keepalive to trace-stream WebSocket server ([2d6e92a](https://github.com/DevNiola/Prism/commit/2d6e92a8f6a223eb0a1525ce5319e18c1bb12cfe)), closes [#387](https://github.com/DevNiola/Prism/issues/387)
+* add retry and report-a-bug to ErrorBoundary fallback ([#499](https://github.com/DevNiola/Prism/issues/499)) ([cd0a924](https://github.com/DevNiola/Prism/commit/cd0a924b3acd81a4ed8d68ac650d35674de9cdc9))
+* apply per-route rate limits and add X-RateLimit-Reset header ([e307cf3](https://github.com/DevNiola/Prism/commit/e307cf31faa230ceba76d6e9e0aedfa5435c6ffe)), closes [#393](https://github.com/DevNiola/Prism/issues/393)
+* **auth:** enforce JWT validation and add token refresh to session auth ([#401](https://github.com/DevNiola/Prism/issues/401)) ([fad12b3](https://github.com/DevNiola/Prism/commit/fad12b3506e301a33c5b5aa79812097aa51b2a21))
+* **backend:** add session TTL cleanup and WS expiry notifications ([#405](https://github.com/DevNiola/Prism/issues/405)) ([8824d77](https://github.com/DevNiola/Prism/commit/8824d77aba72813c9815092e00625de0d39714fc))
+* **backend:** generate and serve OpenAPI 3.1 spec at /v1/openapi.json ([#400](https://github.com/DevNiola/Prism/issues/400)) ([ad40ac7](https://github.com/DevNiola/Prism/commit/ad40ac793f7537fe5e75ff7955832584b90ba6f0))
+* **decode:** add multi-op transaction tests for MultiOpDecoder ([#485](https://github.com/DevNiola/Prism/issues/485)) ([3ba0c2e](https://github.com/DevNiola/Prism/commit/3ba0c2eeafb5c33424874a6f8c0cd77feb4cefa0))
+* **decode:** add optimistic UI updates and session link sharing (closes [#22](https://github.com/DevNiola/Prism/issues/22), closes [#23](https://github.com/DevNiola/Prism/issues/23)) ([08ab5c9](https://github.com/DevNiola/Prism/commit/08ab5c9abcd53aef7c8cc618da3911d3a4f9ff6f))
+* **devops:** add unified make ci target and local e2e runner to Makefile ([#415](https://github.com/DevNiola/Prism/issues/415)) ([ab34e29](https://github.com/DevNiola/Prism/commit/ab34e292b05a4bafc72ff87e6ba08645408172df))
+* **devops:** wire cargo fmt, clippy, and pnpm lint into pre-commit hooks ([#416](https://github.com/DevNiola/Prism/issues/416)) ([0070080](https://github.com/DevNiola/Prism/commit/007008016fbca3b6940d7cf179095b0144a3f2d9))
+* **k8s:** add PodDisruptionBudgets and HorizontalPodAutoscalers for web and server ([51c9b26](https://github.com/DevNiola/Prism/commit/51c9b264e71fb61620f4cf0a4f37a9808077e0dc)), closes [#410](https://github.com/DevNiola/Prism/issues/410)
+* **metrics:** add Prometheus metrics endpoint with prom-client ([37160f9](https://github.com/DevNiola/Prism/commit/37160f93c18e40fc3941a88a83a34611d696b423)), closes [#399](https://github.com/DevNiola/Prism/issues/399)
+* persist BreakpointManager breakpoints to localStorage ([6414608](https://github.com/DevNiola/Prism/commit/6414608f55dbe05fabcc5cb7b03115e3363be866)), closes [#459](https://github.com/DevNiola/Prism/issues/459)
+* **replay:** propagate cancellation and timeout to the worker ([#402](https://github.com/DevNiola/Prism/issues/402)) ([1edd172](https://github.com/DevNiola/Prism/commit/1edd17265572fc57da762ea9d8bbbd3c0c7f1d41))
+* require session authentication on WebSocket subscribe messages ([9e12f82](https://github.com/DevNiola/Prism/commit/9e12f822c23e56952d818d3d5620ed7c3088f81b)), closes [#388](https://github.com/DevNiola/Prism/issues/388)
+* **terraform:** add S3+DynamoDB remote state backend and locking ([b6071ab](https://github.com/DevNiola/Prism/commit/b6071abb73d6cc9864ad0ef49b306d5b85c8f757)), closes [#412](https://github.com/DevNiola/Prism/issues/412)
+* truncate long tx hashes in Breadcrumbs with tooltip and copy ([#500](https://github.com/DevNiola/Prism/issues/500)) ([8c9eab4](https://github.com/DevNiola/Prism/commit/8c9eab4ccb5e6a4abe29c8eb4b09ca7b189f0014))
+* **ui:** responsive layout for timeline, diff viewer, and comparison on small screens ([#498](https://github.com/DevNiola/Prism/issues/498)) ([39c1e99](https://github.com/DevNiola/Prism/commit/39c1e99e5cbe8a988f36cd99a21fc36d3f367d16))
+* virtualize ExecutionTimeline with @tanstack/react-virtual ([fee7b13](https://github.com/DevNiola/Prism/commit/fee7b13c15564fa58387a5f3b116fa722316169e)), closes [#453](https://github.com/DevNiola/Prism/issues/453)
+* **wasm:** validate WASM modules against Soroban-allowed host functions ([#488](https://github.com/DevNiola/Prism/issues/488)) ([4a8924d](https://github.com/DevNiola/Prism/commit/4a8924de3a2939810e7186da58dd20e53873b0a8))
+* **web:** inspect and copy Stellar XDR ([07baf4f](https://github.com/DevNiola/Prism/commit/07baf4f46d13a551812819236531e50b52c993c8))
+* **web:** rank palette results and surface recent transactions ([fb1f89c](https://github.com/DevNiola/Prism/commit/fb1f89c89c62d9688ec7184558c8b1f440f30191))
+* **web:** share decode and trace state through URLs ([e83f907](https://github.com/DevNiola/Prism/commit/e83f9078d64366b89a63673b1b499ca56038fa11))
+* **worker:** add exponential backoff retries, visibility timeout, and DLQ to replay worker ([dfc8476](https://github.com/DevNiola/Prism/commit/dfc8476e03a7b5b6fa856cc53b869f23a30a727b)), closes [#394](https://github.com/DevNiola/Prism/issues/394)
+
 # [1.6.0](https://github.com/DevNiola/Prism/compare/v1.5.0...v1.6.0) (2026-11-26)
 
 
