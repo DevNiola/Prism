@@ -4,6 +4,8 @@ import { useSessionStore } from "@/store/session";
 
 import type { DiagnosticEventEntry } from "@/lib/types";
 
+import type { DiagnosticEventEntry } from "@/lib/types";
+
 export type TracePhase =
   | "idle"
   | "fetching"
@@ -43,6 +45,7 @@ export interface TraceData {
   state_diff: any[];
   diagnostic_events?: DiagnosticEventEntry[];
   completed: boolean;
+  diagnostic_events?: DiagnosticEventEntry[];
   error?: string;
 }
 

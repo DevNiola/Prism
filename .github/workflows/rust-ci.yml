@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -50,7 +50,7 @@ jobs:
 
       - name: Set up Chrome for WASM browser tests
         if: matrix.os == 'ubuntu-latest'
-        uses: browser-actions/setup-chrome@v1
+        uses: browser-actions/setup-chrome@v2
 
       - name: Install wasm-pack
         if: matrix.os == 'ubuntu-latest'
@@ -62,3 +62,6 @@ jobs:
 
       - name: Run tests with all features
         run: cargo test --workspace --all-features
+
+      - name: Check taxonomy protocol-version drift
+        run: scripts/check_taxonomy_protocol_drift.sh

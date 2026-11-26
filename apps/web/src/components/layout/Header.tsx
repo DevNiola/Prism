@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import NetworkSwitcher from "./NetworkSwitcher";
+import { triggerTourReplay } from "@/components/shared/OnboardingTour";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
@@ -14,9 +15,12 @@ const NAV_LINKS = [
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const helpRef = useRef<HTMLDivElement>(null);
+  const helpButtonRef = useRef<HTMLButtonElement>(null);
 
   // Close menu when navigating
   useEffect(() => {
@@ -43,14 +47,36 @@ export default function Header() {
   // Close menu on Escape
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && menuOpen) {
-        setMenuOpen(false);
-        buttonRef.current?.focus();
+      if (e.key === "Escape") {
+        if (helpOpen) {
+          setHelpOpen(false);
+          helpButtonRef.current?.focus();
+        } else if (menuOpen) {
+          setMenuOpen(false);
+          buttonRef.current?.focus();
+        }
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [menuOpen]);
+  }, [menuOpen, helpOpen]);
+
+  // Close help dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        helpRef.current &&
+        !helpRef.current.contains(e.target as Node) &&
+        !helpButtonRef.current?.contains(e.target as Node)
+      ) {
+        setHelpOpen(false);
+      }
+    }
+    if (helpOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [helpOpen]);
 
   return (
     <header
@@ -95,7 +121,41 @@ export default function Header() {
         </ul>
 
         {/* Desktop network switcher */}
-        <div className="hidden md:flex items-center">
+        <div className="hidden md:flex items-center gap-2">
+          {/* Help menu */}
+          <div className="relative">
+            <button
+              ref={helpButtonRef}
+              type="button"
+              onClick={() => setHelpOpen((prev) => !prev)}
+              aria-expanded={helpOpen}
+              aria-haspopup="true"
+              aria-label="Help menu"
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 text-sm font-semibold"
+            >
+              ?
+            </button>
+            {helpOpen && (
+              <div
+                ref={helpRef}
+                role="menu"
+                aria-label="Help options"
+                className="absolute right-0 mt-1 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-xl py-1 z-50"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setHelpOpen(false);
+                    triggerTourReplay();
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+                >
+                  🔬 Restart tour
+                </button>
+              </div>
+            )}
+          </div>
           <NetworkSwitcher />
         </div>
 

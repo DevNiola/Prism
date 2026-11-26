@@ -7,12 +7,14 @@ export type RpcStatus = "unknown" | "ok" | "degraded" | "unreachable";
 interface NetworkState {
   network: Network;
   customRpcUrl: string;
+  savedCustomRpcUrls: string[];
   isValidating: boolean;
   rpcStatus: RpcStatus;
   rpcLatencyMs: number | null;
   rpcLastChecked: number | null;
   setNetwork: (network: Network) => void;
   setCustomRpcUrl: (url: string) => void;
+  applyCustomRpcUrl: (url: string) => void;
   setIsValidating: (isValidating: boolean) => void;
   setRpcHealth: (status: RpcStatus, latencyMs: number | null) => void;
 }
@@ -22,6 +24,7 @@ export const useNetworkStore = create<NetworkState>()(
     (set) => ({
       network: "testnet",
       customRpcUrl: "",
+      savedCustomRpcUrls: [],
       isValidating: false,
       rpcStatus: "unknown" as RpcStatus,
       rpcLatencyMs: null,
@@ -29,6 +32,14 @@ export const useNetworkStore = create<NetworkState>()(
       setNetwork: (network) =>
         set({ network, rpcStatus: "unknown", rpcLatencyMs: null, rpcLastChecked: null }),
       setCustomRpcUrl: (url) => set({ customRpcUrl: url }),
+      applyCustomRpcUrl: (url) => set((state) => ({
+        network: "custom",
+        customRpcUrl: url,
+        savedCustomRpcUrls: [
+          url,
+          ...state.savedCustomRpcUrls.filter((savedUrl) => savedUrl !== url),
+        ],
+      })),
       setIsValidating: (isValidating) => set({ isValidating }),
       setRpcHealth: (status, latencyMs) =>
         set({ rpcStatus: status, rpcLatencyMs: latencyMs, rpcLastChecked: Date.now() }),
@@ -38,6 +49,7 @@ export const useNetworkStore = create<NetworkState>()(
       partialize: (state) => ({
         network: state.network,
         customRpcUrl: state.customRpcUrl,
+        savedCustomRpcUrls: state.savedCustomRpcUrls,
       }),
     }
   )

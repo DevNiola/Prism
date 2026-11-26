@@ -54,6 +54,7 @@ pub fn build_report(error: &ClassifiedError) -> GratResult<DiagnosticReport> {
             is_first_failure: None,
             call_depth: None,
             nested_reports: Vec::new(),
+            protocol_version: Some(crate::SOROBAN_PROTOCOL_VERSION),
             learn_more: "https://developers.stellar.org/docs/learn/smart-contracts/errors"
                 .to_string(),
         };

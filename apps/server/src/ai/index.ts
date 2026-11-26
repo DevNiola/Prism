@@ -1,4 +1,4 @@
-export { explainError } from "./client";
+export { explainError, explainErrorStream } from "./client";
 export type {
   AIExplanation,
   AIRequestMeta,

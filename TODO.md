@@ -1,4 +1,8 @@
-# TODO - CacheStore LRU Eviction Fix
+# Working Backlog
+
+The [public roadmap](docs/roadmap.mdx) summarizes milestones from this file. Checked items are done. Label open items as in progress or planned when updating the roadmap.
+
+## CacheStore LRU Eviction Fix
 
 - [x] Implement directory-aware size calculation in `crates/core/src/cache/store.rs`
 - [x] Add LRU eviction triggered by `put()` when `current_size + new_entry_size > max_size`

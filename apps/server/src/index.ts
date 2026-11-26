@@ -62,6 +62,64 @@ server.addHook("onRequest", async (request) => {
 });
 
 // ---------------------------------------------------------------------------
+// Global Error Handler: normalized envelope, no stack leaks in production
+// ---------------------------------------------------------------------------
+server.setErrorHandler((error, request, reply) => {
+  const isProduction = process.env.NODE_ENV === "production";
+
+  // Determine status code
+  const statusCode =
+    typeof (error as any).statusCode === "number"
+      ? (error as any).statusCode
+      : error.validation
+      ? 400
+      : 500;
+
+  // Map status code to a short error label
+  const errorLabels: Record<number, string> = {
+    400: "Bad Request",
+    401: "Unauthorized",
+    403: "Forbidden",
+    404: "Not Found",
+    429: "Too Many Requests",
+    500: "Internal Server Error",
+    502: "Bad Gateway",
+    503: "Service Unavailable",
+  };
+  const errorLabel = errorLabels[statusCode] ?? "Internal Server Error";
+
+  // Safe message: never leak internal details in production for 5xx
+  const message =
+    statusCode >= 500 && isProduction
+      ? "An unexpected error occurred. Please try again later."
+      : error.message || errorLabel;
+
+  // Log with appropriate level and request_id
+  const logMeta: Record<string, unknown> = {
+    request_id: request.id,
+    statusCode,
+    method: request.method,
+    url: request.url,
+  };
+  if (!isProduction) {
+    logMeta.stack = error.stack;
+  }
+
+  if (statusCode >= 500) {
+    request.log.error({ ...logMeta, err: error }, "Unhandled error");
+  } else if (statusCode >= 400) {
+    request.log.warn(logMeta, "Client error");
+  }
+
+  reply.status(statusCode).send({
+    statusCode,
+    error: errorLabel,
+    message,
+    request_id: request.id,
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Bootstrap the session store and attach it as a decorator so every route
 // plugin can access the same Redis-backed store instance.
 // ---------------------------------------------------------------------------

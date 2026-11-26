@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ToastProvider } from "@/components/shared/Toast";
 import "./globals.css";
+import ToastContainer from "@/components/shared/Toast";
 
 export const metadata: Metadata = {
   title: "Grat — Soroban Transaction Debugger",

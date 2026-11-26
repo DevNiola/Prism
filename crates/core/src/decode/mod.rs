@@ -49,6 +49,9 @@ pub mod struct_decoder;
 pub mod tuple_decoder;
 pub mod walker;
 
+#[cfg(test)]
+mod roundtrip_tests;
+
 pub use argument_decoder::ArgumentDecoder;
 pub use auth::{
     AddressCredential, AuthChain, AuthCredential, AuthFunctionKind, AuthInvocation,

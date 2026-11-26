@@ -110,6 +110,129 @@ async function callLLM(reportJson: string): Promise<ChatCompletion> {
 }
 
 // ---------------------------------------------------------------------------
+// Streaming pipeline: budget → concurrency → LLM (stream: true) → yield chunks
+// ---------------------------------------------------------------------------
+
+/**
+ * Streaming variant of the AI explain pipeline.
+ *
+ * Calls the LLM with `stream: true` and yields plain-text content chunks as
+ * they arrive from the upstream SSE feed. No caching or deduplication is
+ * applied to streaming responses.
+ *
+ * Token budget is enforced before the request starts and usage is recorded
+ * (via `estimateTokens`) when the stream ends.
+ *
+ * @param reportJson  Sanitized diagnostic-report JSON string.
+ * @param txHash      Transaction hash (used only for observability; not cached).
+ * @param network     Network identifier.
+ * @param signal      Optional AbortSignal so the caller can cancel mid-stream.
+ */
+export async function* explainErrorStream(
+  reportJson: string,
+  txHash: string,
+  network: string,
+  signal?: AbortSignal,
+): AsyncGenerator<string> {
+  // 1. Budget pre-flight
+  await assertBudgetAvailable();
+
+  // 2. Concurrency gate
+  await acquireConcurrency();
+
+  const { apiKey, apiBaseUrl, model, maxTokensPerRequest, temperature, timeoutMs } =
+    config.ai;
+
+  if (!apiKey) {
+    await releaseConcurrency();
+    throw new Error(
+      "AI_API_KEY is not configured. Set the AI_API_KEY environment variable.",
+    );
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  if (signal) {
+    signal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+
+  let accumulatedContent = "";
+
+  try {
+    const response = await fetch(`${apiBaseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokensPerRequest,
+        temperature,
+        stream: true,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: buildUserPrompt(reportJson) },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`AI provider returned HTTP ${response.status}: ${text}`);
+    }
+
+    if (!response.body) {
+      throw new Error("AI provider returned a response with no body.");
+    }
+
+    // Parse the SSE stream line by line
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      // Keep the last (potentially incomplete) line in the buffer
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+
+        const dataStr = trimmed.slice(5).trim();
+        if (dataStr === "[DONE]") return;
+
+        try {
+          const parsed = JSON.parse(dataStr) as {
+            choices?: { delta?: { content?: string } }[];
+          };
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) {
+            accumulatedContent += content;
+            yield content;
+          }
+        } catch {
+          // Malformed SSE data line — skip silently
+        }
+      }
+    }
+  } finally {
+    clearTimeout(timer);
+    const tokensUsed = estimateTokens(accumulatedContent);
+    if (tokensUsed > 0) {
+      await recordUsage(tokensUsed).catch(() => {});
+    }
+    await releaseConcurrency();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Orchestrated pipeline: dedup → budget → cache → LLM → cache → publish
 // ---------------------------------------------------------------------------
 

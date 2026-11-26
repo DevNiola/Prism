@@ -24,6 +24,7 @@ export async function requestReplay(txHash: string, network: string) {
 
 export async function getHealth() {
   const res = await fetch(`${API_BASE}/v1/health`);
+  if (!res.ok) throw new Error(`Health check failed (${res.status}).`);
   return res.json();
 }
 
@@ -77,6 +78,11 @@ export interface ResourceProfileResponse {
 }
 
 export interface StateDiffEntryResponse {
+  /**
+   * Canonical, human-readable ledger key string in the form
+   * `<kind>/<discriminating-fields>` (e.g. `contract_data/<contract-id>/<key-hex>`).
+   * Falls back to `raw/<base64>` for unrecognised key variants.
+   */
   key: string;
   before?: string;
   after?: string;

@@ -177,7 +177,7 @@ When invoking `soroban-env-host` with contract WASM — compilation is expensive
 
 ### Key generation
 
-The cache key is the **SHA-256 hash** of the raw WASM bytecode:
+The cache key is the **SHA-256 hash** of the raw WASM bytecode, not the contract id:
 
 ```rust
 pub fn hash_bytecode(bytecode: &[u8]) -> String {
@@ -188,9 +188,38 @@ pub fn hash_bytecode(bytecode: &[u8]) -> String {
 ```
 
 This means:
-- Identical bytecode always maps to the same key.
-- Any change to the bytecode (even one byte) produces a different key.
+- Identical bytecode always maps to the same key (content-addressable lookup).
+- Any change to the bytecode — even a single byte — produces a completely different key.
 - There is no need for the caller to manage key naming.
+
+### Cache invalidation on redeployment
+
+Because the key is derived from the bytecode content rather than from any contract identifier, invalidation is **automatic on redeployment**:
+
+```
+Contract C deployed at address A with bytecode B1
+  → cache key = sha256(B1) = "a3f2..."
+  → put("a3f2...", compiled_B1)
+
+Contract C redeployed at address A with bytecode B2
+  → cache key = sha256(B2) = "7c91..."   ← different key
+  → get("7c91...") → None                ← cache miss: fresh compilation triggered
+  → put("7c91...", compiled_B2)
+```
+
+The old entry for `B1` remains in the backing store until it is evicted by TTL or LRU pressure, but it will never be served when the host asks for `B2`. **A redeployed contract (same id, new code) always resolves against fresh metadata.**
+
+### Cache TTL
+
+`WasmCache` itself does not impose a TTL — it delegates entirely to the backing `CacheProvider`. To apply TTL-based expiry, back the cache with `DiskCache` and call `put_with_ttl`:
+
+```rust
+// 7-day TTL for compiled WASM modules
+let disk = DiskCache::new("/var/cache/prism/wasm")?;
+disk.put_with_ttl("sha256hex", &compiled, None, Some(Duration::from_secs(7 * 86_400))).await?;
+```
+
+For most deployments, TTL-based eviction is unnecessary because stale entries are naturally bypassed by the content-addressed keying scheme. TTL is useful when storage space is constrained and old module versions should be explicitly reclaimed.
 
 ### Usage
 
@@ -316,7 +345,30 @@ impl CacheProvider for MyRedisCache {
 
 ---
 
-## Cache Key Generation
+## Cache TTL Reference
+
+The table below summarises the TTL behaviour of each cache tier.
+
+| Tier | Default TTL | Configurable? | Notes |
+|---|---|---|---|
+| `MemoryCache` | None (process-lifetime) | No | Entries live until `clear()` or process exit |
+| `DiskCache` | None (persists forever) | Yes — per entry via `put_with_ttl` | Background sweep task (`start_eviction_sweep`) removes expired entries periodically; lazy eviction also occurs on `get` |
+| `CacheStore` | None (persists forever) | Yes — per entry via `put_with_ttl` | Expired entries are removed lazily on `get`; LRU eviction runs when the size limit is reached |
+| `WasmCache` | Inherits from backing provider | Indirectly | TTL is not set by `WasmCache` itself; set it on the underlying `DiskCache` if needed |
+
+### Recommended TTLs by data category
+
+| Data | Recommended TTL | Rationale |
+|---|---|---|
+| Ledger entries | No TTL (or prune by ledger sequence) | Ledger data is immutable; use `prune_older_than` instead |
+| Transaction results | No TTL | Transactions are final once confirmed |
+| WASM compiled modules | No TTL (or 7–30 days) | Invalidated automatically by bytecode hash; TTL only needed for storage reclamation |
+| Contract specs | No TTL | Derived from WASM; invalidates with bytecode |
+| In-flight RPC responses | 60–300 seconds | Avoid re-fetching on rapid retries |
+
+---
+
+
 
 | Subsystem | Key Format | Example |
 |---|---|---|

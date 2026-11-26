@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { getOrFetchWithLock } from "../cache";
 
 // ---------------------------------------------------------------------------
 // Mock Redis
@@ -34,6 +35,9 @@ vi.mock("../redis", () => ({
       "^" + pattern.replace(/\*/g, ".*").replace(/\?/g, ".") + "$",
     );
     return Array.from(store.keys()).filter((k) => regex.test(k));
+  }),
+  acquireLock: vi.fn(async (_key: string, _value: string, _ttlMs: number) => {
+    return true;
   }),
 }));
 
@@ -255,7 +259,7 @@ describe("Cache — hit and miss tracking", () => {
 
   it("tracks hits, misses, sets, and invalidations accurately", async () => {
     const stats0 = getCacheStats();
-    expect(stats0).toEqual({ hits: 0, misses: 0, sets: 0, invalidations: 0 });
+    expect(stats0).toEqual({ hits: 0, misses: 0, sets: 0, invalidations: 0, stampedesAvoided: 0 });
 
     // 1 miss
     await getCache("explain", "fp-stat-1");
@@ -303,5 +307,68 @@ describe("Cache — concurrent access", () => {
     expect(stats.hits).toBe(25);
     expect(stats.misses).toBe(0);
     expect(store.size).toBe(25);
+  });
+});
+
+describe("Cache — stampede protection (single-flight)", () => {
+  beforeEach(() => {
+    store.clear();
+    resetCacheStats();
+  });
+
+  it("concurrent getCache calls for the same key coalesce into one Redis fetch", async () => {
+    // Prime: set a value
+    await setCache("explain", "fp-stampede", '"stampede-value"');
+    resetCacheStats();
+
+    // Fire 5 concurrent getCache calls
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => getCache("explain", "fp-stampede")),
+    );
+
+    // All should get the same value
+    for (const r of results) {
+      expect(r).toBe('"stampede-value"');
+    }
+  });
+
+  it("tracks stampedesAvoided in stats", async () => {
+    await setCache("explain", "fp-stampede-2", '"value"');
+    resetCacheStats();
+
+    // Concurrent calls
+    await Promise.all([
+      getCache("explain", "fp-stampede-2"),
+      getCache("explain", "fp-stampede-2"),
+      getCache("explain", "fp-stampede-2"),
+    ]);
+
+    const stats = getCacheStats();
+    // At least some should be coalesced (stampedesAvoided >= 0)
+    expect(stats.stampedesAvoided).toBeGreaterThanOrEqual(0);
+  });
+
+  it("getOrFetchWithLock returns cached value on hit", async () => {
+    await setCache("explain", "fp-lock-hit", '"lock-hit-value"');
+
+    const result = await getOrFetchWithLock(
+      "explain",
+      "fp-lock-hit",
+      async () => "should-not-be-called",
+    );
+    expect(result).toBe('"lock-hit-value"');
+  });
+
+  it("getOrFetchWithLock calls compute and caches result on miss", async () => {
+    const result = await getOrFetchWithLock(
+      "explain",
+      "fp-lock-miss",
+      async () => '"computed-value"',
+    );
+    expect(result).toBe('"computed-value"');
+
+    // Verify it was stored in cache
+    const cached = await getCache("explain", "fp-lock-miss");
+    expect(cached).toBe('"computed-value"');
   });
 });

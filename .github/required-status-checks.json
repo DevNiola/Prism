@@ -1,0 +1,7 @@
+{
+  "rust_checks": "Rust Checks",
+  "node_checks": "Node & Web Checks",
+  "wasm-build": "wasm-build",
+  "web-e2e": "playwright",
+  "security": "security"
+}

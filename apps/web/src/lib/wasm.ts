@@ -31,14 +31,14 @@ export type SorobanValueType =
   | "void";
 
 const INTEGER_BOUNDS: Partial<Record<SorobanValueType, [bigint, bigint]>> = {
-  u32: [0n, 2n ** 32n - 1n],
-  i32: [-(2n ** 31n), 2n ** 31n - 1n],
-  u64: [0n, 2n ** 64n - 1n],
-  i64: [-(2n ** 63n), 2n ** 63n - 1n],
-  u128: [0n, 2n ** 128n - 1n],
-  i128: [-(2n ** 127n), 2n ** 127n - 1n],
-  u256: [0n, 2n ** 256n - 1n],
-  i256: [-(2n ** 255n), 2n ** 255n - 1n],
+  u32: [BigInt(0), BigInt(2) ** BigInt(32) - BigInt(1)],
+  i32: [-(BigInt(2) ** BigInt(31)), BigInt(2) ** BigInt(31) - BigInt(1)],
+  u64: [BigInt(0), BigInt(2) ** BigInt(64) - BigInt(1)],
+  i64: [-(BigInt(2) ** BigInt(63)), BigInt(2) ** BigInt(63) - BigInt(1)],
+  u128: [BigInt(0), BigInt(2) ** BigInt(128) - BigInt(1)],
+  i128: [-(BigInt(2) ** BigInt(127)), BigInt(2) ** BigInt(127) - BigInt(1)],
+  u256: [BigInt(0), BigInt(2) ** BigInt(256) - BigInt(1)],
+  i256: [-(BigInt(2) ** BigInt(255)), BigInt(2) ** BigInt(255) - BigInt(1)],
 };
 
 export function validateScVal(
@@ -93,6 +93,63 @@ export function validateScVal(
       return trimmed === "" ? null : "Expected an empty value for void.";
   }
   return null;
+}
+
+export interface ParsedScVal {
+  type: SorobanValueType;
+  value: unknown;
+}
+
+/** Parse an editor field without rounding wide integers. */
+export function parseScValJson(source: string, type: SorobanValueType): ParsedScVal {
+  let value: unknown;
+  try {
+    value = JSON.parse(source);
+  } catch {
+    throw new Error("Enter valid JSON.");
+  }
+
+  const integerBounds = INTEGER_BOUNDS[type];
+  if (integerBounds) {
+    if (typeof value !== "number" && typeof value !== "string") {
+      throw new Error(`Expected a ${type} integer.`);
+    }
+    const integer = typeof value === "number" ? source.trim() : value;
+    if (!/^-?\d+$/.test(integer)) {
+      throw new Error(`Expected a ${type} integer in decimal notation.`);
+    }
+    const error = validateScVal(integer, type);
+    if (error) throw new Error(error);
+    return { type, value: type === "u32" || type === "i32" ? Number(integer) : BigInt(integer).toString() };
+  }
+
+  if (type === "void" && value === null) return { type, value };
+  if (type === "bool" && typeof value === "boolean") return { type, value };
+  if (type === "vec" || type === "map") {
+    const error = validateScVal(source, type);
+    if (error) throw new Error(error);
+    JSON.parse(source, (_key, entry: unknown) => {
+      if (typeof entry === "number" && !Number.isSafeInteger(entry)) {
+        throw new Error("Use quoted decimal strings for large integers. ScVal has no floating-point type.");
+      }
+      return entry;
+    });
+    return { type, value };
+  }
+  if (
+    (type === "address" || type === "bytes" || type === "string" || type === "symbol") &&
+    typeof value === "string"
+  ) {
+    const error = validateScVal(value, type);
+    if (error) throw new Error(error);
+    return {
+      type,
+      value: type === "bytes" ? value.trim().replace(/^0x/, "").toLowerCase()
+        : type === "string" ? value : value.trim(),
+    };
+  }
+  const expected = type === "void" ? "null" : type === "bool" ? "a boolean" : "a quoted string";
+  throw new Error(`Expected ${expected} for ${type}.`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -16,6 +16,8 @@ Add `grat-core` to your `Cargo.toml`:
 ```toml
 [dependencies]
 grat-core = "0.1.0"
+serde_json = "1"
+stellar-xdr = "30.0.0"
 ```
 
 ## WASM Usage
@@ -26,11 +28,101 @@ Embed Prism into your JavaScript/TypeScript applications:
 npm install @grat-soroban/grat-wasm
 ```
 
-## Public API Highlights
+## Walk diagnostic events
 
-- `decode_error`: Returns a structured diagnostic report.
-- `resolve_contract_error`: Decodes custom error codes via WASM.
-- `replay_transaction`: Runs a full Tier 2/3 simulation.
+Pass diagnostic events decoded from transaction metadata to the walker. This fixture
+represents one event from a failed call. You can use
+`grat_core::xdr::codec::XdrCodec` to decode individual Base64 XDR diagnostic events.
+
+```rust
+use grat_core::decode::walk_diagnostic_events;
+use stellar_xdr::curr::{
+    ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, DiagnosticEvent,
+    ExtensionPoint, Hash, ScVal,
+};
+
+fn main() {
+    let events = [DiagnosticEvent {
+        in_successful_contract_call: false,
+        event: ContractEvent {
+            ext: ExtensionPoint::V0,
+            contract_id: Some(Hash([1; 32])),
+            type_: ContractEventType::Contract,
+            body: ContractEventBody::V0(ContractEventV0 {
+                topics: Vec::new().try_into().expect("empty XDR topic list"),
+                data: ScVal::U32(42),
+            }),
+        },
+    }];
+
+    let decoded = walk_diagnostic_events(&events);
+    assert!(!decoded[0].in_successful_call);
+    assert_eq!(decoded[0].data, ScVal::U32(42));
+}
+```
+
+## Decode a function call
+
+Pass a function and contract spec when available. With `None`, the decoder
+uses the XDR value types directly. Pass `None` for the return value when the
+transaction did not yield one.
+
+```rust
+use grat_core::decode::FunctionCallDecoder;
+use serde_json::json;
+use stellar_xdr::curr::ScVal;
+
+fn main() {
+    let args = [ScVal::U32(10), ScVal::U32(20)];
+    let result = ScVal::U32(30);
+    let decoded = FunctionCallDecoder::new().decode("add", &args, None, Some(&result), None);
+
+    assert_eq!(decoded.arguments[0].value, json!(10));
+    assert_eq!(decoded.return_value, Some(json!(30)));
+}
+```
+
+## Load the error taxonomy
+
+Use the bundled taxonomy for an offline lookup by category and numeric code.
+
+```rust
+use grat_core::taxonomy::{loader::TaxonomyDatabase, schema::ErrorCategory};
+
+fn main() -> grat_core::GratResult<()> {
+    let database = TaxonomyDatabase::load_embedded()?;
+    let entry = database.lookup(&ErrorCategory::Budget, 0).expect("CPU budget entry");
+
+    assert_eq!(entry.name, "CPUExceeded");
+    println!("{}", entry.summary);
+    Ok(())
+}
+```
+
+## Build a diagnostic report
+
+Classify a failed transaction response before building and serializing its report.
+This example supplies a small response fixture. In an integration, pass the
+failed transaction response, including `resultXdr` when available.
+
+```rust
+use grat_core::decode::{host_error::classify_error, report::build_report};
+use grat_core::DiagnosticReport;
+use serde_json::json;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let tx = json!({ "status": "FAILED", "errorCode": 50 });
+    let error = classify_error(&tx)?;
+    let report: DiagnosticReport = build_report(&error)?;
+
+    assert_eq!(report.error_code, 50);
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(())
+}
+```
+
+The examples are also available as rustdoc examples in `grat-core`. Run them
+from the repository root with `cargo test -p grat-core --doc`.
 
 ## HostError API
 
@@ -71,3 +163,5 @@ println!("{}", err.summary());
 
 Returns the human-readable category name for the error variant,
 e.g. `"Budget"`, `"Auth"`, `"ContractSpecific"`.
+
+See the [integration guide](/guides/integration) for browser, Node.js, and native Rust examples.

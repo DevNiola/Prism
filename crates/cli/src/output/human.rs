@@ -16,6 +16,9 @@ pub fn format_report(report: &DiagnosticReport) -> String {
         report.error_name, report.error_category, report.error_code
     ));
     out.push(format!("Summary: {}", report.summary));
+    if let Some(pv) = report.protocol_version {
+        out.push(format!("Soroban Protocol: v{pv}"));
+    }
     out.join("\n")
 }
 
@@ -29,6 +32,10 @@ pub fn print_report(report: &DiagnosticReport) -> anyhow::Result<()> {
         report.error_name, report.error_category, report.error_code
     );
     println!("Summary: {}", report.summary);
+
+    if let Some(pv) = report.protocol_version {
+        println!("Soroban Protocol: v{pv}");
+    }
 
     if !report.detailed_explanation.trim().is_empty() {
         println!();

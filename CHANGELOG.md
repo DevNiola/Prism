@@ -1,3 +1,47 @@
+# [1.6.0](https://github.com/DevNiola/Prism/compare/v1.5.0...v1.6.0) (2026-11-26)
+
+
+### Bug Fixes
+
+* **a11y:** ensure SeverityBadge meets WCAG AA contrast and add aria-label ([f3cc401](https://github.com/DevNiola/Prism/commit/f3cc4018c983631d664d5ab3e44d35cf3f915eaf)), closes [#494](https://github.com/DevNiola/Prism/issues/494)
+* **debug:** scope what-if edits to the decoded report ([ed66e1c](https://github.com/DevNiola/Prism/commit/ed66e1c0ad66aaa4e5a2af4d3706f0eaf45663fb))
+* **trace:** make each diagnostic row a timeline link target ([a602732](https://github.com/DevNiola/Prism/commit/a602732118bcbd0b39551907c01b5dfba6095e54))
+* **ui:** match skeleton geometry to final layout and add crossfade ([4ff4399](https://github.com/DevNiola/Prism/commit/4ff43992fee005cad4040cc84052753895f1529c)), closes [#492](https://github.com/DevNiola/Prism/issues/492)
+* **web:** clear the custom RPC draft after applying ([3e575ca](https://github.com/DevNiola/Prism/commit/3e575ca01757450899af6dcfc178bcdb409f8557))
+
+
+### Features
+
+* **a11y:** add ARIA roles and keyboard nav to CommandPalette and ExecutionTimeline ([92709ff](https://github.com/DevNiola/Prism/commit/92709ffadb28233975d1e92e987c0b6d126de839)), closes [#493](https://github.com/DevNiola/Prism/issues/493)
+* add global error handler with normalized response envelope ([ed51ee5](https://github.com/DevNiola/Prism/commit/ed51ee5b9ca727eecce4d8d5a23515f7fa4de8a8)), closes [#404](https://github.com/DevNiola/Prism/issues/404)
+* add per-key token budget tracking with webhook alerts and 429 Retry-After ([#392](https://github.com/DevNiola/Prism/issues/392)) ([d632f10](https://github.com/DevNiola/Prism/commit/d632f102ec909419173e65c59798b0c009c90389))
+* add single-flight stampede protection and Redis lock to cache manager ([#390](https://github.com/DevNiola/Prism/issues/390)) ([331247b](https://github.com/DevNiola/Prism/commit/331247b93fdc1c648a6a6a422f03d520121e84ed))
+* add SSE streaming endpoint for AI explanations ([#391](https://github.com/DevNiola/Prism/issues/391)) ([df60f7c](https://github.com/DevNiola/Prism/commit/df60f7c3b632995f521e1f885567dc6e346ec790))
+* **bench:** add resource profiler benchmark ([#475](https://github.com/DevNiola/Prism/issues/475)) ([6fa9bc1](https://github.com/DevNiola/Prism/commit/6fa9bc176ba592b8c3f2e099bf99d3ca10adcd52))
+* **cache:** add concurrency and TTL tests for disk cache ([#476](https://github.com/DevNiola/Prism/issues/476)) ([8c0bf66](https://github.com/DevNiola/Prism/commit/8c0bf66e4b907703ba71ad702c82139ac3e7c2d1))
+* **cache:** verify WASM module cache invalidation keyed by bytecode hash ([#477](https://github.com/DevNiola/Prism/issues/477)) ([99f4e1b](https://github.com/DevNiola/Prism/commit/99f4e1bd23b0474b1a8223679b4af16bbf870309))
+* **debug:** add drag-to-reorder, grouping, and enable/disable-all to BreakpointManager ([073ed6d](https://github.com/DevNiola/Prism/commit/073ed6d8930401ed55d17afc912c42ae5bd9bb69)), closes [#502](https://github.com/DevNiola/Prism/issues/502)
+* **debugger:** add determinism property tests for what-if re-simulation ([#474](https://github.com/DevNiola/Prism/issues/474)) ([64a1120](https://github.com/DevNiola/Prism/commit/64a11207b95dd3e3ef46d9ae5c943a3edda1991e))
+* **debugger:** support conditional breakpoints in breakpoint controller ([#487](https://github.com/DevNiola/Prism/issues/487)) ([81215a8](https://github.com/DevNiola/Prism/commit/81215a8f32987612d09a2bbbe3f7b9149b103273))
+* **debug:** inline-highlight changed keys, add prev/next navigation and changes-only filter in ComparisonView ([#504](https://github.com/DevNiola/Prism/issues/504)) ([3045723](https://github.com/DevNiola/Prism/commit/30457235b6575b420ba6a62f681770aed009e953))
+* **debug:** validate what-if inputs and preview ScVals ([d8020b8](https://github.com/DevNiola/Prism/commit/d8020b8654850425335aa093407ede9eb674e33f))
+* **decode:** add difficulty filter and toast on copy to SuggestedFixes ([#451](https://github.com/DevNiola/Prism/issues/451)) ([4e4673c](https://github.com/DevNiola/Prism/commit/4e4673cca8ffb333b1fc083ed7678e18e0e613fc))
+* **decode:** link contract id to Stellar Expert and add copy button ([#452](https://github.com/DevNiola/Prism/issues/452)) ([3b51f67](https://github.com/DevNiola/Prism/commit/3b51f67f16b1b1e48a47d23183d720b09972b0e7))
+* **decode:** link contract id to Stellar Expert and add copy button ([#452](https://github.com/DevNiola/Prism/issues/452)) ([a0a2376](https://github.com/DevNiola/Prism/commit/a0a23763b8dc664e75b001c967d428e8962837ae))
+* **dedup:** move dedup window to Redis for distributed replica support ([#403](https://github.com/DevNiola/Prism/issues/403)) ([6044ae6](https://github.com/DevNiola/Prism/commit/6044ae6b9d5635566bf4fd7d839b1837cc7a88a5))
+* **replay:** normalize ledger-key representation in replay state diffs ([#486](https://github.com/DevNiola/Prism/issues/486)) ([ba40fd0](https://github.com/DevNiola/Prism/commit/ba40fd0e97f2005d2047943cb5c2414c0398cb85))
+* **report:** surface Soroban protocol version in DiagnosticReport ([#484](https://github.com/DevNiola/Prism/issues/484)) ([83816bf](https://github.com/DevNiola/Prism/commit/83816bf8e0754d0cbb96f6254bd3c7ae9c65a6a3))
+* **shared:** add undo action and auto-dismiss progress to Toast ([f8da911](https://github.com/DevNiola/Prism/commit/f8da91125d174a2a409df7042228cbf442a8a769)), closes [#495](https://github.com/DevNiola/Prism/issues/495)
+* **spec:** resolve contract error enum names and doc comments ([#481](https://github.com/DevNiola/Prism/issues/481)) ([0ca4ef2](https://github.com/DevNiola/Prism/commit/0ca4ef25c024e220632e7d771758d55836b0ee6f))
+* **taxonomy:** add updater path for new Soroban protocol errors with drift detection ([#482](https://github.com/DevNiola/Prism/issues/482)) ([ccd9189](https://github.com/DevNiola/Prism/commit/ccd918954aee92ed29f7e8962bc8feae62447298))
+* **taxonomy:** detect duplicate error IDs globally across categories in linter ([#483](https://github.com/DevNiola/Prism/issues/483)) ([1646a36](https://github.com/DevNiola/Prism/commit/1646a3630b34caf2c89b490d9f92823496213e80))
+* **trace:** add budget verdict and percentage color to ResourceProfile ([#507](https://github.com/DevNiola/Prism/issues/507)) ([29c7199](https://github.com/DevNiola/Prism/commit/29c7199589eb96ce75a63a41de0da88d07b0010e))
+* **trace:** add side-by-side/stacked toggle, copy-diff, and expand for long values in StateDiffViewer ([#505](https://github.com/DevNiola/Prism/issues/505)) ([5ff1ac3](https://github.com/DevNiola/Prism/commit/5ff1ac3b4e610e828c0e9bc9ef1639341d255d59))
+* **trace:** filter and search diagnostic events ([bb71b2a](https://github.com/DevNiola/Prism/commit/bb71b2a0aa2ebf93cc5f498f7a164a8200783b38))
+* **ui:** add per-page empty states with example hashes and CTAs ([bb5d37a](https://github.com/DevNiola/Prism/commit/bb5d37ac0d559ca15dbbf5f919939d8f1215427c)), closes [#491](https://github.com/DevNiola/Prism/issues/491)
+* **ui:** add skip and don't-show-again persistence to OnboardingTour ([#490](https://github.com/DevNiola/Prism/issues/490)) ([393580b](https://github.com/DevNiola/Prism/commit/393580bcc2dcfc030e6b0ce093d1f5fbb9e2f497))
+* **web:** save and select custom RPC endpoints ([746f831](https://github.com/DevNiola/Prism/commit/746f831f9fc7cabe6b56894abf48d06140f7e17f))
+
 # [1.5.0](https://github.com/DevNiola/Prism/compare/v1.4.0...v1.5.0) (2026-11-26)
 
 

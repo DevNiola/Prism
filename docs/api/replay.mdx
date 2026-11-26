@@ -1,0 +1,48 @@
+---
+title: "Replay API"
+description: "Submit and look up transaction replay requests."
+---
+
+Set up your shell using the [curl examples overview](/api/curl-examples).
+
+## POST /api/replay
+
+Replace the example hash with a transaction on the selected network. The current POST handler returns a queued status without a job ID.
+
+```bash POST /api/replay
+curl -sS -i -X POST "$BASE_URL/api/replay" \
+  -H 'X-Request-ID: replay-submit' \
+  -H 'Content-Type: application/json' \
+  --data '{"txHash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","network":"testnet"}'
+```
+
+Response (`200`)
+
+```json
+{
+  "status": "queued"
+}
+```
+
+## GET /api/replay/:jobId
+
+Set `JOB_ID` to an existing replay queue job ID. The sample shows an active job.
+
+```bash GET /api/replay/:jobId
+curl -sS -i -X GET "$BASE_URL/api/replay/$JOB_ID" \
+  -H 'X-Request-ID: replay-status'
+```
+
+Response (`200`)
+
+```json
+{
+  "jobId": "42",
+  "state": "active",
+  "progress": 0,
+  "result": null,
+  "failedReason": null
+}
+```
+
+For trace event payloads, see the [WebSocket trace stream protocol](/websocket-protocol).

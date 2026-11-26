@@ -1,5 +1,7 @@
 # Security Policy
 
+The [docs site security page](docs/security.mdx) mirrors this policy. Update both when the reporting process or security practices change.
+
 ## Reporting a Vulnerability
 
 We prioritize the security of our users. If you find a security vulnerability in Grat, please report it privately.

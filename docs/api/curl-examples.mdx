@@ -1,0 +1,22 @@
+---
+title: "HTTP API curl examples"
+description: "Try the Prism server from your terminal."
+---
+
+Start the Fastify server with its configured Redis instance. These examples use its default port, 3001. Set the base URL once in the shell where you will run the commands.
+
+```bash
+export BASE_URL=http://localhost:3001
+```
+
+Each request supplies an `X-Request-ID` for log correlation. The server echoes it in the response headers, displayed by curl's `-i` option. Use the copy button on each command block. Session reads use the signed JWT and session writes use the raw session token. The other routes shown here accept requests without a Bearer token.
+
+| Routes | Examples |
+| --- | --- |
+| Replay | [Submit and look up a replay](/api/replay) |
+| Session | [Create, read, update, and close a session](/api/session) |
+| AI | [Request an explanation, check budgets, and clear AI cache entries](/api/ai) |
+| Cache | [Check cache statistics and invalidate an entry](/api/cache) |
+| Health | [Check the server and its dependencies](/api/health) |
+
+For live trace messages and WebSocket handshake details, see the [WebSocket trace stream protocol](/websocket-protocol).

@@ -1,0 +1,86 @@
+---
+title: "AI API"
+description: "Request explanations and manage the AI response cache."
+---
+
+Set up your shell using the [curl examples overview](/api/curl-examples).
+
+## POST /api/ai/explain
+
+Set `AI_API_KEY` on the server to enable provider requests. The example uses an illustrative diagnostic report and response.
+
+```bash POST /api/ai/explain
+curl -sS -i -X POST "$BASE_URL/api/ai/explain" \
+  -H 'X-Request-ID: ai-explain' \
+  -H 'Content-Type: application/json' \
+  --data '{"report":{"error_name":"Example contract error"},"tx_hash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","network":"testnet"}'
+```
+
+Response (`200`)
+
+```json
+{
+  "summary": "The contract rejected the invocation.",
+  "detailed_explanation": "Review the diagnostic events for the contract error code.",
+  "suggested_fixes": [
+    "Inspect the invocation arguments."
+  ],
+  "tokens_used": 120,
+  "cached": false,
+  "request_id": "example-ai-request"
+}
+```
+
+## GET /api/ai/budget
+
+```bash GET /api/ai/budget
+curl -sS -i -X GET "$BASE_URL/api/ai/budget" \
+  -H 'X-Request-ID: ai-budget'
+```
+
+Response (`200`)
+
+```json
+{
+  "allowed": true,
+  "hourly_remaining": 10000,
+  "daily_remaining": 50000,
+  "concurrent_active": 0,
+  "concurrent_limit": 5,
+  "hourly_reset_at": "2026-01-01T01:00:00.000Z",
+  "daily_reset_at": "2026-01-02T00:00:00.000Z"
+}
+```
+
+## DELETE /api/ai/cache/:txHash
+
+```bash DELETE /api/ai/cache/:txHash
+curl -sS -i -X DELETE "$BASE_URL/api/ai/cache/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" \
+  -H 'X-Request-ID: ai-invalidate'
+```
+
+Response (`200`)
+
+```json
+{
+  "invalidated": 1,
+  "tx_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+}
+```
+
+## DELETE /api/ai/cache
+
+Run this against a development instance. It clears the entire AI response cache.
+
+```bash DELETE /api/ai/cache
+curl -sS -i -X DELETE "$BASE_URL/api/ai/cache" \
+  -H 'X-Request-ID: ai-clear'
+```
+
+Response (`200`)
+
+```json
+{
+  "invalidated": 3
+}
+```

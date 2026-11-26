@@ -1,3 +1,5 @@
+import type { SorobanValueType } from "./wasm";
+
 export interface DiagnosticReport {
   error_category: string;
   error_code: number;
@@ -13,6 +15,8 @@ export interface DiagnosticReport {
   operation_index?: number;
   operation_count?: number;
   is_first_failure?: boolean;
+  /** Soroban protocol version active when this report was produced. */
+  protocol_version?: number;
 }
 
 export interface RootCause {
@@ -55,11 +59,20 @@ export interface ResourceSummary {
   write_limit: number;
 }
 
+export interface DecodedScValArgument {
+  name: string;
+  type: SorobanValueType;
+  label?: string;
+  /** JSON text with decimal strings accepted for wide integers. */
+  value?: string;
+}
+
 export interface TransactionContext {
   tx_hash: string;
   ledger_sequence: number;
   function_name?: string;
   arguments: string[];
+  decoded_arguments?: DecodedScValArgument[];
   return_value?: string;
   fee: FeeBreakdown;
   resources: ResourceSummary;
@@ -73,3 +86,10 @@ export interface DiagnosticEventEntry {
 }
 
 export type Network = "mainnet" | "testnet" | "futurenet" | "custom";
+
+declare const txHashBrand: unique symbol;
+export type TxHash = string & { readonly [txHashBrand]: true };
+
+export function isTxHash(value: string): value is TxHash {
+  return value.length === 64 && /^[0-9a-f]{64}$/.test(value);
+}

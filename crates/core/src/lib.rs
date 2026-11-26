@@ -16,6 +16,21 @@
 //!
 //! println!("Prism Core v{} running Soroban Protocol v{}", VERSION, SOROBAN_PROTOCOL_VERSION);
 //! ```
+//!
+//! ## Look up a taxonomy entry
+//!
+//! ```rust
+//! use grat_core::taxonomy::{loader::TaxonomyDatabase, schema::ErrorCategory};
+//!
+//! fn main() -> grat_core::GratResult<()> {
+//!     let database = TaxonomyDatabase::load_embedded()?;
+//!     let entry = database.lookup(&ErrorCategory::Budget, 0).expect("CPU budget entry");
+//!
+//!     assert_eq!(entry.name, "CPUExceeded");
+//!     println!("{}", entry.summary);
+//!     Ok(())
+//! }
+//! ```
 
 #[cfg(feature = "decode")]
 pub mod archive;
@@ -23,6 +38,57 @@ pub mod archive;
 pub mod cache;
 #[cfg(feature = "decode")]
 pub mod debugger;
+/// ## Walk diagnostic events
+///
+/// Pass diagnostic events decoded from transaction metadata to the walker.
+/// This fixture represents one event from a failed call.
+///
+/// ```rust
+/// use grat_core::decode::walk_diagnostic_events;
+/// use stellar_xdr::curr::{
+///     ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, DiagnosticEvent,
+///     ExtensionPoint, Hash, ScVal,
+/// };
+///
+/// fn main() {
+///     let events = [DiagnosticEvent {
+///         in_successful_contract_call: false,
+///         event: ContractEvent {
+///             ext: ExtensionPoint::V0,
+///             contract_id: Some(Hash([1; 32])),
+///             type_: ContractEventType::Contract,
+///             body: ContractEventBody::V0(ContractEventV0 {
+///                 topics: Vec::new().try_into().expect("empty XDR topic list"),
+///                 data: ScVal::U32(42),
+///             }),
+///         },
+///     }];
+///
+///     let decoded = walk_diagnostic_events(&events);
+///     assert!(!decoded[0].in_successful_call);
+///     assert_eq!(decoded[0].data, ScVal::U32(42));
+/// }
+/// ```
+///
+/// ## Decode a function call
+///
+/// Pass a function and contract spec when available. With `None`, the decoder
+/// uses the XDR value types directly.
+///
+/// ```rust
+/// use grat_core::decode::FunctionCallDecoder;
+/// use serde_json::json;
+/// use stellar_xdr::curr::ScVal;
+///
+/// fn main() {
+///     let args = [ScVal::U32(10), ScVal::U32(20)];
+///     let result = ScVal::U32(30);
+///     let decoded = FunctionCallDecoder::new().decode("add", &args, None, Some(&result), None);
+///
+///     assert_eq!(decoded.arguments[0].value, json!(10));
+///     assert_eq!(decoded.return_value, Some(json!(30)));
+/// }
+/// ```
 #[cfg(feature = "decode")]
 pub mod decode;
 pub mod error;

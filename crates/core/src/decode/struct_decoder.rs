@@ -23,6 +23,7 @@
 
 use crate::decode::return_decoder::ReturnValueDecoder;
 use crate::spec::decoder::{ContractSpec, ContractStructDef};
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 use stellar_xdr::curr::{ScMap, ScVal};
@@ -32,7 +33,7 @@ use stellar_xdr::curr::{ScMap, ScVal};
 /// Every field named here is reported rather than dropped or nulled, because
 /// each one means the payload was not produced by the contract version that
 /// defines this struct.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StructDecodeReport {
     /// Name of the struct whose layout the payload was matched against.
     pub struct_name: String,

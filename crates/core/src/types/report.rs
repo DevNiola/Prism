@@ -106,6 +106,27 @@ pub struct FailureAttribution {
     pub origin_description: String,
 }
 
+/// Structured diagnostics for a failed transaction.
+///
+/// ## Example
+///
+/// Classify a failed transaction response before building and serializing its report.
+///
+/// ```rust
+/// use grat_core::decode::{host_error::classify_error, report::build_report};
+/// use grat_core::DiagnosticReport;
+/// use serde_json::json;
+///
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let tx = json!({ "status": "FAILED", "errorCode": 50 });
+///     let error = classify_error(&tx)?;
+///     let report: DiagnosticReport = build_report(&error)?;
+///
+///     assert_eq!(report.error_code, 50);
+///     println!("{}", serde_json::to_string_pretty(&report)?);
+///     Ok(())
+/// }
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiagnosticReport {
     pub error_category: String,
@@ -167,6 +188,13 @@ pub struct DiagnosticReport {
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub nested_reports: Vec<DiagnosticReport>,
 
+    /// Soroban protocol version that was active when this report was produced.
+    ///
+    /// Populated from [`grat_core::SOROBAN_PROTOCOL_VERSION`] at decode time
+    /// so that reports can be compared or reproduced across protocol upgrades.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub protocol_version: Option<u32>,
+
     pub learn_more: String,
 }
 
@@ -196,6 +224,7 @@ impl DiagnosticReport {
             is_first_failure: None,
             call_depth: None,
             nested_reports: Vec::new(),
+            protocol_version: None,
             learn_more: "https://developers.stellar.org/docs/learn/smart-contracts/errors"
                 .to_string(),
         }

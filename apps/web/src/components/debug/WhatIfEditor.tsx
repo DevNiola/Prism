@@ -1,17 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { validateScVal, type SorobanValueType } from "@/lib/wasm";
+import { useId, useState } from "react";
+import type { DecodedScValArgument, DiagnosticReport } from "@/lib/types";
+import { parseScValJson } from "@/lib/wasm";
 
-export interface WhatIfField {
-  name: string;
-  type: SorobanValueType;
-  label?: string;
-  value?: string;
-}
+export type WhatIfField = DecodedScValArgument;
+
+const NO_FIELDS: WhatIfField[] = [];
 
 interface WhatIfEditorProps {
-  fields: WhatIfField[];
+  fields?: WhatIfField[];
+  report?: DiagnosticReport | null;
   onResimulate: (values: Record<string, string>) => void | Promise<void>;
 }
 
@@ -20,31 +19,35 @@ function getInitialValues(fields: WhatIfField[]) {
 }
 
 export default function WhatIfEditor({
-  fields,
+  fields: providedFields,
+  report,
   onResimulate,
 }: WhatIfEditorProps) {
-  const [values, setValues] = useState(() => getInitialValues(fields));
+  const fields = providedFields ?? report?.transaction_context?.decoded_arguments ?? NO_FIELDS;
+  const id = useId();
+  const [draft, setDraft] = useState<{
+    report: DiagnosticReport | null | undefined;
+    values: Record<string, string>;
+  }>({ report, values: {} });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setValues((current) => ({
-      ...getInitialValues(fields),
-      ...Object.fromEntries(
-        fields
-          .filter((field) => current[field.name] !== undefined)
-          .map((field) => [field.name, current[field.name]]),
-      ),
-    }));
-  }, [fields]);
+  const edits = draft.report === report ? draft.values : {};
+  const values = { ...getInitialValues(fields), ...edits };
 
-  const errors = Object.fromEntries(
-    fields.map((field) => [
-      field.name,
-      validateScVal(values[field.name] ?? "", field.type),
-    ]),
-  );
-  const isValid = fields.length > 0 && Object.values(errors).every((error) => !error);
+  const argumentsWithValidation = fields.map((field) => {
+    try {
+      const scVal = parseScValJson(values[field.name] ?? "", field.type);
+      return { field, scVal, error: null };
+    } catch (error) {
+      return {
+        field,
+        scVal: null,
+        error: error instanceof Error ? error.message : "Unable to parse argument.",
+      };
+    }
+  });
+  const isValid = fields.length > 0 && argumentsWithValidation.every(({ error }) => !error);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -53,7 +56,7 @@ export default function WhatIfEditor({
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await onResimulate(values);
+      await onResimulate(Object.fromEntries(fields.map(({ name }) => [name, values[name]])));
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "Re-simulation failed.",
@@ -70,9 +73,8 @@ export default function WhatIfEditor({
         <p className="text-sm text-slate-600">No editable inputs are available.</p>
       ) : (
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
-          {fields.map((field) => {
-            const error = errors[field.name];
-            const inputId = `what-if-${field.name}`;
+          {argumentsWithValidation.map(({ field, scVal, error }, index) => {
+            const inputId = `${id}-argument-${index}`;
             const errorId = `${inputId}-error`;
 
             return (
@@ -86,15 +88,16 @@ export default function WhatIfEditor({
                     {field.type}
                   </span>
                 </label>
-                <input
+                <textarea
                   id={inputId}
-                  type="text"
+                  rows={field.type === "vec" || field.type === "map" ? 4 : 1}
+                  spellCheck={false}
                   value={values[field.name] ?? ""}
                   onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      [field.name]: event.target.value,
-                    }))
+                    setDraft({
+                      report,
+                      values: { ...edits, [field.name]: event.target.value },
+                    })
                   }
                   aria-invalid={Boolean(error)}
                   aria-describedby={error ? errorId : undefined}
@@ -104,6 +107,12 @@ export default function WhatIfEditor({
                       : "border-slate-300 focus:ring-indigo-200"
                   }`}
                 />
+                {scVal && (
+                  <details open className="mt-2 text-xs text-slate-600">
+                    <summary className="cursor-pointer">ScVal preview</summary>
+                    <pre className="mt-1 max-h-48 overflow-auto rounded bg-slate-100 p-2">{JSON.stringify(scVal, null, 2)}</pre>
+                  </details>
+                )}
                 {error && (
                   <p id={errorId} className="mt-1 text-sm text-red-700" role="alert">
                     {error}

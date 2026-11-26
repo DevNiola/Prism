@@ -1,0 +1,67 @@
+{
+  "status": "FAILED",
+  "hash": "7777888899990000aaaabbbbccccddddeeeeffff111122223333444455556666",
+  "ledger": 52006,
+  "resultXdr": "AAAAAAAAAGT/////AAAAAQAAAAAAAAAB////9AAAAAI=",
+  "envelopeXdr": "AAAAAgAAAABlXg...",
+  "operation_count": 1,
+  "operations": [
+    {
+      "index": 0,
+      "type": "InvokeHostFunction",
+      "status": "FAILED",
+      "contract_id": "CAAA111122223333444455556666777788889999AAAABBBBCCCCDDDDEEEEFFFF",
+      "function_name": "route_swap"
+    }
+  ],
+  "call_tree": {
+    "depth": 0,
+    "contract_id": "CAAA111122223333444455556666777788889999AAAABBBBCCCCDDDDEEEEFFFF",
+    "function": "route_swap",
+    "status": "FAILED",
+    "children": [
+      {
+        "depth": 1,
+        "contract_id": "CBBB111122223333444455556666777788889999AAAABBBBCCCCDDDDEEEEFFFF",
+        "function": "execute_liquidity",
+        "status": "FAILED",
+        "children": [
+          {
+            "depth": 2,
+            "contract_id": "CCCC111122223333444455556666777788889999AAAABBBBCCCCDDDDEEEEFFFF",
+            "function": "vault_withdraw",
+            "status": "FAILED",
+            "error_code": 2,
+            "error_name": "PoolDepleted"
+          }
+        ]
+      }
+    ]
+  },
+  "root_cause_contract": "CCCC111122223333444455556666777788889999AAAABBBBCCCCDDDDEEEEFFFF",
+  "chain_analysis": {
+    "call_depth": 2,
+    "caller": "CBBB111122223333444455556666777788889999AAAABBBBCCCCDDDDEEEEFFFF",
+    "target": "CCCC111122223333444455556666777788889999AAAABBBBCCCCDDDDEEEEFFFF",
+    "propagation": "Error in downstream vault_withdraw propagated up the invocation chain."
+  },
+  "diagnosticEvents": [
+    {
+      "type": "contract_error",
+      "data": {
+        "contract_id": "CCCC111122223333444455556666777788889999AAAABBBBCCCCDDDDEEEEFFFF",
+        "code": 2
+      }
+    }
+  ],
+  "expected_report": {
+    "error_category": "Contract",
+    "error_code": 2,
+    "error_name": "PoolDepleted",
+    "severity": "Error",
+    "summary": "Downstream cross-contract call to vault_withdraw failed with PoolDepleted at depth 2.",
+    "suggested_fixes": [
+      "Check liquidity pool reserves in target vault before initiating route_swap"
+    ]
+  }
+}

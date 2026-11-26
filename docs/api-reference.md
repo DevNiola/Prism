@@ -2,6 +2,8 @@
 
 The Prism server is a [Fastify](https://fastify.dev/) application (TypeScript) that exposes REST endpoints and a WebSocket stream used by the Prism web dashboard and the CLI's `serve` bridge.
 
+For copyable requests and sample responses for the registered routes, see the [HTTP API curl examples](api/curl-examples.mdx).
+
 **Default base URL:** `http://localhost:3001`
 
 ---

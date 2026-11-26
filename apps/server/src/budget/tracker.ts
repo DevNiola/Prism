@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { config } from "../config";
 import { logger } from "../logger";
@@ -247,5 +248,217 @@ export async function checkReplayBudget(
         });
       }
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-API-key budget tracking
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the first 16 hex characters of the SHA-256 hash of the given API key.
+ * Used for safe logging and Redis key naming.
+ */
+export function hashApiKey(apiKey: string): string {
+  return createHash("sha256").update(apiKey).digest("hex").slice(0, 16);
+}
+
+function perKeyHourlyRedisKey(hashedKey: string): string {
+  return `grat:budget:key:${hashedKey}:hourly`;
+}
+
+function perKeyDailyRedisKey(hashedKey: string): string {
+  return `grat:budget:key:${hashedKey}:daily`;
+}
+
+/**
+ * Fire a webhook for a per-key budget event (warning or exceeded).
+ */
+async function emitPerKeyWebhook(
+  event: "per_key_budget_warning" | "per_key_budget_exceeded",
+  apiKeyHash: string,
+  bucket: "hourly" | "daily",
+  used: number,
+  limit: number,
+  resetAt: string,
+): Promise<void> {
+  if (!config.budget.alertWebhookUrl) {
+    return;
+  }
+  const percent = (used / limit) * 100;
+  try {
+    const response = await fetch(config.budget.alertWebhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event,
+        api_key_hash: apiKeyHash,
+        bucket,
+        used,
+        limit,
+        percent,
+        reset_at: resetAt,
+      }),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!response.ok) {
+      logger.warn(`Per-key budget webhook returned HTTP ${response.status}`, {
+        status: response.status,
+        event,
+      });
+    }
+  } catch (error) {
+    logger.warn("Per-key budget webhook delivery failed", {
+      error: String(error),
+      event,
+    });
+  }
+}
+
+/**
+ * Returns the per-key budget status for a given API key.
+ */
+export async function getKeyBudgetStatus(apiKey: string): Promise<{
+  hourly_used: number;
+  daily_used: number;
+  hourly_remaining: number;
+  daily_remaining: number;
+  hourly_reset_at: string;
+  daily_reset_at: string;
+}> {
+  const hashedKey = hashApiKey(apiKey);
+  const [hourlyUsed, dailyUsed] = await Promise.all([
+    getNumber(perKeyHourlyRedisKey(hashedKey)),
+    getNumber(perKeyDailyRedisKey(hashedKey)),
+  ]);
+
+  const { perKeyHourlyTokenLimit, perKeyDailyTokenLimit } = config.budget;
+
+  return {
+    hourly_used: hourlyUsed,
+    daily_used: dailyUsed,
+    hourly_remaining: Math.max(0, perKeyHourlyTokenLimit - hourlyUsed),
+    daily_remaining: Math.max(0, perKeyDailyTokenLimit - dailyUsed),
+    hourly_reset_at: hourlyResetDate().toISOString(),
+    daily_reset_at: dailyResetDate().toISOString(),
+  };
+}
+
+/**
+ * Pre-flight check: is a new AI request allowed for the given API key?
+ * Also enforces the global budget via `assertBudgetAvailable()`.
+ * Throws `BudgetExceededError` (with `retryAfterSeconds`) when a per-key limit is hit.
+ */
+export async function assertBudgetAvailableForKey(
+  apiKey: string,
+): Promise<void> {
+  // Global check first
+  await assertBudgetAvailable();
+
+  const hashedKey = hashApiKey(apiKey);
+  const [hourlyUsed, dailyUsed] = await Promise.all([
+    getNumber(perKeyHourlyRedisKey(hashedKey)),
+    getNumber(perKeyDailyRedisKey(hashedKey)),
+  ]);
+
+  const {
+    perKeyHourlyTokenLimit: hourlyLimit,
+    perKeyDailyTokenLimit: dailyLimit,
+  } = config.budget;
+
+  if (hourlyUsed >= hourlyLimit) {
+    const retryAfterSeconds = secondsUntilNextHour();
+    throw new BudgetExceededError({
+      hourlyRemaining: 0,
+      dailyRemaining: Math.max(0, dailyLimit - dailyUsed),
+      resetAt: hourlyResetDate(),
+      retryAfterSeconds,
+    });
+  }
+
+  if (dailyUsed >= dailyLimit) {
+    const retryAfterSeconds = secondsUntilMidnightUTC();
+    throw new BudgetExceededError({
+      hourlyRemaining: Math.max(0, hourlyLimit - hourlyUsed),
+      dailyRemaining: 0,
+      resetAt: dailyResetDate(),
+      retryAfterSeconds,
+    });
+  }
+}
+
+/**
+ * Record `tokensUsed` against the per-key hourly and daily counters.
+ * Emits webhook alerts when usage crosses the warning (80%) or limit (100%) threshold.
+ */
+export async function recordUsageForKey(
+  apiKey: string,
+  tokensUsed: number,
+): Promise<void> {
+  const hashedKey = hashApiKey(apiKey);
+  const hourlyKey = perKeyHourlyRedisKey(hashedKey);
+  const dailyKey = perKeyDailyRedisKey(hashedKey);
+
+  const [hourlyNew, dailyNew] = await Promise.all([
+    incrBy(hourlyKey, tokensUsed),
+    incrBy(dailyKey, tokensUsed),
+  ]);
+
+  // Set expiry on first write so counters reset naturally.
+  if (hourlyNew === tokensUsed) {
+    await setExpiry(hourlyKey, secondsUntilNextHour());
+  }
+  if (dailyNew === tokensUsed) {
+    await setExpiry(dailyKey, secondsUntilMidnightUTC());
+  }
+
+  const {
+    perKeyHourlyTokenLimit: hourlyLimit,
+    perKeyDailyTokenLimit: dailyLimit,
+  } = config.budget;
+  const WARNING_THRESHOLD = 80;
+
+  // Check hourly bucket
+  const hourlyPercent = (hourlyNew / hourlyLimit) * 100;
+  if (hourlyNew >= hourlyLimit) {
+    await emitPerKeyWebhook(
+      "per_key_budget_exceeded",
+      hashedKey,
+      "hourly",
+      hourlyNew,
+      hourlyLimit,
+      hourlyResetDate().toISOString(),
+    );
+  } else if (hourlyPercent >= WARNING_THRESHOLD) {
+    await emitPerKeyWebhook(
+      "per_key_budget_warning",
+      hashedKey,
+      "hourly",
+      hourlyNew,
+      hourlyLimit,
+      hourlyResetDate().toISOString(),
+    );
+  }
+
+  // Check daily bucket
+  const dailyPercent = (dailyNew / dailyLimit) * 100;
+  if (dailyNew >= dailyLimit) {
+    await emitPerKeyWebhook(
+      "per_key_budget_exceeded",
+      hashedKey,
+      "daily",
+      dailyNew,
+      dailyLimit,
+      dailyResetDate().toISOString(),
+    );
+  } else if (dailyPercent >= WARNING_THRESHOLD) {
+    await emitPerKeyWebhook(
+      "per_key_budget_warning",
+      hashedKey,
+      "daily",
+      dailyNew,
+      dailyLimit,
+      dailyResetDate().toISOString(),
+    );
   }
 }

@@ -12,12 +12,43 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
+  docs_checks:
+    name: Docs Checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Mintlify CLI
+        run: npm install --global mint@4.3.88
+
+      - name: Validate Mintlify site
+        working-directory: docs
+        run: mint validate
+
+      - name: Check documentation links and anchors
+        working-directory: docs
+        run: mint broken-links --check-anchors --files '**/*.mdx'
+
+      - name: Check README links and anchors
+        uses: lycheeverse/lychee-action@v2.9.0
+        with:
+          args: --offline --include-fragments --no-progress README.md
+          fail: true
+
   rust_checks:
     name: Rust Checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -49,7 +80,7 @@ jobs:
 
       - name: Upload Rust coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage/lcov.info
           flags: rust
@@ -62,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -75,7 +106,7 @@ jobs:
           version: 9
 
       - name: Setup pnpm cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.local/share/pnpm/store
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -90,7 +121,7 @@ jobs:
 
       - name: Upload TypeScript coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: ./apps/server/coverage/lcov.info
           flags: typescript

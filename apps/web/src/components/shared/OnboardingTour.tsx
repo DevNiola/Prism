@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 
 const STORAGE_KEY = "prism_onboarding_completed";
 const REPLAY_STORAGE_KEY = "prism_onboarding_replay";
+export const DONT_SHOW_KEY = "prism_onboarding_dismissed";
 
 interface TourStep {
   id: string;
@@ -65,15 +66,23 @@ interface OnboardingTourProps {
 export function OnboardingTour({ onDone }: OnboardingTourProps) {
   const [visible, setVisible] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const [dontShowAgain, setDontShowAgain] = useState(false);
 
   useEffect(() => {
-    // Show tour on first visit OR when manually replayed
+    // Show tour on first visit OR when manually replayed.
+    // A replay clears the dismissed flag so the tour re-surfaces fully.
     try {
       const completed = localStorage.getItem(STORAGE_KEY);
+      const dismissed = localStorage.getItem(DONT_SHOW_KEY);
       const replay = localStorage.getItem(REPLAY_STORAGE_KEY);
-      if (!completed || replay === "true") {
-        setVisible(true);
+
+      if (replay === "true") {
+        // Manual replay — override any dismissed/completed state
         localStorage.removeItem(REPLAY_STORAGE_KEY);
+        localStorage.removeItem(DONT_SHOW_KEY);
+        setVisible(true);
+      } else if (!completed && dismissed !== "true") {
+        setVisible(true);
       }
     } catch {
       // localStorage unavailable (SSR / private browsing)
@@ -81,27 +90,33 @@ export function OnboardingTour({ onDone }: OnboardingTourProps) {
     }
   }, []);
 
-  const markDone = useCallback(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, "true");
-    } catch {
-      // ignore
-    }
-    setVisible(false);
-    onDone?.();
-  }, [onDone]);
+  const markDone = useCallback(
+    (dismiss: boolean) => {
+      try {
+        localStorage.setItem(STORAGE_KEY, "true");
+        if (dismiss) {
+          localStorage.setItem(DONT_SHOW_KEY, "true");
+        }
+      } catch {
+        // ignore
+      }
+      setVisible(false);
+      onDone?.();
+    },
+    [onDone],
+  );
 
   const handleSkip = useCallback(() => {
-    markDone();
-  }, [markDone]);
+    markDone(dontShowAgain);
+  }, [markDone, dontShowAgain]);
 
   const handleNext = useCallback(() => {
     if (stepIndex < TOUR_STEPS.length - 1) {
       setStepIndex((i) => i + 1);
     } else {
-      markDone();
+      markDone(dontShowAgain);
     }
-  }, [stepIndex, markDone]);
+  }, [stepIndex, markDone, dontShowAgain]);
 
   const handlePrev = useCallback(() => {
     setStepIndex((i) => Math.max(0, i - 1));
@@ -192,13 +207,26 @@ export function OnboardingTour({ onDone }: OnboardingTourProps) {
 
             {/* Navigation */}
             <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={handleSkip}
-                className="text-xs text-slate-500 hover:text-slate-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded px-2 py-1"
-              >
-                Skip tour
-              </button>
+              {/* Left side: skip + don't show again */}
+              <div className="flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleSkip}
+                  className="text-xs text-slate-500 hover:text-slate-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded px-2 py-1 text-left"
+                >
+                  Skip tour
+                </button>
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={dontShowAgain}
+                    onChange={(e) => setDontShowAgain(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 text-violet-500 focus:ring-violet-500 focus:ring-offset-slate-900"
+                    aria-label="Don't show this tour again"
+                  />
+                  <span className="text-xs text-slate-500">Don&apos;t show again</span>
+                </label>
+              </div>
 
               <div className="flex gap-2">
                 {!isFirst && (
@@ -228,13 +256,14 @@ export function OnboardingTour({ onDone }: OnboardingTourProps) {
 }
 
 /**
- * Utility to trigger the onboarding tour replay.
- * Call this from a settings page or "Replay tour" button.
+ * Trigger the onboarding tour to replay on the next page load.
+ * Clears the dismissed flag so the tour re-surfaces fully even for users
+ * who previously opted out with "Don't show again".
  */
 export function triggerTourReplay() {
   try {
     localStorage.setItem(REPLAY_STORAGE_KEY, "true");
-    // Reload or navigate to trigger the tour
+    localStorage.removeItem(DONT_SHOW_KEY);
     if (typeof window !== "undefined") {
       window.location.reload();
     }
