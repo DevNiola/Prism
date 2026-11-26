@@ -1,0 +1,103 @@
+---
+title: "Session API"
+description: "Create, share, and update debug sessions."
+---
+
+Set up your shell using the [curl examples overview](/api/curl-examples).
+
+## POST /api/session
+
+Use the URL of your running trace server for `wsUrl`. From the actual response, set `SESSION_ID` to `sessionId`, `SESSION_JWT` to `token`, and `SESSION_RAW_TOKEN` to `rawToken`. Keep both tokens private.
+
+```bash POST /api/session
+curl -sS -i -X POST "$BASE_URL/api/session" \
+  -H 'X-Request-ID: session-create' \
+  -H 'Content-Type: application/json' \
+  --data '{"txHash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","network":"testnet","wsUrl":"ws://localhost:8080/ws"}'
+```
+
+Response (`201`)
+
+```json
+{
+  "sessionId": "example-session",
+  "token": "example-jwt",
+  "rawToken": "example-raw-token",
+  "wsUrl": "ws://localhost:8080/ws",
+  "createdAt": "2026-01-01T00:00:00.000Z"
+}
+```
+
+## GET /api/session/:sessionId
+
+```bash GET /api/session/:sessionId
+curl -sS -i -X GET "$BASE_URL/api/session/$SESSION_ID" \
+  -H 'X-Request-ID: session-read' \
+  -H "Authorization: Bearer $SESSION_JWT"
+```
+
+Response (`200`)
+
+```json
+{
+  "status": "active",
+  "session": {
+    "sessionId": "example-session",
+    "txHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "network": "testnet",
+    "wsUrl": "ws://localhost:8080/ws",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z",
+    "traceSnapshot": null
+  }
+}
+```
+
+## PATCH /api/session/:sessionId/snapshot
+
+```bash PATCH /api/session/:sessionId/snapshot
+curl -sS -i -X PATCH "$BASE_URL/api/session/$SESSION_ID/snapshot" \
+  -H 'X-Request-ID: session-snapshot' \
+  -H "Authorization: Bearer $SESSION_RAW_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"snapshot":{"ledger_sequence":42,"nodes":[],"resource_profile":null,"state_diff":[],"completed":false}}'
+```
+
+Response (`200`)
+
+```json
+{
+  "status": "ok"
+}
+```
+
+## POST /api/session/:sessionId/heartbeat
+
+```bash POST /api/session/:sessionId/heartbeat
+curl -sS -i -X POST "$BASE_URL/api/session/$SESSION_ID/heartbeat" \
+  -H 'X-Request-ID: session-heartbeat' \
+  -H "Authorization: Bearer $SESSION_RAW_TOKEN"
+```
+
+Response (`200`)
+
+```json
+{
+  "status": "ok",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
+}
+```
+
+## DELETE /api/session/:sessionId
+
+```bash DELETE /api/session/:sessionId
+curl -sS -i -X DELETE "$BASE_URL/api/session/$SESSION_ID" \
+  -H 'X-Request-ID: session-delete' \
+  -H "Authorization: Bearer $SESSION_RAW_TOKEN"
+```
+
+Response (`204`)
+
+The response body is empty.
+
+The session response carries the live trace URL. See the [WebSocket trace stream protocol](/websocket-protocol) for event formats.

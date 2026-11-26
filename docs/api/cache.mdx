@@ -1,0 +1,44 @@
+---
+title: "Cache API"
+description: "Inspect and invalidate server cache entries."
+---
+
+Set up your shell using the [curl examples overview](/api/curl-examples).
+
+The server also registers these paths without the `/api` prefix.
+
+## GET /api/cache/stats
+
+```bash GET /api/cache/stats
+curl -sS -i -X GET "$BASE_URL/api/cache/stats" \
+  -H 'X-Request-ID: cache-stats'
+```
+
+Response (`200`)
+
+```json
+{
+  "ratio": 0.75,
+  "hits": 3,
+  "misses": 1
+}
+```
+
+## DELETE /api/cache/:key
+
+Replace `example-key` with a URL-encoded cache key. The example shows the response for a missing entry.
+
+```bash DELETE /api/cache/:key
+curl -sS -i -X DELETE "$BASE_URL/api/cache/example-key" \
+  -H 'X-Request-ID: cache-delete'
+```
+
+Response (`200`)
+
+```json
+{
+  "status": "not_found",
+  "key": "example-key",
+  "success": false
+}
+```
