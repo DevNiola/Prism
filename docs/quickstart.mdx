@@ -1,37 +1,40 @@
 ---
 title: "Quickstart"
-description: "Decode your first failed transaction in under 60 seconds."
+description: "Build the CLI and decode a Soroban transaction."
 icon: "bolt"
 ---
 
-Follow these steps to diagnose a failed Soroban transaction using the Grat CLI.
+Prism's CLI binary is named `grat`. Use Bash and install Git and the stable Rust toolchain with [rustup](https://rustup.rs/). The CLI build does not require Node.js or pnpm. For web or extension development, install Node.js 20 or later and pnpm 9.
 
-<Steps>
-  <Step title="Identify a failed transaction">
-    Find a transaction hash (`tx_hash`) that failed with a cryptic error like
-    `Error(Contract, #3)`.
-  </Step>
-  <Step title="Run the decode command">
-    <CodeGroup>
-      ```bash Terminal grat decode abc123def456... --network testnet ```
-    </CodeGroup>
-  </Step>
-  <Step title="Review the diagnostic report">
-    Grat will resolve the error and provide a clear explanation. ```text
-    Diagnostic Report: ------------------ Error: InsufficientBalance (resolved
-    from #3) Contract: CD...123 (MyTokenContract) Reason: The sender does not
-    have enough XLM to complete the transfer. Suggested Fix: Ensure the account
-    has at least 10 XLM before retrying. ```
-  </Step>
-</Steps>
+## Clone and build
 
-## What's Next?
+```bash Terminal
+git clone https://github.com/DevNiola/Prism.git
+cd Prism
+cargo build --release -p grat-cli
+```
 
-<CardGroup cols={2}>
-  <Card title="Trace Execution" icon="route" href="/cli/trace">
-    See exactly where the budget was spent.
-  </Card>
-  <Card title="Interactive Debugging" icon="bug" href="/concepts/time-travel">
-    Set breakpoints and step through host calls.
-  </Card>
-</CardGroup>
+<Note>
+  A clean checkout can currently fail at dependency resolution because the workspace requests the `next` feature from `stellar-xdr` 30. If you already have `grat` installed, use `grat` in place of `./target/release/grat` below.
+</Note>
+
+## Verify the CLI with a fixture
+
+From the repository root, decode the `resultXdr` value from `tests/fixtures/transactions/budget_exceeded.json`:
+
+```bash Terminal
+./target/release/grat decode --raw 'AAAAAAAAAGT/////AAAAAQAAAAAAAAAB////+wAAAAA=' --output json
+```
+
+The JSON report should contain `"error_name": "RawXdr"` and say that it decoded 32 bytes. This confirms the CLI can read the fixture's base64 XDR without looking up a transaction. The fixture hash is synthetic.
+
+## Decode a transaction by hash
+
+Paste the hash of an available failed transaction when prompted. Use `--network mainnet` for a mainnet transaction.
+
+```bash Terminal
+read -r -p 'Failed testnet transaction hash: ' tx_hash
+./target/release/grat decode "$tx_hash" --network testnet
+```
+
+Review the report for the error name, explanation, and any suggested fixes. The [decode command reference](./cli/decode) covers output formats and other flags.

@@ -41,29 +41,28 @@ Prism is organized as a modular monorepo:
 
 ## Quick Start
 
-1. **Prerequisites**:
-   - Rust 1.77 or higher.
-   - Node.js 20 or higher.
-   - pnpm installed.
+Use Bash, Git, and the stable Rust toolchain installed with [rustup](https://rustup.rs/). The CLI binary is named `grat`. For web or extension development, install Node.js 20 or later and pnpm 9.
 
-2. **Clone and Prepare**:
+```bash
+git clone https://github.com/DevNiola/Prism.git
+cd Prism
+cargo build --release -p grat-cli
+```
 
-   ```bash
-   git clone https://github.com/DevNiola/Prism.git
-   cd Prism
-   pnpm install
-   ```
+If the source build fails, see the [Quickstart build note](docs/quickstart.mdx#clone-and-build).
 
-3. **Build from Source**:
+Verify the CLI with the result XDR from the checked-in budget failure fixture:
 
-   ```bash
-   cargo build --release
-   ```
+```bash
+./target/release/grat decode --raw 'AAAAAAAAAGT/////AAAAAQAAAAAAAAAB////+wAAAAA=' --output json
+```
 
-4. **Run the CLI**:
-   ```bash
-   ./target/release/prism decode <tx-hash>
-   ```
+Expect `"error_name": "RawXdr"` and an explanation that says 32 bytes were decoded. To look up a failed testnet transaction, paste its hash when prompted:
+
+```bash
+read -r -p 'Failed testnet transaction hash: ' tx_hash
+./target/release/grat decode "$tx_hash" --network testnet
+```
 
 ## Documentation
 
