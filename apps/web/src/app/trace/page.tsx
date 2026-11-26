@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ComparisonView from "@/components/debug/ComparisonView";
 import { useTrace } from "@/hooks/useTrace";
 import { ExecutionTimeline } from "@/components/trace/ExecutionTimeline";
 import { StateDiffViewer } from "@/components/trace/StateDiffViewer";
@@ -36,6 +37,7 @@ function TransactionInfoSkeleton() {
 export default function TracePage() {
   const [txHash, setTxHash] = useState("");
   const [network, setNetwork] = useState("testnet");
+  const [showComparison, setShowComparison] = useState(false);
 
   const wsUrl =
     typeof window !== "undefined"
@@ -220,6 +222,30 @@ export default function TracePage() {
           />
 
           <StateDiffViewer entries={trace.state_diff} loading={loading} />
+
+          {trace.state_diff.length > 0 && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                aria-expanded={showComparison}
+                onClick={() => setShowComparison((open) => !open)}
+                className="rounded border border-gray-300 px-3 py-2 text-sm font-medium"
+              >
+                {showComparison ? "Hide state comparison" : "Compare states side by side"}
+              </button>
+              {showComparison && (
+                <ComparisonView
+                  key={trace.tx_hash}
+                  fields={trace.state_diff.map((entry) => ({
+                    key: entry.key,
+                    before: entry.before,
+                    after: entry.after,
+                    type: entry.before == null ? "added" : entry.after == null ? "deleted" : "modified",
+                  }))}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
     </main>
