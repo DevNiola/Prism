@@ -11,6 +11,7 @@ export interface HistoryEntry {
   errorName: string;
   errorCategory: string;
   report: DiagnosticReport;
+  pinned?: boolean;
 }
 
 interface SessionState {
@@ -26,6 +27,8 @@ interface SessionState {
     network: Network,
     report: DiagnosticReport
   ) => void;
+  togglePin: (id: string) => void;
+  removeFromHistory: (id: string) => void;
   clearHistory: () => void;
   clear: () => void;
 }
@@ -53,6 +56,7 @@ export const useSessionStore = create<SessionState>()(
             errorName: report.error_name,
             errorCategory: report.error_category,
             report,
+            pinned: false,
           };
 
           // Deduplicate by txHash — keep the newest occurrence, then limit to 10
@@ -61,6 +65,18 @@ export const useSessionStore = create<SessionState>()(
 
           return { history: updated };
         }),
+
+      togglePin: (id) =>
+        set((state) => ({
+          history: state.history.map((h) =>
+            h.id === id ? { ...h, pinned: !h.pinned } : h
+          ),
+        })),
+
+      removeFromHistory: (id) =>
+        set((state) => ({
+          history: state.history.filter((h) => h.id !== id),
+        })),
 
       clearHistory: () => set({ history: [] }),
 
