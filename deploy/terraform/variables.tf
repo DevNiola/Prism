@@ -71,3 +71,9 @@ variable "web_memory" {
   type        = number
   default     = 1024
 }
+
+variable "environment" {
+  description = "Deployment environment name (e.g. staging, production). Used for resource tagging."
+  type        = string
+  default     = "production"
+}
