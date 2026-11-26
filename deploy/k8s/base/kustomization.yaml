@@ -8,4 +8,5 @@ resources:
   - web.yaml
   - server.yaml
   - redis.yaml
+  - redis-network-policy.yaml
   - ingress.yaml

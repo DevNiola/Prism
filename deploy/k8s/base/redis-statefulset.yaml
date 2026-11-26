@@ -25,6 +25,14 @@ spec:
             - redis-server
             - "--appendonly"
             - "yes"
+            - "--requirepass"
+            - "$(REDIS_PASSWORD)"
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: prism-secrets
+                  key: REDIS_PASSWORD
           ports:
             - containerPort: 6379
               name: redis
@@ -43,8 +51,9 @@ spec:
           readinessProbe:
             exec:
               command:
-                - redis-cli
-                - ping
+                - sh
+                - -c
+                - redis-cli -a "$REDIS_PASSWORD" ping
             initialDelaySeconds: 5
             periodSeconds: 5
           volumeMounts:
