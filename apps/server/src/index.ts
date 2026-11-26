@@ -5,6 +5,7 @@ import { healthRoutes } from "./routes/health";
 import { sessionRoutes } from "./routes/session";
 import { aiRoutes } from "./routes/ai";
 import { cacheRoutes } from "./routes/cache";
+import { openapiRoute } from "./routes/openapi";
 import { config, assertValidConfig } from "./config";
 import { SessionStore } from "./session-store";
 import { shutdownWorker } from "./workers/replay.worker";
@@ -99,7 +100,7 @@ server.register(replayRoutes, { prefix: "/api" });
 server.register(sessionRoutes, { prefix: "/api" });
 server.register(aiRoutes, { prefix: "/api" });
 server.register(cacheRoutes, { prefix: "/api" });
-server.register(cacheRoutes);
+server.register(openapiRoute);
 
 // ---------------------------------------------------------------------------
 // Start
