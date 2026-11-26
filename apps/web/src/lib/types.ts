@@ -1,3 +1,5 @@
+import type { SorobanValueType } from "./wasm";
+
 export interface DiagnosticReport {
   error_category: string;
   error_code: number;
@@ -57,11 +59,20 @@ export interface ResourceSummary {
   write_limit: number;
 }
 
+export interface DecodedScValArgument {
+  name: string;
+  type: SorobanValueType;
+  label?: string;
+  /** JSON text with decimal strings accepted for wide integers. */
+  value?: string;
+}
+
 export interface TransactionContext {
   tx_hash: string;
   ledger_sequence: number;
   function_name?: string;
   arguments: string[];
+  decoded_arguments?: DecodedScValArgument[];
   return_value?: string;
   fee: FeeBreakdown;
   resources: ResourceSummary;

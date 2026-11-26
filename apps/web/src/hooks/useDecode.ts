@@ -41,5 +41,11 @@ export function useDecode() {
     }
   }, []);
 
-  return { report, loading, error, decode };
+  return {
+    report,
+    loading,
+    error,
+    decode,
+    decodedArguments: report?.transaction_context?.decoded_arguments,
+  };
 }
