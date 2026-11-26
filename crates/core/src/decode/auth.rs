@@ -618,4 +618,249 @@ mod tests {
     fn invalid_base64_is_an_error() {
         assert!(AuthChain::from_xdr_base64("!!!not-valid!!!").is_err());
     }
+
+    // ── Issue #472: Ed25519 vs Smart Wallet vs SourceAccount detection ─────
+
+    #[test]
+    fn ed25519_address_prefix_starts_with_g() {
+        // Any Ed25519 account address must render as a G... strkey.
+        let entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                address: account_address(1),
+                nonce: 0,
+                signature_expiration_ledger: 0,
+                signature: ScVal::Void,
+            }),
+            root_invocation: invocation(
+                contract_fn(contract_address(2), "transfer", vec![]),
+                empty_subs(),
+            ),
+        };
+        let chain = AuthChain::from_entry(&entry);
+        if let AuthCredential::Address(ref cred) = chain.credential {
+            assert_eq!(cred.auth_type, AuthorizationType::Ed25519);
+            assert!(
+                cred.address.starts_with('G'),
+                "Ed25519 address must start with G, got: {}",
+                cred.address
+            );
+        } else {
+            panic!("expected Address credential");
+        }
+    }
+
+    #[test]
+    fn smart_wallet_address_prefix_starts_with_c() {
+        let entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                address: contract_address(7),
+                nonce: 0,
+                signature_expiration_ledger: 0,
+                signature: ScVal::Void,
+            }),
+            root_invocation: invocation(
+                contract_fn(contract_address(8), "invoke", vec![]),
+                empty_subs(),
+            ),
+        };
+        let chain = AuthChain::from_entry(&entry);
+        if let AuthCredential::Address(ref cred) = chain.credential {
+            assert_eq!(cred.auth_type, AuthorizationType::SmartWallet);
+            assert!(
+                cred.address.starts_with('C'),
+                "Smart Wallet address must start with C, got: {}",
+                cred.address
+            );
+        } else {
+            panic!("expected Address credential");
+        }
+    }
+
+    #[test]
+    fn source_account_has_no_address_field() {
+        // SourceAccount carries no explicit address — there is nothing to type.
+        let entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::SourceAccount,
+            root_invocation: invocation(
+                contract_fn(contract_address(5), "mint", vec![]),
+                empty_subs(),
+            ),
+        };
+        let chain = AuthChain::from_entry(&entry);
+        assert_eq!(
+            chain.credential,
+            AuthCredential::SourceAccount,
+            "SourceAccount credential should not carry an address"
+        );
+        // Confirm it's not an Address variant.
+        assert!(
+            !matches!(chain.credential, AuthCredential::Address(_)),
+            "SourceAccount must not be an Address credential"
+        );
+    }
+
+    #[test]
+    fn ed25519_has_no_contract_id() {
+        let entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                address: account_address(11),
+                nonce: 5,
+                signature_expiration_ledger: 999,
+                signature: ScVal::Void,
+            }),
+            root_invocation: invocation(
+                contract_fn(contract_address(12), "approve", vec![]),
+                empty_subs(),
+            ),
+        };
+        let chain = AuthChain::from_entry(&entry);
+        if let AuthCredential::Address(ref cred) = chain.credential {
+            assert_eq!(cred.auth_type, AuthorizationType::Ed25519);
+            assert!(
+                cred.contract_id.is_none(),
+                "Ed25519 auth must have no contract_id, got: {:?}",
+                cred.contract_id
+            );
+        } else {
+            panic!("expected Address credential");
+        }
+    }
+
+    #[test]
+    fn smart_wallet_contract_id_is_set_and_equals_address() {
+        let entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                address: contract_address(13),
+                nonce: 10,
+                signature_expiration_ledger: 500,
+                signature: ScVal::Void,
+            }),
+            root_invocation: invocation(
+                contract_fn(contract_address(14), "execute", vec![]),
+                empty_subs(),
+            ),
+        };
+        let chain = AuthChain::from_entry(&entry);
+        if let AuthCredential::Address(ref cred) = chain.credential {
+            assert_eq!(cred.auth_type, AuthorizationType::SmartWallet);
+            let contract_id = cred.contract_id.as_deref().expect("smart wallet must have contract_id");
+            assert_eq!(
+                contract_id, cred.address.as_str(),
+                "Smart Wallet contract_id must equal its address"
+            );
+            assert!(
+                contract_id.starts_with('C'),
+                "contract_id must start with C, got: {contract_id}"
+            );
+        } else {
+            panic!("expected Address credential");
+        }
+    }
+
+    #[test]
+    fn detect_auth_type_across_multiple_entries() {
+        // Simulate a "mixed" transaction scenario: build two entries, one Ed25519
+        // one Smart Wallet, and confirm detection is correct for both.
+        let ed25519_entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                address: account_address(20),
+                nonce: 1,
+                signature_expiration_ledger: 100,
+                signature: ScVal::Void,
+            }),
+            root_invocation: invocation(
+                contract_fn(contract_address(99), "multi_party_transfer", vec![]),
+                empty_subs(),
+            ),
+        };
+        let smart_wallet_entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                address: contract_address(21),
+                nonce: 2,
+                signature_expiration_ledger: 100,
+                signature: ScVal::Void,
+            }),
+            root_invocation: invocation(
+                contract_fn(contract_address(99), "multi_party_transfer", vec![]),
+                empty_subs(),
+            ),
+        };
+
+        let chain_a = AuthChain::from_entry(&ed25519_entry);
+        let chain_b = AuthChain::from_entry(&smart_wallet_entry);
+
+        match &chain_a.credential {
+            AuthCredential::Address(c) => {
+                assert_eq!(c.auth_type, AuthorizationType::Ed25519);
+                assert!(c.address.starts_with('G'));
+                assert!(c.contract_id.is_none());
+            }
+            _ => panic!("expected Address credential for chain_a"),
+        }
+
+        match &chain_b.credential {
+            AuthCredential::Address(c) => {
+                assert_eq!(c.auth_type, AuthorizationType::SmartWallet);
+                assert!(c.address.starts_with('C'));
+                assert!(c.contract_id.is_some());
+            }
+            _ => panic!("expected Address credential for chain_b"),
+        }
+    }
+
+    #[test]
+    fn auth_type_display_matches_fixture_values() {
+        // The fixture JSON files use "Ed25519" and "Smart Wallet" as the auth_type
+        // string values. Verify the Display impl matches those exact strings.
+        assert_eq!(AuthorizationType::Ed25519.to_string(), "Ed25519");
+        assert_eq!(AuthorizationType::SmartWallet.to_string(), "Smart Wallet");
+    }
+
+    #[test]
+    fn source_account_invocation_still_has_function_name() {
+        // Even with SourceAccount credentials, the invocation tree is fully populated.
+        let entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::SourceAccount,
+            root_invocation: invocation(
+                contract_fn(contract_address(30), "claim", vec![ScVal::U32(42)]),
+                empty_subs(),
+            ),
+        };
+        let chain = AuthChain::from_entry(&entry);
+        assert_eq!(chain.credential, AuthCredential::SourceAccount);
+        assert_eq!(chain.invocations.len(), 1);
+        assert_eq!(chain.invocations[0].function.as_deref(), Some("claim"));
+        assert_eq!(chain.invocations[0].arg_count, 1);
+    }
+
+    #[test]
+    fn address_credential_serializes_auth_type_field() {
+        // Serialized form must include "auth_type" key with correct value.
+        let entry = SorobanAuthorizationEntry {
+            credentials: SorobanCredentials::Address(SorobanAddressCredentials {
+                address: account_address(50),
+                nonce: 0,
+                signature_expiration_ledger: 0,
+                signature: ScVal::Void,
+            }),
+            root_invocation: invocation(
+                contract_fn(contract_address(51), "fn", vec![]),
+                empty_subs(),
+            ),
+        };
+        let chain = AuthChain::from_entry(&entry);
+        if let AuthCredential::Address(ref cred) = chain.credential {
+            let json = serde_json::to_string(cred).expect("serialize");
+            assert!(
+                json.contains("\"auth_type\""),
+                "serialized credential must contain auth_type field"
+            );
+            assert!(
+                json.contains("ed25519"),
+                "Ed25519 auth_type must serialize as 'ed25519'"
+            );
+        } else {
+            panic!("expected Address credential");
+        }
+    }
 }
