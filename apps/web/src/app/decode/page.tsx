@@ -16,6 +16,24 @@ import { useSessionStore } from "@/store/session";
 import { useNetworkStore } from "@/store/network";
 import EmptyState from "@/components/shared/EmptyState";
 
+const DECODE_EXAMPLES = [
+  {
+    label: "Contract Error",
+    hash: "789abc123def456789abc123def456789abc123def456789abc123def456789a",
+    description: "Sample contract execution failure",
+  },
+  {
+    label: "Budget Exceeded",
+    hash: "abc123def456789abc123def456789abc123def456789abc123def456789abcd",
+    description: "Sample CPU budget exceeded failure",
+  },
+  {
+    label: "Auth Failed",
+    hash: "def456789abc123def456789abc123def456789abc123def456789abc123defa",
+    description: "Sample authorization failure",
+  },
+];
+
 function DecodePageContent() {
   const [activeTab, setActiveTab] = useState<"diagnose" | "lookup">("diagnose");
   const [report, setReport] = useState<DiagnosticReport | null>(null);
@@ -47,6 +65,10 @@ function DecodePageContent() {
         `${decoded.error_category.toLowerCase()}-${decoded.error_code}-${Date.now()}`;
       addToHistory(txHash, network, decoded);
     }
+  }
+
+  function handleExampleClick(hash: string) {
+    window.location.href = `?txHash=${hash}`;
   }
 
   return (
@@ -122,6 +144,8 @@ function DecodePageContent() {
                       Enter an error code
                     </button>
                   }
+                  examples={DECODE_EXAMPLES}
+                  onExampleClick={handleExampleClick}
                 />
               )}
               {report && (

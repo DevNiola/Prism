@@ -11,6 +11,24 @@ import EmptyState from "@/components/shared/EmptyState";
 import Breadcrumbs from "@/components/shared/Breadcrumbs";
 import { useToast } from "@/hooks/useToast";
 
+const TRACE_EXAMPLES = [
+  {
+    label: "Contract Error",
+    hash: "789abc123def456789abc123def456789abc123def456789abc123def456789a",
+    description: "Sample contract execution failure",
+  },
+  {
+    label: "Budget Exceeded",
+    hash: "abc123def456789abc123def456789abc123def456789abc123def456789abcd",
+    description: "Sample CPU budget exceeded failure",
+  },
+  {
+    label: "Auth Failed",
+    hash: "def456789abc123def456789abc123def456789abc123def456789abc123defa",
+    description: "Sample authorization failure",
+  },
+];
+
 /** Mirrors the Transaction Info card so the page keeps its height while the
  *  trace stream is still being established. */
 function TransactionInfoSkeleton() {
@@ -160,6 +178,11 @@ export default function TracePage() {
               Enter a transaction hash
             </button>
           }
+          examples={TRACE_EXAMPLES}
+          onExampleClick={(hash) => {
+            setTxHash(hash);
+            requestTrace(hash, network);
+          }}
         />
       )}
 
