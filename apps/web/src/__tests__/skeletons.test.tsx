@@ -277,3 +277,23 @@ describe("ContextSummary", () => {
     expect(container.querySelectorAll("section")).toHaveLength(3);
   });
 });
+
+describe("ExecutionTimeline virtualization", () => {
+  it("mounts a 500-node trace within a 500 ms render budget", () => {
+    const nodes = Array.from({ length: 500 }, (_, i) => ({
+      node: { event_type: `event_${i}`, data: null },
+      path: [i],
+    }));
+
+    const start = performance.now();
+    const { container } = render(
+      <ExecutionTimeline nodes={nodes} currentStep={0} />,
+    );
+    const elapsed = performance.now() - start;
+
+    // The virtualizer should render only the visible slice, so the full 500
+    // items should NOT all be in the DOM.
+    expect(container.querySelectorAll('[role="option"]').length).toBeLessThan(500);
+    expect(elapsed).toBeLessThan(500);
+  });
+});
