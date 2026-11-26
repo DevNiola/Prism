@@ -34,14 +34,13 @@ export function ReplayProgressBar({
   onCancel,
 }: ReplayProgressBarProps) {
   if (
-    progress.phase === "idle" ||
-    progress.phase === "cancelled"
+    progress.phase === "idle"
   ) {
     return null;
   }
 
   const currentPhaseIndex = PHASE_ORDER.indexOf(progress.phase);
-  const isActive = progress.phase !== "complete" && progress.phase !== "error";
+  const isActive = !["complete", "error", "cancelled"].includes(progress.phase);
 
   return (
     <div
@@ -92,11 +91,12 @@ export function ReplayProgressBar({
           </div>
 
           {/* Cancel button */}
-          {isActive && (
+          {progress.phase !== "cancelled" && (
             <button
               type="button"
               onClick={onCancel}
-              className="text-xs px-3 py-1.5 rounded-lg border border-slate-600 text-slate-400 hover:text-red-400 hover:border-red-500/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+              disabled={!isActive}
+              className="text-xs px-3 py-1.5 rounded-lg border border-slate-600 text-slate-400 hover:text-red-400 hover:border-red-500/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-50"
               aria-label="Cancel replay"
             >
               Cancel
@@ -132,13 +132,12 @@ export function ReplayProgressBar({
         role="list"
         aria-label="Replay phases"
       >
-        {PHASES.map(({ key, label, icon }, index) => {
+        {PHASES.map(({ key, label, icon }) => {
           const phaseIndex = PHASE_ORDER.indexOf(key);
           const isDone = currentPhaseIndex > phaseIndex;
           const isCurrent =
             progress.phase === key ||
             (progress.phase === "complete" && phaseIndex === PHASES.length - 1);
-          const isPending = !isDone && !isCurrent;
 
           return (
             <div

@@ -24,7 +24,7 @@ export interface StateDiffEntry {
 }
 
 export interface TraceStreamCallbacks {
-  onTraceStarted?: (data: { tx_hash: string; ledger_sequence: number }) => void;
+  onTraceStarted?: (data: { tx_hash: string; ledger_sequence: number; total_nodes?: number }) => void;
   onTraceNode?: (data: TraceNode) => void;
   onResourceUpdate?: (data: ResourceUpdate) => void;
   onStateDiffEntry?: (data: StateDiffEntry) => void;
@@ -40,23 +40,39 @@ export function useWebSocket(url: string, callbacks?: TraceStreamCallbacks) {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const callbacksRef = useRef(callbacks);
   useEffect(() => {
-    if (!url) return;
+    callbacksRef.current = callbacks;
+  }, [callbacks]);
+
+  const close = useCallback(() => {
+    const ws = wsRef.current;
+    wsRef.current = null;
+    if (ws) ws.close();
+    setConnected(false);
+  }, []);
+
+  const connect = useCallback(() => {
+    if (!url) return null;
 
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("WebSocket connected");
+      if (wsRef.current !== ws) return;
       setConnected(true);
       setError(null);
     };
 
     ws.onmessage = (event) => {
+      if (wsRef.current !== ws) return;
       try {
+        const callbacks = callbacksRef.current;
         const message = JSON.parse(event.data);
 
         switch (message.type) {
+          case "subscribed":
+            break;
           case "trace_started":
             callbacks?.onTraceStarted?.(message);
             break;
@@ -85,19 +101,25 @@ export function useWebSocket(url: string, callbacks?: TraceStreamCallbacks) {
     };
 
     ws.onerror = (event) => {
+      if (wsRef.current !== ws) return;
       console.error("WebSocket error:", event);
       setError("WebSocket connection error");
     };
 
     ws.onclose = () => {
-      console.log("WebSocket disconnected");
+      if (wsRef.current !== ws) return;
+      wsRef.current = null;
+      callbacksRef.current?.onTraceError?.({ error: "Trace connection closed." });
       setConnected(false);
     };
 
-    return () => {
-      ws.close();
-    };
-  }, [url, callbacks]);
+    return ws;
+  }, [url]);
+
+  useEffect(() => {
+    connect();
+    return close;
+  }, [connect, close]);
 
   const sendMessage = useCallback((message: any) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -109,9 +131,17 @@ export function useWebSocket(url: string, callbacks?: TraceStreamCallbacks) {
 
   const requestTrace = useCallback(
     (txHash: string) => {
-      sendMessage({ tx_hash: txHash });
+      const ws = wsRef.current ?? connect();
+      const message = JSON.stringify({ type: "subscribe", tx_hash: txHash });
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(message);
+      } else if (ws?.readyState === WebSocket.CONNECTING) {
+        ws.addEventListener("open", () => {
+          if (wsRef.current === ws) ws.send(message);
+        }, { once: true });
+      }
     },
-    [sendMessage],
+    [connect],
   );
 
   return {
@@ -119,5 +149,6 @@ export function useWebSocket(url: string, callbacks?: TraceStreamCallbacks) {
     error,
     sendMessage,
     requestTrace,
+    close,
   };
 }

@@ -132,6 +132,7 @@ Sent once when the server begins executing the trace. Use this event to initiali
 | `tx_hash` | `string` | Transaction hash being traced |
 | `ledger_sequence` | `number` | Ledger at which the transaction was included |
 | `timestamp` | `string` | ISO 8601 timestamp of trace start |
+| `total_nodes` | `number` | Optional node count for streams that know it in advance. Clients can use it to estimate remaining node delivery time. |
 
 ---
 

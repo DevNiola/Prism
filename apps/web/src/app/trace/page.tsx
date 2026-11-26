@@ -8,7 +8,7 @@ import { ResourceProfile } from "@/components/trace/ResourceProfile";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import Skeleton from "@/components/shared/Skeleton";
 import EmptyState from "@/components/shared/EmptyState";
-import Breadcrumbs from "@/components/shared/Breadcrumbs";
+import ReplayProgressBar from "@/components/trace/ReplayProgressBar";
 import { useToast } from "@/hooks/useToast";
 
 /** Mirrors the Transaction Info card so the page keeps its height while the
@@ -42,7 +42,7 @@ export default function TracePage() {
       ? `ws://${window.location.hostname}:8080`
       : "";
 
-  const { trace, loading, requestTrace, streaming, streamError } =
+  const { trace, loading, progress, requestTrace, cancelTrace, streaming, streamError } =
     useTrace(wsUrl);
   const { showToast } = useToast();
 
@@ -62,7 +62,7 @@ export default function TracePage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (txHash) {
-      requestTrace(txHash, network);
+      requestTrace(txHash);
     }
   };
 
@@ -122,6 +122,8 @@ export default function TracePage() {
         )}
       </form>
 
+      <ReplayProgressBar progress={progress} onCancel={cancelTrace} />
+
       {loading && !trace && (
         <div className="space-y-8">
           <div className="flex items-center justify-center py-4">
@@ -180,7 +182,7 @@ export default function TracePage() {
                 <dt className="text-sm text-gray-600">Trace Nodes</dt>
                 <dd className="font-mono text-sm">
                   {trace.nodes.length}{" "}
-                  {trace.completed ? "(complete)" : "(streaming...)"}
+                  {loading ? "(streaming…)" : `(${progress.phase})`}
                 </dd>
               </div>
               <div>

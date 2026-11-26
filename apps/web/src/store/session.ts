@@ -19,6 +19,8 @@ interface SessionState {
   txHash: string | null;
   report: DiagnosticReport | null;
   history: HistoryEntry[];
+  replayCancelIntent: { txHash: string; requestedAt: number } | null;
+  recordReplayCancel: (txHash: string) => void;
   setHasHydrated: (hasHydrated: boolean) => void;
   setTxHash: (hash: string) => void;
   setReport: (report: DiagnosticReport) => void;
@@ -40,6 +42,9 @@ export const useSessionStore = create<SessionState>()(
       txHash: null,
       report: null,
       history: [],
+      replayCancelIntent: null,
+      recordReplayCancel: (txHash) =>
+        set({ replayCancelIntent: { txHash, requestedAt: Date.now() } }),
       setHasHydrated: (hasHydrated) => set({ hasHydrated }),
 
       setTxHash: (hash) => set({ txHash: hash }),
@@ -80,7 +85,7 @@ export const useSessionStore = create<SessionState>()(
 
       clearHistory: () => set({ history: [] }),
 
-      clear: () => set({ txHash: null, report: null }),
+      clear: () => set({ txHash: null, report: null, replayCancelIntent: null }),
     }),
     {
       name: "prism-session",
