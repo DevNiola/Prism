@@ -42,3 +42,14 @@ jobs:
             @semantic-release/git
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  containers:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    uses: ./.github/workflows/container-build.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    with:
+      release_tag: ${{ needs.release.outputs.release_tag }}

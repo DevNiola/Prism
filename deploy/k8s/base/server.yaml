@@ -14,8 +14,8 @@ spec:
     spec:
       containers:
         - name: server
-          image: ghcr.io/devniola/prism-server:0.1.0
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/devniola/prism-server:latest
+          imagePullPolicy: Always
           envFrom:
             - configMapRef:
                 name: prism-config

@@ -14,8 +14,8 @@ spec:
     spec:
       containers:
         - name: web
-          image: ghcr.io/devniola/prism-web:0.1.0
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/devniola/prism-web:latest
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 3000
