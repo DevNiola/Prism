@@ -1,0 +1,35 @@
+---
+title: "API Reference (OpenAPI)"
+description: "Machine-readable OpenAPI 3.1 specification for the Grat server API."
+---
+
+## OpenAPI spec
+
+The Grat server publishes its full API contract as an OpenAPI 3.1 document.
+
+**Endpoint:** `GET /v1/openapi.json`
+
+You can consume this spec with any OpenAPI-compatible tooling (Swagger UI, Redoc, Insomnia, Postman, etc.).
+
+### Routes covered
+
+| Tag | Routes |
+|-----|--------|
+| Health | `GET /health` |
+| Replay | `POST /api/replay`, `GET /api/replay/{jobId}` |
+| Session | `POST /api/session`, `GET /api/session/{sessionId}`, `PATCH /api/session/{sessionId}/snapshot`, `POST /api/session/{sessionId}/heartbeat`, `DELETE /api/session/{sessionId}` |
+| AI | `POST /api/ai/explain`, `GET /api/ai/budget`, `DELETE /api/ai/cache/{txHash}`, `DELETE /api/ai/cache` |
+
+### Authentication
+
+Endpoints that mutate session state require a `Bearer` token obtained from `POST /api/session`.
+
+```http
+Authorization: Bearer <token>
+```
+
+### Example: fetch the spec locally
+
+```bash
+curl http://localhost:3001/v1/openapi.json | jq .
+```

@@ -3,6 +3,7 @@ import { replayRoutes } from "./routes/replay";
 import { healthRoutes } from "./routes/health";
 import { sessionRoutes } from "./routes/session";
 import { aiRoutes } from "./routes/ai";
+import { openapiRoute } from "./routes/openapi";
 import { config } from "./config";
 import { SessionStore } from "./session-store";
 
@@ -35,6 +36,7 @@ server.register(healthRoutes);
 server.register(replayRoutes, { prefix: "/api" });
 server.register(sessionRoutes, { prefix: "/api" });
 server.register(aiRoutes, { prefix: "/api" });
+server.register(openapiRoute);
 
 // ---------------------------------------------------------------------------
 // Start
