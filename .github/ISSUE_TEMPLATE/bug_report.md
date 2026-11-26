@@ -1,27 +1,23 @@
 ---
 name: Bug report
-about: Report a reproducible problem
-title: "[Bug]: "
+about: Report a bug in Prism
+title: '[Bug] '
 labels: bug
-assignees: ""
+assignees: ''
 ---
 
-## Bug description
+**Page / Route**
+<!-- e.g. /decode, /trace/0xabc123 -->
 
-Describe what happened and what you expected to happen.
+**Error class**
+<!-- e.g. TypeError, RangeError -->
 
-## Steps to reproduce
+**Steps to reproduce**
+1.
+2.
 
-1. 
-2. 
-3. 
+**Expected behaviour**
 
-## Environment
+**Actual behaviour**
 
-- Prism version or commit:
-- OS:
-- Relevant runtime/tool versions:
-
-## Logs or screenshots
-
-Add relevant error output or screenshots. Remove secrets and sensitive data.
+**Screenshots (if applicable)**
