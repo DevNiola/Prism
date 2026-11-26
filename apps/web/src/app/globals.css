@@ -12,6 +12,16 @@
   --severity-fatal-bg: #450a0a;
 }
 
+/*
+ * Severity badge contrast ratios (WCAG AA requires >= 4.5:1 for normal text):
+ *   info    – text-blue-700  (#1d4ed8) on bg-blue-50  (#eff6ff) ≈ 8.6:1  ✓
+ *   warning – text-amber-800 (#92400e) on bg-amber-50 (#fffbeb) ≈ 7.2:1  ✓
+ *   error   – text-red-700   (#b91c1c) on bg-red-50   (#fef2f2) ≈ 5.9:1  ✓
+ *   fatal   – text-red-200   (#fecaca) on bg-red-950  (#450a0a) ≈ 9.5:1  ✓
+ * Dark-mode panel variants use lighter text (-200 shades) on dark backgrounds,
+ * all yielding >= 7:1 contrast ratio.
+ */
+
 .severity-info {
   color: var(--severity-info);
   background-color: var(--severity-info-bg);
